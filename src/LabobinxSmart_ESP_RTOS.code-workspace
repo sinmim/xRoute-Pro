@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"freenove_ws2812_lib_for_esp32.h": "c"
+		}
+	}
+}

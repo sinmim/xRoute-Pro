@@ -1,0 +1,688 @@
+//====================================================VERSION CONTROLS
+// #define DEBUG_MODE
+#define BOARD_NEW_VERSION_ADC_WIFI_CONFLICT_FIXED
+//====================================================VERSION CONTROLS
+#include <esp_bt_device.h>
+#include <Arduino.h>
+#include <EEPROM.h>
+#include "save_load.h"
+#include "BluetoothSerial.h"
+#include <BLESerial.h>
+#include <BLEDevice.h>
+#include "relay.h"
+#include "othedFunctions.h"
+#include "ledPwm.h"
+#include "dsp.h"
+#include "adc.h"
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
+#include <Freenove_WS2812_Lib_for_ESP32.h>
+#include <GyverBME280.h>
+#include <Adafruit_AHTX0.h>
+#define ___________________________________________VAR_DEF
+#ifdef ___________________________________________VAR_DEF
+#define I2C_BUSSY 1
+#define I2C_FREE 0
+bool i2cStat = I2C_FREE;
+Adafruit_MPU6050 mpu;
+#define MPU_DISSCONNECT 0
+#define MPU_CONNECTED 1
+bool MPU_STATE = MPU_DISSCONNECT;
+float accXValue = 0, accYValue = 0, accZValue = 0, len = 0, alpha = 0, accSensitivity = 0;
+float accXValueOffset = 0;
+float accYValueOffset = 0;
+sensors_event_t mpuAcc, mpuGyro, mpuTemp;
+void initMPU();
+//------------------------------------WS2812
+// WS2812B
+#define LEDS_COUNT 1
+#define LEDS_PIN 23
+#define CHANNEL 0
+Freenove_ESP32_WS2812 strip = Freenove_ESP32_WS2812(LEDS_COUNT, LEDS_PIN, CHANNEL, TYPE_GRB);
+#define COLOR_RED 0xff0000
+#define COLOR_GREEN 0x00ff00
+#define COLOR_BLUE 0x0000ff
+#define COLOR_ORANG 0xffa000
+#define COLOR_OFF 0x000000
+int LED_COLOR = COLOR_OFF;
+void ws2812Blink(int color);
+//------------------------------------WS2812
+void loadSavedValue();
+EEpromAdd E2ADD;
+//------------------------------------HUMIDITY SENSORS
+#define HUM_SENSOR_TYPE_NON 0
+#define HUM_SENSOR_TYPE_BME280 1
+#define HUM_SENSOR_TYPE_AHT10 2
+int humSensorType = HUM_SENSOR_TYPE_BME280;
+// BME280
+GyverBME280 bme;
+// AHT10
+uint8_t readStatus = 0;
+Adafruit_AHTX0 aht;
+//------------------------InternalSensors
+float psi = 0;
+float altitute = 0;
+float psiOffset = 0;
+//------------------------BME sensor
+float digitalTemp = 0;
+float digitalHum = 0;
+float digitalPress = 0;
+float digitalAlt = 0;
+// END---------------------------------HUMIDITY SENSORS
+//------------------------------------VOLTAGES
+//------------------------POWER
+float negv = 0, v = 0, a0 = 0, a1 = 0, a2 = 0, w = 0, b = 0, cwPrcnt = 0, dwPrcnt = 0, gwPrcnt = 0, pt100mv = 0, gsmAnten = 0, battHourLeft = 0;
+float VcalCo = 0, volt = 0;
+float amp0Offset = 0;
+float A0calCo = 1, amp0 = 0;
+float amp1Offset = 0;
+float A1calCo = 1, amp1 = 0;
+float amp2Offset = 0;
+float A2calCo = 1, amp2 = 0;
+//--------------Negative Voltage
+float NegVoltOffsetSave = 0;
+float NegVoltOffset = 0;
+float Negvolt = 0;
+//--------------Battery
+float batteryCap = 0;
+float battFullVoltage = 0;
+float battEmptyVoltage = 0;
+float cableResistance = 0;
+//--------------Gauges
+// clean water G1
+float clnWtr = 0;
+float clnWtrMax = 0;
+float clnWtrMin = 0;
+// Dirty Water G2
+float drtWtr = 0;
+float drtWtrMax = 0;
+float drtWtrMin = 0;
+// Grey Water G3
+float gryWtr = 0;
+float gryWtrMax = 0;
+float gryWtrMin = 0;
+//--------------PT100
+float pt100 = 0;
+float PT_mvCal = 0;
+// END---------------------------------VOLTAGES
+//------------------------------------DIMERS
+static bool DimValChanged = false;
+float dimTmp[7] = {0, 0, 0, 0, 0, 0, 0};
+float dimLPF[7] = {0, 0, 0, 0, 0, 0, 0};
+float dimLimit[7] = {0, 0, 0, 0, 0, 0, 0};
+// END---------------------------------DIMERS
+bool overCrntFlg = false;
+//------------------------------------Default Values
+int DFLT_V_CAL = 120;
+int DFLT_A0_CAL = 47;
+int DFLT_A_CAL = 60;
+int DFLT_A2_CAL = 60;
+int DFLT_BATT_CAP = 100;
+int DFLT_PT_MV_CAL = 585;
+int DFLT_BATT_FULL_VOLT = 135;
+int DFLT_BATT_EMPTY_VOLT = 119;
+int DFLT_CABLE_RES_MILI_OHM = 0;
+float pressurCalOffset = 0.04F; // psi
+// END---------------------------------Default Values
+extern relConfig RELAYS;
+BluetoothSerial SerialBT;
+int blePass;
+//--------------------------DATA'S
+extern struct bleData BLE_DATA;
+char mainRxStr[128];
+char mainTxStr[128];
+bool mainStrIsFree = true;
+// END-----------------------DATA's
+#endif
+//===========================CLASSES
+//------------------------------------------------------Lisence
+#include <esp_system.h>
+#include <WiFi.h>
+#include <SHA256.h>
+uint64_t chipid;
+String GeneralLisence;
+class lisence
+{
+#include <string.h>
+public:
+  String name;
+  String secretKey;
+  char realSerial[18];
+  bool State;
+
+public:
+  lisence(String lisenceName, String key)
+  {
+    secretKey = key;
+    name = lisenceName;
+    State = checkActivation();
+    generateSerial();
+  }
+  bool checkActivation()
+  {
+    // find the key in the string
+    int keyIndex = GeneralLisence.indexOf(name);
+    if (keyIndex == -1)
+    {
+      return false;
+    }
+    // find the end of the key
+    int endKeyIndex = GeneralLisence.indexOf(':', keyIndex);
+    if (endKeyIndex == -1)
+    {
+      return false;
+    }
+    // find the start of the value
+    int valueIndex = endKeyIndex + 1;
+    // find the end of the value
+    int endValueIndex = GeneralLisence.indexOf(',', valueIndex);
+    if (endValueIndex == -1)
+    {
+      endValueIndex = GeneralLisence.length();
+    }
+    // extract the value substring
+    String valueStr = GeneralLisence.substring(valueIndex, endValueIndex);
+    // convert the value string to a boolean
+    return valueStr == "True "; // chonke false ye harf bishtare be true space zadim too save
+  }
+  // Edits a boolean license feature in a string based on a new state.
+  void editGeneralLisence()
+  {
+    String searchName = name + ":";
+    int pos = GeneralLisence.indexOf(searchName);
+    if (pos == -1)
+    {
+      // name not found in GeneralLisence, do nothing
+      return;
+    }
+    // find the end position of the value (which is either "," or end of string)
+    int endPos = GeneralLisence.indexOf(",", pos);
+    if (endPos == -1)
+    {
+      endPos = GeneralLisence.length();
+    }
+    // extract the current value of the name
+    String value = GeneralLisence.substring(pos + searchName.length(), endPos);
+    // construct the new value based on the current state
+    String newValue = (State ? "True " : "False");
+    // check if the length of the old and new values are different
+    if (newValue.length() != value.length())
+    {
+      // adjust the length by adding or removing a single comma
+      if (newValue.length() > value.length())
+      {
+        value += ","; // add a comma to the end of the value
+      }
+      else
+      {
+        value = value.substring(0, value.length() - 1); // remove the comma at the end of the value
+      }
+    }
+    // replace the old value with the new value
+    for (int i = 0; i < newValue.length(); i++)
+    {
+      GeneralLisence.setCharAt(pos + searchName.length() + i, newValue.charAt(i));
+    }
+    // add or remove comma if necessary
+    if (newValue.length() > value.length())
+    {
+      GeneralLisence += ",";
+    }
+    else if (newValue.length() < value.length())
+    {
+      GeneralLisence = GeneralLisence.substring(0, pos + searchName.length() + newValue.length()) + GeneralLisence.substring(endPos);
+    }
+  }
+
+  void activate()
+  {
+    State = true;
+    editGeneralLisence();
+    EEPROM.writeString(E2ADD.licenseStatSave, GeneralLisence);
+    EEPROM.commit();
+  }
+
+  void deactivate()
+  {
+    State = false;
+    editGeneralLisence();
+    EEPROM.writeString(E2ADD.licenseStatSave, GeneralLisence);
+    EEPROM.commit();
+  }
+
+  void generateSerial()
+  {
+    // Combine the chip ID with the secret key
+    uint64_t uid = ESP.getEfuseMac();
+    char seed[32];
+    snprintf(seed, sizeof(seed), "%012llX%s", uid, secretKey);
+
+    // Generate a SHA-256 hash from the seed
+    SHA256 sha256;
+    uint8_t hash[32];
+    sha256.update((const uint8_t *)seed, strlen(seed));
+    sha256.finalize(hash, sizeof(hash));
+
+    // Convert the hash to a registration code
+    snprintf(realSerial, 17, "%02X%02X%02X%02X%02X%02X%02X%02X",
+             hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7]);
+  }
+  bool isActive()
+  {
+    return State;
+  }
+};
+lisence *GyroLicense;  // Key for Gyro
+lisence *VoiceLicense; // Key For Voice
+//----------------------Barometer
+#include <Arduino_LPS22HB.h>
+double psiToMeters(double x)
+{
+  double terms[] = {
+      2.9555552436857372e+004,
+      -1.7883867989464394e+004,
+      9.8312047316532298e+003,
+      -3.7605201110388034e+003,
+      9.5496784858940555e+002,
+      -1.6250311741869669e+002,
+      1.8559912122100705e+001,
+      -1.4009705117575890e+000,
+      6.6928561584190832e-002,
+      -1.8309852995320351e-003,
+      2.1837249289504070e-005};
+  size_t csz = sizeof terms / sizeof *terms;
+  double t = 1;
+  double r = 0;
+  for (int i = 0; i < csz; i++)
+  {
+    r += terms[i] * t;
+    t *= x;
+  }
+  return r;
+}
+//----------------------Accelerameter
+String GyroOriantation = "XY00";
+#include "SparkFunLIS3DH.h"
+LIS3DH myIMU; // Default constructor is I2C, addr 0x19.
+uint8_t Xis, Yis;
+int revX, revY;
+#define AXEL_X_DEF 'X'
+#define AXEL_Y_DEF 'Y'
+#define AXEL_Z_DEF 'Z'
+#define AXEL_REV '1'
+#define AXEL_NOR '0'
+void readaxels(uint8_t sensor, float *x, float *y)
+{
+  static String last;
+#define ADD_INTERNAL_GYRO 0x19
+#define ADD_MPU6050 0x68
+  float tempx;
+  float tempy;
+  float tempz;
+
+  if (sensor == ADD_INTERNAL_GYRO)
+  {
+    tempx = myIMU.readFloatAccelX();
+    tempy = myIMU.readFloatAccelY();
+    tempz = myIMU.readFloatAccelZ();
+  }
+  else if (sensor == ADD_MPU6050)
+  {
+    mpu.getEvent(&mpuAcc, &mpuGyro, &mpuTemp);
+    tempx = mpuAcc.acceleration.x;
+    tempy = mpuAcc.acceleration.y;
+    tempz = mpuAcc.acceleration.z;
+  }
+
+  if (1) //(last != GyroOriantation)
+  {
+    last = GyroOriantation;
+    Xis = GyroOriantation.charAt(0);
+    Yis = GyroOriantation.charAt(1);
+    if (GyroOriantation.charAt(2) == AXEL_REV)
+    {
+      revX = -1;
+    }
+    else if (GyroOriantation.charAt(2) == AXEL_NOR)
+    {
+      revX = 1;
+    }
+
+    if (GyroOriantation.charAt(3) == AXEL_REV)
+    {
+      revY = -1;
+    }
+    else if (GyroOriantation.charAt(3) == AXEL_NOR)
+    {
+      revY = 1;
+    }
+  }
+
+  if (Xis == AXEL_X_DEF)
+    *x = tempx;
+  if (Xis == AXEL_Y_DEF)
+    *x = tempy;
+  if (Xis == AXEL_Z_DEF)
+    *x = tempz;
+
+  if (Yis == AXEL_X_DEF)
+    *y = tempx;
+  if (Yis == AXEL_Y_DEF)
+    *y = tempy;
+  if (Yis == AXEL_Z_DEF)
+    *y = tempz;
+}
+class I2CDevice
+{
+public:
+  I2CDevice(int address, String name)
+  {
+    _address = address;
+    _name = name;
+    _connected = false;
+  }
+
+  bool isConnected()
+  {
+    Wire.beginTransmission(_address);
+    _connected = (Wire.endTransmission() == 0);
+    return _connected;
+  }
+
+  bool lastState()
+  {
+    return _connected;
+  }
+
+  String getName()
+  {
+    return _name;
+  }
+
+private:
+  int _address;
+  String _name;
+  bool _connected;
+};
+void I2C_SENSORS_TASK(void *parameters)
+{
+#define CHECK_INTERVAL 500
+#define BARO_INTERVAL 200
+#define GYRO_INTERVAL 5
+#define HUM_INTERVAL 200
+
+#define ADD_INTERNAL_GYRO 0x19
+#define ADD_INTERNAL_BAROMETER 0x5C
+#define ADD_AHT10 0x38
+#define ADD_MPU6050 0x68
+#define ADD_BMP280 0x76
+#define NO_SENSOR 0
+  Wire.begin();
+
+  uint8_t mainGyro = NO_SENSOR;
+  uint8_t mainBarometer = NO_SENSOR;
+  uint8_t mainHumSensor = NO_SENSOR;
+
+  I2CDevice internalGyro(ADD_INTERNAL_GYRO, "INTERNAL_GYRO");
+  I2CDevice internalBarometer(ADD_INTERNAL_BAROMETER, "INTERNAL_BAROMETER");
+  I2CDevice externalAHT10(ADD_AHT10, "AHT10");
+  I2CDevice externalMPU6050(ADD_MPU6050, "MPU6050");
+  I2CDevice externalBMP280(ADD_BMP280, "BMP280");
+
+  int cntr = 0;
+
+  for (;;)
+  {
+    // Cheking for Sensors connectivitys and initializing them
+    if (((cntr++) % CHECK_INTERVAL) == 0)
+    {
+      //--------------internalBarometer
+      if (internalBarometer.lastState() == false)
+      {
+        if (internalBarometer.isConnected() == true)
+        {
+          Serial.print(internalBarometer.getName() + " Connected !");
+          if (BARO.begin())
+          {
+            Serial.println("...OK");
+            mainBarometer = ADD_INTERNAL_BAROMETER;
+          }
+          else
+          {
+            Serial.println("...Failed");
+          }
+        }
+      }
+      else
+      {
+        if (internalBarometer.isConnected() == false)
+        {
+          Serial.println(internalBarometer.getName() + " Disconnected !");
+          mainBarometer = NO_SENSOR;
+        }
+      }
+      //--------------internalGyro Checking
+      if (internalGyro.lastState() == false || mainGyro == NO_SENSOR)
+      {
+        if (internalGyro.isConnected() == true)
+        {
+          Serial.print(internalGyro.getName() + " Connected !");
+
+          if (myIMU.begin() == 0) // means no error for this special libarary
+          {
+            Serial.println("...OK");
+            mainGyro = ADD_INTERNAL_GYRO;
+          }
+          else
+          {
+            Serial.println("...Failed");
+          }
+        }
+      }
+      else
+      {
+        if (internalGyro.isConnected() == false)
+        {
+          Serial.println(internalGyro.getName() + " Disconnected !");
+          mainGyro = NO_SENSOR;
+        }
+      }
+      //--------------ExternalGyro Checking
+      if (externalMPU6050.lastState() == false)
+      {
+        if (externalMPU6050.isConnected() == true)
+        {
+          Serial.print(externalMPU6050.getName() + " Connected !");
+          if (mpu.begin())
+          {
+            Serial.println("...OK");
+            mainGyro = ADD_MPU6050;
+          }
+          else
+          {
+            Serial.println("...Failed");
+          }
+        }
+      }
+      else
+      {
+        if (externalMPU6050.isConnected() == false)
+        {
+          Serial.println(externalMPU6050.getName() + " Disconnected !");
+          mainGyro = NO_SENSOR;
+        }
+      }
+      //--------------External Hum Sensor selecting
+      // BMP280
+      if (externalBMP280.lastState() == false)
+      {
+        if (externalBMP280.isConnected() == true)
+        {
+          Serial.print(externalBMP280.getName() + " Connected !");
+
+          if (bme.begin() == true)
+          {
+            Serial.println("...OK");
+            mainHumSensor = ADD_BMP280;
+          }
+          else
+          {
+            Serial.println("...Failed");
+          }
+        }
+      }
+      else
+      {
+        if (externalBMP280.isConnected() == false)
+        {
+          Serial.println(externalBMP280.getName() + " Disconnected !");
+          mainHumSensor = NO_SENSOR;
+        }
+      }
+      // AHT10
+      if (externalAHT10.lastState() == false)
+      {
+        if (externalAHT10.isConnected() == true)
+        {
+          Serial.print(externalAHT10.getName() + " Connected !");
+          if (aht.begin() == true)
+          {
+            Serial.println("...OK");
+            mainHumSensor = ADD_AHT10;
+          }
+          else
+          {
+            Serial.println("...Failed");
+          }
+        }
+      }
+      else
+      {
+        if (externalAHT10.isConnected() == false)
+        {
+          Serial.println(externalAHT10.getName() + " Disconnected !");
+          mainHumSensor = NO_SENSOR;
+        }
+      }
+    }
+
+    // Actual mesurments and filtering
+    if (cntr % BARO_INTERVAL == 0 && mainBarometer == ADD_INTERNAL_BAROMETER && GyroLicense->isActive() == true)
+    {
+      digitalAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffset);
+    }
+
+    if (cntr % GYRO_INTERVAL == 0)
+    {
+      if (mainGyro == ADD_INTERNAL_GYRO && GyroLicense->isActive() == true)
+      {
+        float tempx, tempy;
+        readaxels(ADD_INTERNAL_GYRO, &tempx, &tempy);
+        accXValue = LOW_PASS_FILTER(tempx, accXValue, 0.98);
+        accYValue = LOW_PASS_FILTER(tempy, accYValue, 0.98);
+      }
+      if (mainGyro == ADD_MPU6050)
+      {
+        float tempx, tempy;
+        readaxels(ADD_MPU6050, &tempx, &tempy);
+        accXValue = LOW_PASS_FILTER(mpuAcc.acceleration.x / 10.0F, accXValue, 0.98);
+        accYValue = LOW_PASS_FILTER(mpuAcc.acceleration.y / 10.0F, accYValue, 0.98);
+      }
+    }
+
+    if (cntr % HUM_INTERVAL == 0)
+    {
+      if (mainHumSensor == ADD_BMP280)
+      {
+        digitalTemp = bme.readTemperature();
+        digitalHum = bme.readHumidity();
+        digitalPress = bme.readPressure();
+      }
+      if (mainHumSensor == ADD_AHT10)
+      {
+        sensors_event_t humidity, temp;
+        aht.getEvent(&humidity, &temp); // populate temp and humidity objects with fresh data
+        digitalHum = humidity.relative_humidity;
+        digitalTemp = temp.temperature;
+      }
+    }
+
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+//-------------------------------------------------TASKS
+
+
+#include <WiFi.h> 
+#include <WiFiUdp.h> 
+ 
+const char* ssid = "Labobinx"; // Your Wi-Fi network name (SSID) 
+const char* password = "1020304050"; // Your Wi-Fi network password 
+ 
+IPAddress sendAddress(255, 255, 255, 255); // Broadcast IP address 
+unsigned int sendPort = 20356; // Destination port number 
+unsigned int localPort = 20356; // Local port number to receive incoming messages 
+ 
+WiFiUDP udp; 
+ 
+void setup() { 
+  Serial.begin(115200); 
+   
+  // Connect to Wi-Fi network 
+  WiFi.begin(ssid, password); 
+  Serial.print("Connecting to "); 
+  Serial.print(ssid); 
+   
+  while (WiFi.status() != WL_CONNECTED) { 
+    delay(1000); 
+    Serial.print("."); 
+  } 
+   
+  Serial.println(""); 
+  Serial.println("Connected to Wi-Fi");   
+  Serial.println("IP Address: "); 
+  Serial.println(WiFi.localIP()); 
+ 
+  // Configure UDP socket 
+  if (!udp.begin(localPort)) { 
+    Serial.println("Failed to begin UDP socket"); 
+    while (1) { 
+      delay(1000); // Wait forever 
+    } 
+  } 
+ 
+  Serial.print("Listening on port "); 
+  Serial.println(localPort); 
+} 
+ 
+void loop() { 
+  // Wait for message to arrive 
+  int packetSize = udp.parsePacket(); 
+  if (packetSize) { 
+    // Read incoming message into a buffer 
+    char incomingPacket[64]; 
+    int bytesRead = udp.read(incomingPacket, 63); 
+ 
+    if (bytesRead > 0) { 
+      incomingPacket[bytesRead] = 0; 
+      Serial.print("Received packet: "); 
+      Serial.println(incomingPacket); 
+ 
+      // Send an acknowledgement back to the sender 
+      udp.beginPacket(sendAddress, sendPort); 
+      udp.printf("ACK: %s", incomingPacket); 
+      udp.endPacket(); 
+    } 
+  } 
+ 
+  // Send a message once per second 
+  uint8_t message[50] ;
+  static int i;
+  sprintf((char *)message, "i=%6d",i++);
+  udp.beginPacket(sendAddress, sendPort); 
+  udp.write((const uint8_t*)message, 8);
+
+  udp.endPacket(); 
+  delay(10); 
+}

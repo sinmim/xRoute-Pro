@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "freenove_ws2812_lib_for_esp32.h": "c"
+    },
+    "idf.flashType": "UART",
+    "idf.portWin": "COM5",
+    "CodeGPT.apiKey": "CodeGPT Plus Beta"
+}
