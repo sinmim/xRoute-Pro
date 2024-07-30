@@ -85,7 +85,6 @@ boolean GyroOffsetingFlg = false;
 sensors_event_t mpuAcc, mpuGyro, mpuTemp;
 void initMPU();
 //------------------------------------WS2812
-int Saman;
 #define LEDS_COUNT 1
 #define LEDS_PIN 23
 #define CHANNEL 0
