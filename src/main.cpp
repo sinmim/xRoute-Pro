@@ -30,7 +30,6 @@
 #include "SparkFunLIS3DH.h"
 #include <SPIFFS.h>
 #include <FS.h>
-#include<conditions.h>
 #endif
 #define __________________________________________VAR_DEF
 #ifdef __________________________________________VAR_DEF
@@ -194,6 +193,9 @@ const String statesFile = "/LastStates.txt";
 #include <ButtonConfig.h>
 const String ConfigFile = "/ConfigFile.txt";
 String strConfigFileBuff = "";
+//===========================Conditions
+#include <conditions.h>
+Conditions *cndtions[10];
 //===========================CLASSES
 uint64_t chipid;
 String GeneralLisence;
@@ -667,6 +669,19 @@ void defaultCalibrations();
 int dimShortFlg = false;
 int dimShortNum = 0;
 //-------------------------------------------------TASKS
+void ConditionsTask(void *parameters)
+{
+  Serial.println("Conditions Task Started");
+  for (;;)
+  {
+    for (int i = 0; i < Conditions::getCount(); i++)
+    {
+      cndtions[i]->doWork();
+    }
+
+    vTaskDelay(1000);
+  }
+}
 void loadStateFromFile()
 {
   Serial.println("Loading Last States");
@@ -719,7 +734,6 @@ void saveStatesToFile()
     f.close();
   }
 }
-
 bool MeasurmentTaskPause = false;
 void MeasurmentTask(void *parameters)
 {
@@ -2615,6 +2629,9 @@ void setup()
     Serial.println("SPIFF ERROR !");
   }
 
+  conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt, &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2, &battHourLeft);
+  cndtions[0] = new Conditions("VOL", 0, ">", 120, "DIM", 1, 25);
+
   uint32_t flashSize = ESP.getFlashChipSize();
   // Convert flash size from bytes to megabytes
   float flashSizeMB = (float)flashSize / (1024.0 * 1024.0);
@@ -2711,6 +2728,13 @@ void setup()
   xTaskCreate(
       BatteryTask,
       "BatteryTask",
+      3 * 1024,
+      NULL,
+      3,
+      NULL);
+  xTaskCreate(
+      ConditionsTask,
+      "ConditionsTask",
       3 * 1024,
       NULL,
       3,
