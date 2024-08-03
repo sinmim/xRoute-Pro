@@ -30,6 +30,7 @@
 #include "SparkFunLIS3DH.h"
 #include <SPIFFS.h>
 #include <FS.h>
+#include<conditions.h>
 #endif
 #define __________________________________________VAR_DEF
 #ifdef __________________________________________VAR_DEF
