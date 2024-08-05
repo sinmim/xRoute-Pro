@@ -114,7 +114,7 @@ void Conditions::setDim(int val)
 void Conditions::setRel(bool state)
 {
     char str[50];
-    if (getRel(outputPort-1) != state)
+    if (getRel(outputPort - 1) != state)
     {
         sprintf(str, "sw%d\n", outputPort);
         sendCmd(str);
@@ -127,17 +127,18 @@ void Conditions::setOut()
     {
         if (outputValue == 0)
         {
-            setRel( false);
+            setRel(false);
         }
         else
         {
-            setRel( true);
+            setRel(true);
         }
     }
     else if (outputType == "DIM")
     {
         setDim(outputValue);
     }
+    Serial.println(inputType+String(inputPort)+oprt+String(setpoint)+"-->"+outputType+String(outputPort)+"="+String(outputValue));
 }
 void Conditions::doWork()
 {

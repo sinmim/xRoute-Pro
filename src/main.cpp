@@ -194,8 +194,9 @@ const String statesFile = "/LastStates.txt";
 const String ConfigFile = "/ConfigFile.txt";
 String strConfigFileBuff = "";
 //===========================Conditions
+#include <vector>
 #include <conditions.h>
-Conditions *cndtions[6];
+std::vector<Conditions> cndtions;
 //===========================CLASSES
 uint64_t chipid;
 String GeneralLisence;
@@ -676,7 +677,7 @@ void ConditionsTask(void *parameters)
   {
     for (int i = 0; i < Conditions::getCount(); i++)
     {
-      cndtions[i]->doWork();
+      cndtions[i].doWork();
     }
 
     vTaskDelay(1000);
@@ -2633,15 +2634,17 @@ void setup()
   setCmdFunction(&sendCmndToMainStringProcessorTask);
   getRelayStateFunction(&relState_0_15);
 
-  cndtions[0] = new Conditions("FLT", 0, ">", 800, "DIM", 1, 0);
-  cndtions[1] = new Conditions("FLT", 0, "<", 700, "DIM", 1, 100);
+  cndtions.push_back(Conditions("FLT", 0, ">", 800, "DIM", 1, 0));
+  cndtions.push_back(Conditions("FLT", 0, "<", 700, "DIM", 1, 100));
 
-  cndtions[2] = new Conditions("VOL", 0, "<", 130, "REL", 1, 0);
-  cndtions[3] = new Conditions("VOL", 0, ">", 130, "REL", 1, 1);
+  cndtions.push_back(Conditions("VOL", 0, "<", 130, "REL", 1, 0));
+  cndtions.push_back(Conditions("VOL", 0, ">", 130, "REL", 1, 1));
 
-  cndtions[4] = new Conditions("FLT", 0, ">", 900, "REL", 2, 1);
-  cndtions[5] = new Conditions("FLT", 0, "<", 900, "REL", 2, 0);
-  
+  cndtions.push_back(Conditions("FLT", 0, ">", 900, "REL", 2, 1));
+  cndtions.push_back(Conditions("FLT", 0, "<", 900, "REL", 2, 0));
+
+  cndtions.push_back(Conditions("HUM", 0, ">", 45, "REL", 3, 1));
+  cndtions.push_back(Conditions("HUM", 0, "<", 40, "REL", 3, 0));
 
   uint32_t flashSize = ESP.getFlashChipSize();
   // Convert flash size from bytes to megabytes

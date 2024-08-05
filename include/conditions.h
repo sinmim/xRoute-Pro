@@ -12,17 +12,17 @@ class Conditions
 {
 private:
   //--Input
-  int inputPort = 1;
-  String inputType = "TEMP_IN";
+  int inputPort ;
+  String inputType;
   float *inputPtr;
   //--Oprator
-  String oprt = ">";
+  String oprt;
   //--Output type
-  int outputPort = 2;
-  String outputType = "REL"; //"DIM"
+  int outputPort ;
+  String outputType; //"DIM"
   //--Output value
-  int outputValue = 100;
-  float setpoint = 75;
+  int outputValue ;
+  float setpoint ;
 
 public:
   static int ConditionCount;
