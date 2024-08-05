@@ -5,7 +5,8 @@
 //=========
 void conditionSetVariables(float *v, float *a0, float *a1, float *w, float *b, float *cwPrcnt, float *dwPrcnt, float *gwPrcnt, float *digitalTemp, float *digitalHum, float *digitalAlt, float *pt100mv, float *a2, float *battHourLeft);
 //=========
-void setCmdFunction(void (*func)(String));
+void setCmdFunction(void (*func)(char *str));
+void getRelayStateFunction(bool (*func)(int RelNum));
 
 class Conditions
 {
@@ -31,7 +32,7 @@ public:
   }
   Conditions(String inputType, int inputPort, String oprt, float setpoint, String outputType, int outputPort, int outputValue);
   void setDim(int val); // override
-  void setRel(int relNum, bool state);
+  void setRel(bool state);
   void setOut();
   void doWork();
 };

@@ -21,10 +21,15 @@ void conditionSetVariables(float *v, float *a0, float *a1, float *w, float *b, f
     _battHourLeft = battHourLeft;
 }
 //=========
-void (*sendCmd)(String);
-void setCmdFunction(void (*func)(String))
+void (*sendCmd)(char *str);
+void setCmdFunction(void (*func)(char *str))
 {
     sendCmd = func;
+};
+bool (*getRel)(int RelNum);
+void getRelayStateFunction(bool (*func)(int RelNum))
+{
+    getRel = func;
 };
 
 Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue)
@@ -101,15 +106,19 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
 
 void Conditions::setDim(int val)
 {
-    String str = "APDIM" + String(outputPort) + ".val=" + String(val) + "\n";
-    sendCmd(str.c_str());
+    char str[50];
+    sprintf(str, "APDIM%d.val=%d\n", outputPort, val);
+    sendCmd(str);
 }
 
-void Conditions::setRel(int relNum, bool state)
+void Conditions::setRel(bool state)
 {
-    // it will toggle the rel state and need to set it or reset it instead of toggle . later ill do it
-    String str = "sw" + String(relNum) + "\n";
-    sendCmd(str.c_str());
+    char str[50];
+    if (getRel(outputPort-1) != state)
+    {
+        sprintf(str, "sw%d\n", outputPort);
+        sendCmd(str);
+    }
 }
 
 void Conditions::setOut()
@@ -118,18 +127,17 @@ void Conditions::setOut()
     {
         if (outputValue == 0)
         {
-            setRel(outputPort, false);
+            setRel( false);
         }
         else
         {
-            setRel(outputPort, true);
+            setRel( true);
         }
     }
     else if (outputType == "DIM")
     {
         setDim(outputValue);
     }
-    Serial.println("Condition meet");
 }
 void Conditions::doWork()
 {

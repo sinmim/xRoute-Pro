@@ -195,7 +195,7 @@ const String ConfigFile = "/ConfigFile.txt";
 String strConfigFileBuff = "";
 //===========================Conditions
 #include <conditions.h>
-Conditions *cndtions[10];
+Conditions *cndtions[6];
 //===========================CLASSES
 uint64_t chipid;
 String GeneralLisence;
@@ -2630,7 +2630,18 @@ void setup()
   }
 
   conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt, &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2, &battHourLeft);
-  cndtions[0] = new Conditions("VOL", 0, ">", 120, "DIM", 1, 25);
+  setCmdFunction(&sendCmndToMainStringProcessorTask);
+  getRelayStateFunction(&relState_0_15);
+
+  cndtions[0] = new Conditions("FLT", 0, ">", 800, "DIM", 1, 0);
+  cndtions[1] = new Conditions("FLT", 0, "<", 700, "DIM", 1, 100);
+
+  cndtions[2] = new Conditions("VOL", 0, "<", 130, "REL", 1, 0);
+  cndtions[3] = new Conditions("VOL", 0, ">", 130, "REL", 1, 1);
+
+  cndtions[4] = new Conditions("FLT", 0, ">", 900, "REL", 2, 1);
+  cndtions[5] = new Conditions("FLT", 0, "<", 900, "REL", 2, 0);
+  
 
   uint32_t flashSize = ESP.getFlashChipSize();
   // Convert flash size from bytes to megabytes
