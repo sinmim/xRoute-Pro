@@ -102,6 +102,7 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
     {
         // inputPtr = ; must add a variable for relay
     }
+    Serial.println("Condition[" + String(index) + "]: IF(" + inputType + String(inputPort) + String(oprt) + String(setpoint) + ")-->" + outputType + String(outputPort) + "=" + String(outputValue));
 }
 
 void Conditions::setDim(int val)
@@ -118,7 +119,7 @@ void Conditions::setRel(bool state)
     {
         sprintf(str, "sw%d\n", outputPort);
         sendCmd(str);
-        Serial.println("Condition["+String(index)+"]: " + inputType + String(inputPort) + oprt + String(setpoint) + "-->" + outputType + String(outputPort) + "=" + String(outputValue));
+        Serial.println("Condition[" + String(index) + "]: " + inputType + String(inputPort) + oprt + String(setpoint) + "-->" + outputType + String(outputPort) + "=" + String(outputValue));
     }
 }
 

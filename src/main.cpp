@@ -2646,8 +2646,8 @@ void setup()
   cndtions.push_back(Conditions("HUM", 0, ">", 45, "REL", 3, 1));//6
   cndtions.push_back(Conditions("HUM", 0, "<", 40, "REL", 3, 0));//7
 
-  cndtions.push_back(Conditions("AMP", 2, ">", 500, "REL", 4, 1));//8
-  cndtions.push_back(Conditions("AMP", 2, "<", 500, "REL", 4, 0));//9
+  cndtions.push_back(Conditions("AMP", 2, ">", 50, "REL", 4, 1));//8
+  cndtions.push_back(Conditions("AMP", 2, "<", 50, "REL", 4, 0));//9
 
   cndtions.push_back(Conditions("AMP", 0, "<", -50, "REL", 5, 1));//10
   cndtions.push_back(Conditions("AMP", 0, ">", -50, "REL", 5, 0));//11
