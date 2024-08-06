@@ -11,6 +11,7 @@ void getRelayStateFunction(bool (*func)(int RelNum));
 class Conditions
 {
 private:
+  int index;
   //--Input
   int inputPort ;
   String inputType;

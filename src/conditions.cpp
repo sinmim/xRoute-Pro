@@ -34,8 +34,8 @@ void getRelayStateFunction(bool (*func)(int RelNum))
 
 Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue)
 {
+    index = ConditionCount;
     ConditionCount++;
-
     inputType = _inputType;
     inputPort = _inputPort;
     oprt = _oprt;
@@ -118,6 +118,7 @@ void Conditions::setRel(bool state)
     {
         sprintf(str, "sw%d\n", outputPort);
         sendCmd(str);
+        Serial.println("Condition["+String(index)+"]: " + inputType + String(inputPort) + oprt + String(setpoint) + "-->" + outputType + String(outputPort) + "=" + String(outputValue));
     }
 }
 
@@ -138,8 +139,8 @@ void Conditions::setOut()
     {
         setDim(outputValue);
     }
-    Serial.println(inputType+String(inputPort)+oprt+String(setpoint)+"-->"+outputType+String(outputPort)+"="+String(outputValue));
 }
+
 void Conditions::doWork()
 {
     float val = *inputPtr;
