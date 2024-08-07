@@ -117,9 +117,13 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
 
 void Conditions::setDim(int val)
 {
-    char str[50];
-    sprintf(str, "APDIM%d.val=%d\n", outputPort, val);
-    sendCmd(str);
+    if ((int)(getDim(inputPort - 1)) != val)
+    {
+        char str[50];
+        sprintf(str, "APDIM%d.val=%d\n", outputPort, val);
+        sendCmd(str);
+        Serial.println("Condition[" + String(index) + "]: " + inputType + String(inputPort) + oprt + String(setpoint) + "-->" + outputType + String(outputPort) + "=" + String(outputValue));
+    }
 }
 
 void Conditions::setRel(bool state)
@@ -158,7 +162,6 @@ void Conditions::doWork()
     float val = 1;
     if (inputType == "REL")
     {
-
         if (getRel(inputPort - 1) == true)
         {
             val = 1;
@@ -167,8 +170,10 @@ void Conditions::doWork()
         {
             val = 0;
         }
+        // Serial.println(val);
+        // return;
     }
-    if (inputType == "DIM")
+    else if (inputType == "DIM")
     {
         val = getDim(inputPort - 1);
     }

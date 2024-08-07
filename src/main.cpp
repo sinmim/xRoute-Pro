@@ -675,13 +675,10 @@ void ConditionsTask(void *parameters)
   Serial.println("Conditions Task Started");
   for (;;)
   {
-    long int ms = millis();
     for (int i = 0; i < Conditions::getCount(); i++)
     {
       cndtions[i].doWork();
     }
-    Serial.println("Conditions Time : " + String((millis() - ms)));
-
     vTaskDelay(1000);
   }
 }
@@ -2399,6 +2396,10 @@ void defaultCalibrations()
 }
 void sendCmndToMainStringProcessorTask(char *str)
 {
+  while (mainStrIsFree == false)
+  {
+    vTaskDelay(pdTICKS_TO_MS(1));
+  }
   mainStrIsFree = false;
   strcpy(mainRxStr, str);
   mainStrIsFree = true;
@@ -2637,11 +2638,13 @@ void setup()
   getRelayStateFunction(&relState_0_15);
   getDimValueFunction(&getDimVal);
 
-  // cndtions.push_back(Conditions("FLT", 0, ">", 800, "DIM", 1, 0));  // 0
-  // cndtions.push_back(Conditions("FLT", 0, "<", 700, "DIM", 1, 10)); // 1
+  cndtions.push_back(Conditions("FLT", 0, ">", 800, "DIM", 1, 0));  // 0
+  cndtions.push_back(Conditions("FLT", 0, "<", 700, "DIM", 1, 10)); // 1
 
-  // cndtions.push_back(Conditions("VOL", 0, "<", 130, "REL", 1, 0)); // 2
-  // cndtions.push_back(Conditions("VOL", 0, ">", 130, "REL", 1, 1)); // 3
+  cndtions.push_back(Conditions("VOL", 0, "<", 130, "REL", 1, 0));  // 2
+  cndtions.push_back(Conditions("VOL", 0, "<", 130, "DIM", 2, 0));  // 3
+  cndtions.push_back(Conditions("VOL", 0, ">", 130, "REL", 1, 1));  // 4
+  cndtions.push_back(Conditions("VOL", 0, ">", 130, "DIM", 2, 20)); // 5
 
   // cndtions.push_back(Conditions("FLT", 0, ">", 900, "REL", 2, 1)); // 4
   // cndtions.push_back(Conditions("FLT", 0, "<", 900, "REL", 2, 0)); // 5
@@ -2661,11 +2664,11 @@ void setup()
   // cndtions.push_back(Conditions("AMP", 0, "<", -5, "REL", 5, 1)); // 14
   // cndtions.push_back(Conditions("AMP", 0, ">", -5, "REL", 5, 0)); // 15
 
-  //cndtions.push_back(Conditions("DIM", 7, ">", 100, "REL", 8, 1)); // 16
-//cndtions.push_back(Conditions("DIM", 7, "<", 100, "REL", 8, 0)); // 17
+  // cndtions.push_back(Conditions("DIM", 7, ">", 100, "REL", 8, 1)); // 16
+  // cndtions.push_back(Conditions("DIM", 7, "<", 100, "REL", 8, 0)); // 17
 
-  cndtions.push_back(Conditions("REL", 1, ">", 0, "REL", 6, 1)); // 18
-  cndtions.push_back(Conditions("REL", 1, "<", 1, "REL", 6, 0)); // 19
+  // cndtions.push_back(Conditions("REL", 1, ">", 0, "REL", 6, 1)); // 18
+  // cndtions.push_back(Conditions("REL", 1, "<", 1, "REL", 6, 0)); // 19
 
   uint32_t flashSize = ESP.getFlashChipSize();
   // Convert flash size from bytes to megabytes
