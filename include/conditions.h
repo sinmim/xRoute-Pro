@@ -7,23 +7,23 @@ void conditionSetVariables(float *v, float *a0, float *a1, float *w, float *b, f
 //=========
 void setCmdFunction(void (*func)(char *str));
 void getRelayStateFunction(bool (*func)(int RelNum));
-
+void getDimValueFunction(float (*func)(int n));
 class Conditions
 {
 private:
   int index;
   //--Input
-  int inputPort ;
+  int inputPort;
   String inputType;
-  float *inputPtr;
+  float *inputPtr = nullptr;
   //--Oprator
   String oprt;
   //--Output type
-  int outputPort ;
+  int outputPort;
   String outputType; //"DIM"
   //--Output value
-  int outputValue ;
-  float setpoint ;
+  int outputValue;
+  float setpoint;
 
 public:
   static int ConditionCount;

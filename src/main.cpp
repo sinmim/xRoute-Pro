@@ -49,7 +49,7 @@
 // 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
 // String Version = "4.0.7"; 24V version
 // 2.0.8 adding save to file for state recovery after crashes
-String Version = "2.0.8";
+String Version = "2.1.0";
 //========Update
 #include "Update.h"
 #include "AESLib.h"
@@ -675,10 +675,12 @@ void ConditionsTask(void *parameters)
   Serial.println("Conditions Task Started");
   for (;;)
   {
+    long int ms = millis();
     for (int i = 0; i < Conditions::getCount(); i++)
     {
       cndtions[i].doWork();
     }
+    Serial.println("Conditions Time : " + String((millis() - ms)));
 
     vTaskDelay(1000);
   }
@@ -2633,25 +2635,37 @@ void setup()
   conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt, &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2, &battHourLeft);
   setCmdFunction(&sendCmndToMainStringProcessorTask);
   getRelayStateFunction(&relState_0_15);
+  getDimValueFunction(&getDimVal);
 
-  cndtions.push_back(Conditions("FLT", 0, ">", 800, "DIM", 1, 0));//0
-  cndtions.push_back(Conditions("FLT", 0, "<", 700, "DIM", 1, 10));//1
+  // cndtions.push_back(Conditions("FLT", 0, ">", 800, "DIM", 1, 0));  // 0
+  // cndtions.push_back(Conditions("FLT", 0, "<", 700, "DIM", 1, 10)); // 1
 
-  cndtions.push_back(Conditions("VOL", 0, "<", 130, "REL", 1, 0));//2
-  cndtions.push_back(Conditions("VOL", 0, ">", 130, "REL", 1, 1));//3
+  // cndtions.push_back(Conditions("VOL", 0, "<", 130, "REL", 1, 0)); // 2
+  // cndtions.push_back(Conditions("VOL", 0, ">", 130, "REL", 1, 1)); // 3
 
-  cndtions.push_back(Conditions("FLT", 0, ">", 900, "REL", 2, 1));//4
-  cndtions.push_back(Conditions("FLT", 0, "<", 900, "REL", 2, 0));//5
+  // cndtions.push_back(Conditions("FLT", 0, ">", 900, "REL", 2, 1)); // 4
+  // cndtions.push_back(Conditions("FLT", 0, "<", 900, "REL", 2, 0)); // 5
 
-  cndtions.push_back(Conditions("HUM", 0, ">", 45, "REL", 3, 1));//6
-  cndtions.push_back(Conditions("HUM", 0, "<", 40, "REL", 3, 0));//7
+  // cndtions.push_back(Conditions("HUM", 0, ">", 45, "REL", 3, 1)); // 6
+  // cndtions.push_back(Conditions("HUM", 0, "<", 40, "REL", 3, 0)); // 7
 
-  cndtions.push_back(Conditions("AMP", 2, ">", 50, "REL", 4, 1));//8
-  cndtions.push_back(Conditions("AMP", 2, "<", 50, "REL", 4, 0));//9
+  // cndtions.push_back(Conditions("TMP", 1, ">", 280, "REL", 6, 1)); // 8
+  // cndtions.push_back(Conditions("TMP", 1, "<", 280, "REL", 6, 0)); // 9
 
-  cndtions.push_back(Conditions("AMP", 0, "<", -50, "REL", 5, 1));//10
-  cndtions.push_back(Conditions("AMP", 0, ">", -50, "REL", 5, 0));//11
+  // cndtions.push_back(Conditions("AMP", 2, ">", 50, "REL", 4, 1)); // 10
+  // cndtions.push_back(Conditions("AMP", 2, "<", 50, "REL", 4, 0)); // 11
 
+  // cndtions.push_back(Conditions("AMP", 2, ">", 50, "DIM", 2, 100)); // 12
+  // cndtions.push_back(Conditions("AMP", 2, "<", 50, "DIM", 2, 0));   // 13
+
+  // cndtions.push_back(Conditions("AMP", 0, "<", -5, "REL", 5, 1)); // 14
+  // cndtions.push_back(Conditions("AMP", 0, ">", -5, "REL", 5, 0)); // 15
+
+  //cndtions.push_back(Conditions("DIM", 7, ">", 100, "REL", 8, 1)); // 16
+//cndtions.push_back(Conditions("DIM", 7, "<", 100, "REL", 8, 0)); // 17
+
+  cndtions.push_back(Conditions("REL", 1, ">", 0, "REL", 6, 1)); // 18
+  cndtions.push_back(Conditions("REL", 1, "<", 1, "REL", 6, 0)); // 19
 
   uint32_t flashSize = ESP.getFlashChipSize();
   // Convert flash size from bytes to megabytes
@@ -2926,6 +2940,7 @@ void dimmerShortCircuitIntrupt()
     sum = 0;
   }
 }
+
 // END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
 //* ALI: namayeshgare gyro tooye home ham bayad scale beshe eyne too wizard

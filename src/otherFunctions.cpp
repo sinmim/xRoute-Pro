@@ -134,7 +134,11 @@ void giveMeMacAdress()
   }
   Serial.println();
 }
-
+float getDimVal(int n)
+{
+  float val = (dimTmp[n] / (32768 * dimLimit[n])) * 255;
+  return val;
+}
 bool SaveStringToFile(String str, String path)
 {
   Serial.println("Creating ConfigFile from: " + str);

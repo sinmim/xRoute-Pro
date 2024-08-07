@@ -21,6 +21,7 @@ void conditionSetVariables(float *v, float *a0, float *a1, float *w, float *b, f
     _battHourLeft = battHourLeft;
 }
 //=========
+
 void (*sendCmd)(char *str);
 void setCmdFunction(void (*func)(char *str))
 {
@@ -31,6 +32,11 @@ void getRelayStateFunction(bool (*func)(int RelNum))
 {
     getRel = func;
 };
+float (*getDim)(int DimNumber);
+void getDimValueFunction(float (*func)(int n))
+{
+    getDim = func;
+}
 
 Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue)
 {
@@ -100,7 +106,11 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
     }
     else if (inputType == "REL")
     {
-        // inputPtr = ; must add a variable for relay
+        // itll done in the do work
+    }
+    else if (inputType == "DIM")
+    {
+        // itll done in the do work
     }
     Serial.println("Condition[" + String(index) + "]: IF(" + inputType + String(inputPort) + String(oprt) + String(setpoint) + ")-->" + outputType + String(outputPort) + "=" + String(outputValue));
 }
@@ -144,7 +154,28 @@ void Conditions::setOut()
 
 void Conditions::doWork()
 {
-    float val = *inputPtr;
+
+    float val = 1;
+    if (inputType == "REL")
+    {
+
+        if (getRel(inputPort - 1) == true)
+        {
+            val = 1;
+        }
+        else
+        {
+            val = 0;
+        }
+    }
+    if (inputType == "DIM")
+    {
+        val = getDim(inputPort - 1);
+    }
+    else
+    {
+        val = *inputPtr;
+    }
 
     if (oprt == ">")
     {

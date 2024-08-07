@@ -13,5 +13,6 @@ void printTaskResourceUsage(int interval);
 void giveMeMacAdress();
 bool SaveStringToFile(String str, String path);
 String readStringFromFile(String path);
+float getDimVal(int n);
 
 #endif
