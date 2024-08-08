@@ -32,8 +32,8 @@ void getRelayStateFunction(bool (*func)(int RelNum))
 {
     getRel = func;
 };
-float (*getDim)(int DimNumber);
-void getDimValueFunction(float (*func)(int n))
+int (*getDim)(int DimNumber);
+void getDimValueFunction(int (*func)(int n))
 {
     getDim = func;
 }
@@ -117,7 +117,8 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
 
 void Conditions::setDim(int val)
 {
-    if ((int)(getDim(inputPort - 1)) != val)
+    //Serial.print("inputPort:" + String(outputPort) + "getdim:" + String(getDim(outputPort - 1)) + " val:" + String(val));
+    if (getDim(outputPort - 1) != val)
     {
         char str[50];
         sprintf(str, "APDIM%d.val=%d\n", outputPort, val);
@@ -158,7 +159,6 @@ void Conditions::setOut()
 
 void Conditions::doWork()
 {
-
     float val = 1;
     if (inputType == "REL")
     {

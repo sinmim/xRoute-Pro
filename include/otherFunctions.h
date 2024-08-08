@@ -1,5 +1,5 @@
-#ifndef othedFunctions_h
-#define othedFunctions_h
+#ifndef otherFunctions_h
+#define otherFunctions_h
 void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit);
 void generatePass(char *result);
 bool checkPass(uint64_t uid, const char *pass);
@@ -13,6 +13,6 @@ void printTaskResourceUsage(int interval);
 void giveMeMacAdress();
 bool SaveStringToFile(String str, String path);
 String readStringFromFile(String path);
-float getDimVal(int n);
+int getDimVal(int n);
 
 #endif

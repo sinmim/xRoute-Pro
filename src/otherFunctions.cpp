@@ -2,7 +2,7 @@
 #include <esp_system.h>
 #include <WiFi.h>
 #include <SHA256.h>
-#include "othedFunctions.h"
+#include "otherFunctions.h"
 #include "relay.h"
 #include "BLESerial.h"
 #include "BluetoothSerial.h"
@@ -134,10 +134,10 @@ void giveMeMacAdress()
   }
   Serial.println();
 }
-float getDimVal(int n)
+int getDimVal(int n)
 {
   float val = (dimTmp[n] / (32768 * dimLimit[n])) * 255;
-  return val;
+  return (int)val;
 }
 bool SaveStringToFile(String str, String path)
 {

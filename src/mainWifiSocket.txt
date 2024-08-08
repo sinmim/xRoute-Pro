@@ -10,7 +10,7 @@
 #include <BLESerial.h>
 #include <BLEDevice.h>
 #include "relay.h"
-#include "othedFunctions.h"
+#include "otherFunctions.h"
 #include "ledPwm.h"
 #include "dsp.h"
 #include "adc.h"

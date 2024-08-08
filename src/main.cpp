@@ -11,7 +11,7 @@
 #include <BLESerial.h>
 #include <BLEDevice.h>
 #include "relay.h"
-#include "othedFunctions.h"
+#include "otherFunctions.h"
 #include "ledPwm.h"
 #include "dsp.h"
 #include "adc.h"
@@ -192,11 +192,16 @@ bool mainStrIsFree = true;
 const String statesFile = "/LastStates.txt";
 #include <ButtonConfig.h>
 const String ConfigFile = "/ConfigFile.txt";
-String strConfigFileBuff = "";
+#include <defaultConditions.h>
+extern const char *defaultCondition;
+String confAndCondStrBuffer = "";
+const String CondFile = "/CondFile.txt";
 //===========================Conditions
 #include <vector>
 #include <conditions.h>
 std::vector<Conditions> cndtions;
+#include <jsonCondition.h>
+ConditionsReader jsonCon;
 //===========================CLASSES
 uint64_t chipid;
 String GeneralLisence;
@@ -679,7 +684,7 @@ void ConditionsTask(void *parameters)
     {
       cndtions[i].doWork();
     }
-    vTaskDelay(1000);
+    vTaskDelay(500);
   }
 }
 void loadStateFromFile()
@@ -1883,7 +1888,7 @@ void MainStringProcessTask(void *parameters)
       int chunkCntr = configLen / CHUNK_SIZE;
       int byteCntr = configLen % CHUNK_SIZE;
       int dataSize;
-      strConfigFileBuff.clear();
+      confAndCondStrBuffer.clear();
       for (int i = 0; i < chunkCntr; i++)
       {
         SerialBT.write(aknoledge, 6);
@@ -1891,7 +1896,7 @@ void MainStringProcessTask(void *parameters)
         dataSize = SerialBT.readBytes(dataBuff, CHUNK_SIZE);
         for (int i = 0; i < dataSize; i++)
         {
-          strConfigFileBuff += (char)dataBuff[i];
+          confAndCondStrBuffer += (char)dataBuff[i];
         }
       }
       SerialBT.write(aknoledge, 6);
@@ -1900,12 +1905,12 @@ void MainStringProcessTask(void *parameters)
       SerialBT.readBytes(dataBuff, byteCntr);
       for (int i = 0; i < byteCntr; i++)
       {
-        strConfigFileBuff += (char)dataBuff[i];
+        confAndCondStrBuffer += (char)dataBuff[i];
       }
-      strConfigFileBuff[configLen] = '\0';
-      SaveStringToFile(strConfigFileBuff, ConfigFile);
+      confAndCondStrBuffer[configLen] = '\0';
+      SaveStringToFile(confAndCondStrBuffer, ConfigFile);
       Serial.flush();
-      strConfigFileBuff.clear();
+      confAndCondStrBuffer.clear();
       MeasurmentTaskPause = false;
       sendConfig();
     }
@@ -2607,6 +2612,10 @@ void setup433()
     }
   }
 }
+void createCondition(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue)
+{
+  cndtions.push_back(Conditions(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue)); // 0
+}
 
 void setup()
 {
@@ -2618,6 +2627,7 @@ void setup()
     Serial.println("SPIFF OK !");
     loadStateFromFile();
     // SaveStringToFile(String(defaultConfig), ConfigFile); // for test and it should be removed
+    // UI Config File
     if (!SPIFFS.exists(ConfigFile))
     {
       if (!SaveStringToFile(String(defaultConfig), ConfigFile))
@@ -2625,8 +2635,18 @@ void setup()
         Serial.println("Error Saving: " + String(ConfigFile));
       }
     }
-    String configFileContent = readStringFromFile(ConfigFile);
-    Serial.println("Config File Content: " + configFileContent);
+    String fileContent = readStringFromFile(ConfigFile);
+    Serial.println("Config File Content: " + fileContent);
+    // CONDITIONS
+    if (!SPIFFS.exists(CondFile))
+    {
+      if (!SaveStringToFile(String(defaultCondition), CondFile))
+      {
+        Serial.println("Error Saving: " + String(CondFile));
+      }
+    }
+    fileContent = readStringFromFile(CondFile);
+    Serial.println("Condition File Content: " + fileContent);
   }
   else
   {
@@ -2637,17 +2657,40 @@ void setup()
   setCmdFunction(&sendCmndToMainStringProcessorTask);
   getRelayStateFunction(&relState_0_15);
   getDimValueFunction(&getDimVal);
+  setcondCreatorFunction(&createCondition);
+  jsonCon.readJsonConditionsFromFile(CondFile);
 
-  cndtions.push_back(Conditions("FLT", 0, ">", 800, "DIM", 1, 0));  // 0
-  cndtions.push_back(Conditions("FLT", 0, "<", 700, "DIM", 1, 10)); // 1
+  // cndtions.push_back(Conditions("FLT", 0, "<", 700, "DIM", 1, 10)); // 1
 
-  cndtions.push_back(Conditions("VOL", 0, "<", 130, "REL", 1, 0));  // 2
-  cndtions.push_back(Conditions("VOL", 0, "<", 130, "DIM", 2, 0));  // 3
-  cndtions.push_back(Conditions("VOL", 0, ">", 130, "REL", 1, 1));  // 4
-  cndtions.push_back(Conditions("VOL", 0, ">", 130, "DIM", 2, 20)); // 5
+  // cndtions.push_back(Conditions("VOL", 0, "<", 130, "REL", 1, 0));  // 2
+  // cndtions.push_back(Conditions("VOL", 0, "<", 130, "DIM", 2, 0));  // 3
+  // cndtions.push_back(Conditions("VOL", 0, ">", 130, "REL", 1, 1));  // 4
+  // cndtions.push_back(Conditions("VOL", 0, ">", 130, "DIM", 2, 20)); // 5
 
-  // cndtions.push_back(Conditions("FLT", 0, ">", 900, "REL", 2, 1)); // 4
-  // cndtions.push_back(Conditions("FLT", 0, "<", 900, "REL", 2, 0)); // 5
+  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 1, 1)); // 6
+  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 2, 1)); // 7
+  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 3, 1)); // 8
+  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 4, 1)); // 9
+  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 5, 1)); // 10
+  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 6, 1)); // 11
+  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 7, 1)); // 12
+  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 8, 1)); // 13
+
+  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 1, 0)); // 14
+  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 2, 0)); // 15
+  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 3, 0)); // 16
+  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 4, 0)); // 17
+  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 5, 0)); // 18
+  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 6, 0)); // 19
+  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 7, 0)); // 20
+  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 8, 0)); // 21
+
+  // cndtions.push_back(Conditions("AMP", 2, ">", 20, "DIM", 3, 200)); // 22
+  // cndtions.push_back(Conditions("AMP", 2, ">", 20, "DIM", 3, 0));  // 23 blinking
+  // cndtions.push_back(Conditions("AMP", 2, "<", 20, "DIM", 3, 0)); // 24
+
+  // cndtions.push_back(Conditions("DIM", 4, ">", 100, "DIM", 5, 150)); // 24
+  // cndtions.push_back(Conditions("DIM", 4, "<", 100, "DIM", 5, 0)); // 24
 
   // cndtions.push_back(Conditions("HUM", 0, ">", 45, "REL", 3, 1)); // 6
   // cndtions.push_back(Conditions("HUM", 0, "<", 40, "REL", 3, 0)); // 7
@@ -2788,7 +2831,7 @@ void setup()
 }
 void loop()
 {
-  vTaskDelay(10 / portTICK_PERIOD_MS);
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
 }
 void loadSavedValue()
 {

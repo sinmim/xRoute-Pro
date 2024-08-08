@@ -3,7 +3,11 @@
         "freenove_ws2812_lib_for_esp32.h": "c",
         "sstream": "cpp",
         "new": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "array": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "utility": "cpp"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM5",

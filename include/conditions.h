@@ -7,7 +7,7 @@ void conditionSetVariables(float *v, float *a0, float *a1, float *w, float *b, f
 //=========
 void setCmdFunction(void (*func)(char *str));
 void getRelayStateFunction(bool (*func)(int RelNum));
-void getDimValueFunction(float (*func)(int n));
+void getDimValueFunction(int (*func)(int n));
 class Conditions
 {
 private:
