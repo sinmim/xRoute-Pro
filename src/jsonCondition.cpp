@@ -118,5 +118,5 @@ void ConditionsReader::readJsonConditionsFromFile(String filename)
     condCreator(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue);
   }
 
-  Serial.println("Configuration loaded successfully from file: " + filename);
+  Serial.println("Conditions loaded successfully from file: " + filename);
 }

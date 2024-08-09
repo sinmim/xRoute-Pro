@@ -115,9 +115,14 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
     Serial.println("Condition[" + String(index) + "]: IF(" + inputType + String(inputPort) + String(oprt) + String(setpoint) + ")-->" + outputType + String(outputPort) + "=" + String(outputValue));
 }
 
+Conditions::~Conditions()
+{
+    ConditionCount--;
+}
+
 void Conditions::setDim(int val)
 {
-    //Serial.print("inputPort:" + String(outputPort) + "getdim:" + String(getDim(outputPort - 1)) + " val:" + String(val));
+    // Serial.print("inputPort:" + String(outputPort) + "getdim:" + String(getDim(outputPort - 1)) + " val:" + String(val));
     if (getDim(outputPort - 1) != val)
     {
         char str[50];

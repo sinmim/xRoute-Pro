@@ -32,6 +32,7 @@ public:
     return ConditionCount;
   }
   Conditions(String inputType, int inputPort, String oprt, float setpoint, String outputType, int outputPort, int outputValue);
+  ~Conditions();
   void setDim(int val); // override
   void setRel(bool state);
   void setOut();

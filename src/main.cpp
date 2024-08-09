@@ -2638,6 +2638,7 @@ void setup()
     String fileContent = readStringFromFile(ConfigFile);
     Serial.println("Config File Content: " + fileContent);
     // CONDITIONS
+    SaveStringToFile(String(defaultCondition), CondFile); // for test and you need to disable it otherwise it will default it again every reset
     if (!SPIFFS.exists(CondFile))
     {
       if (!SaveStringToFile(String(defaultCondition), CondFile))
@@ -2653,65 +2654,13 @@ void setup()
     Serial.println("SPIFF ERROR !");
   }
 
+  // Config the Conditions
   conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt, &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2, &battHourLeft);
   setCmdFunction(&sendCmndToMainStringProcessorTask);
   getRelayStateFunction(&relState_0_15);
   getDimValueFunction(&getDimVal);
   setcondCreatorFunction(&createCondition);
   jsonCon.readJsonConditionsFromFile(CondFile);
-
-  // cndtions.push_back(Conditions("FLT", 0, "<", 700, "DIM", 1, 10)); // 1
-
-  // cndtions.push_back(Conditions("VOL", 0, "<", 130, "REL", 1, 0));  // 2
-  // cndtions.push_back(Conditions("VOL", 0, "<", 130, "DIM", 2, 0));  // 3
-  // cndtions.push_back(Conditions("VOL", 0, ">", 130, "REL", 1, 1));  // 4
-  // cndtions.push_back(Conditions("VOL", 0, ">", 130, "DIM", 2, 20)); // 5
-
-  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 1, 1)); // 6
-  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 2, 1)); // 7
-  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 3, 1)); // 8
-  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 4, 1)); // 9
-  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 5, 1)); // 10
-  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 6, 1)); // 11
-  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 7, 1)); // 12
-  // cndtions.push_back(Conditions("REL", 9, "==", 1, "REL", 8, 1)); // 13
-
-  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 1, 0)); // 14
-  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 2, 0)); // 15
-  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 3, 0)); // 16
-  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 4, 0)); // 17
-  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 5, 0)); // 18
-  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 6, 0)); // 19
-  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 7, 0)); // 20
-  // cndtions.push_back(Conditions("REL", 10, "==", 1, "REL", 8, 0)); // 21
-
-  // cndtions.push_back(Conditions("AMP", 2, ">", 20, "DIM", 3, 200)); // 22
-  // cndtions.push_back(Conditions("AMP", 2, ">", 20, "DIM", 3, 0));  // 23 blinking
-  // cndtions.push_back(Conditions("AMP", 2, "<", 20, "DIM", 3, 0)); // 24
-
-  // cndtions.push_back(Conditions("DIM", 4, ">", 100, "DIM", 5, 150)); // 24
-  // cndtions.push_back(Conditions("DIM", 4, "<", 100, "DIM", 5, 0)); // 24
-
-  // cndtions.push_back(Conditions("HUM", 0, ">", 45, "REL", 3, 1)); // 6
-  // cndtions.push_back(Conditions("HUM", 0, "<", 40, "REL", 3, 0)); // 7
-
-  // cndtions.push_back(Conditions("TMP", 1, ">", 280, "REL", 6, 1)); // 8
-  // cndtions.push_back(Conditions("TMP", 1, "<", 280, "REL", 6, 0)); // 9
-
-  // cndtions.push_back(Conditions("AMP", 2, ">", 50, "REL", 4, 1)); // 10
-  // cndtions.push_back(Conditions("AMP", 2, "<", 50, "REL", 4, 0)); // 11
-
-  // cndtions.push_back(Conditions("AMP", 2, ">", 50, "DIM", 2, 100)); // 12
-  // cndtions.push_back(Conditions("AMP", 2, "<", 50, "DIM", 2, 0));   // 13
-
-  // cndtions.push_back(Conditions("AMP", 0, "<", -5, "REL", 5, 1)); // 14
-  // cndtions.push_back(Conditions("AMP", 0, ">", -5, "REL", 5, 0)); // 15
-
-  // cndtions.push_back(Conditions("DIM", 7, ">", 100, "REL", 8, 1)); // 16
-  // cndtions.push_back(Conditions("DIM", 7, "<", 100, "REL", 8, 0)); // 17
-
-  // cndtions.push_back(Conditions("REL", 1, ">", 0, "REL", 6, 1)); // 18
-  // cndtions.push_back(Conditions("REL", 1, "<", 1, "REL", 6, 0)); // 19
 
   uint32_t flashSize = ESP.getFlashChipSize();
   // Convert flash size from bytes to megabytes
@@ -2989,26 +2938,19 @@ void dimmerShortCircuitIntrupt()
 
 // END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
-//* ALI: namayeshgare gyro tooye home ham bayad scale beshe eyne too wizard
 // ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham
-// *baraye har kodum default benevis
 // dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
 // voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
 // amper ke eshtebah kalibre beshe eshtebahi mire too ye protection
 // *vaghti raft tooye protection mode bayad message bede ke amper kheyli ziyade va badesh ke ok shod bayad ba ye payame ok az khata darbiyad
 // *password bezar baraye blt
 // ezafe kardane ye delaye koochik vaghti ke calibratione chizi ro ancam dadim ta inke baes beshe tooye textbox dide beshe ta beshe baraye meghdare defaultha unu khoondesh ya mishe printesh kard too serial
-// har optioni ke tooye wizard set kardi ye message bede ke set shode , toast bede
 // avaz kardane hajme flash baraye inke alan flashet 2 barabar shode
 // Saman for ALI: ye geraphice khoob baraye ali baraye gyro hazer kon
 // connect ya disconnect shodane hame chizo mitooni tashkhis bedi az tarighe sathe voltaga
 // VAGHTI GYRO RESET MISHE LOW PASS SEFR BESHE CHONKE KHEYLI TOOL MIKESHE
-// M.T1 faghat hysterzis dashte bashe az tarafe ALI
 // baraye 24 volt bayad devidere voltago dorost fekr koni barash chon alan majboori avazesh koni
-// khazan va diod baraye filter kardane voltage esp estefade kon
 // az tabeye constrain baraye limit kardane valuehat estefade kon tooye hamejaye kod ke value ha alaki naran asemoono....
-//* to calibration vaghti ke baterifullcalibrate ro mizanim eshtebahi yedoone be bateryempty value ezafe mishe
-//* alarmaye marboot be low power modo dorost kon
 // detect floaters
 
 // problems
