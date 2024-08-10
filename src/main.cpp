@@ -849,6 +849,8 @@ void sendConfig()
 void MainStringProcessTask(void *parameters)
 {
   char str[128];
+  static bool CondFileComming = false;
+
   for (;;)
   {
     /*wait until string being received*/
@@ -1920,8 +1922,45 @@ void MainStringProcessTask(void *parameters)
     }
     else
     {
-      Serial.println(mainRxStr);
+      Serial.print(mainRxStr);
     }
+    /*
+    else if (!strncmp(mainRxStr, "TakeConditions=", 14))
+    {
+      CondFileComming = true;
+      MeasurmentTaskPause=true;
+      Serial.print(mainRxStr);
+    }
+    else
+    {
+      if (CondFileComming == true)
+      {
+        String strtmp = String(mainRxStr);
+        Serial.print(strtmp);
+        if (strtmp.indexOf("END") > 0)
+        {
+          strtmp = strtmp.substring(0, strtmp.lastIndexOf("END"));
+          CondFileComming = false;
+          MeasurmentTaskPause=false;
+        }
+        confAndCondStrBuffer += strtmp;
+
+        if (CondFileComming == false)
+        {
+          // Serial.println("Data:" + ConFileStr + "Finish");
+          jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
+          confAndCondStrBuffer.clear();
+          Serial.println("Condition receiver OK . RESTARTING in ");
+          vTaskDelay(pdMS_TO_TICKS(2000));
+          esp_restart();
+        }
+      }
+      else
+      {
+        Serial.println(mainRxStr);
+      }
+    }
+    */
     /*main string process ends here*/
     mainRxStr[0] = '\0'; // delet main string
     mainStrIsFree = true;
@@ -2638,7 +2677,7 @@ void setup()
     String fileContent = readStringFromFile(ConfigFile);
     Serial.println("Config File Content: " + fileContent);
     // CONDITIONS
-    SaveStringToFile(String(defaultCondition), CondFile); // for test and you need to disable it otherwise it will default it again every reset
+    // SaveStringToFile(String(defaultCondition), CondFile); // for test and you need to disable it otherwise it will default it again every reset
     if (!SPIFFS.exists(CondFile))
     {
       if (!SaveStringToFile(String(defaultCondition), CondFile))

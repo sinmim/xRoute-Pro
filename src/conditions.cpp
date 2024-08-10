@@ -51,15 +51,24 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
     outputValue = _outputValue;
     inputPtr = nullptr; // Initialize the pointer
 
-    if (inputType == "VOL")
+    if (inputType == "VOLTAGE")
     {
         inputPtr = _v;
     }
-    else if (inputType == "BAT")
+    else if (inputType == "BATTERY")
     {
         inputPtr = _b;
     }
-    else if (inputType == "AMP")
+    else if (inputType == "CAR_BATTERY")
+    {
+    }
+    else if (inputType == "CAR_BATTERY")
+    {
+    }
+    else if (inputType == "SOLAR")
+    {
+    }
+    else if (inputType == "CURRENT")
     {
         if (inputPort == 0)
         {
@@ -69,12 +78,8 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
         {
             inputPtr = _a1;
         }
-        else if (inputPort == 2)
-        {
-            inputPtr = _a2;
-        }
     }
-    else if (inputType == "FLT")
+    else if (inputType == "FLOATER")
     {
         if (inputPort == 0)
         {
@@ -89,18 +94,15 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
             inputPtr = _dwPrcnt;
         }
     }
-    else if (inputType == "TMP")
+    else if (inputType == "TEMP_INT")
     {
-        if (inputPort == 0)
-        {
-            inputPtr = _digitalTemp; // needs to change to analod pt100 value by creating a global var in the main
-        }
-        else if (inputPort == 1)
-        {
-            inputPtr = _digitalTemp;
-        }
+        inputPtr = _digitalTemp;
     }
-    else if (inputType == "HUM")
+    else if (inputType == "TEMP_OUT")
+    {
+        inputPtr = _digitalTemp; // needs to change to analod pt100 value by creating a global var in the main
+    }
+    else if (inputType == "HUMIDITY")
     {
         inputPtr = _digitalHum;
     }
@@ -112,12 +114,27 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
     {
         // itll done in the do work
     }
+    else if (inputType == "ALTITUDE")
+    {
+        // itll done in the do work
+    }
+    else if (inputType == "GAS")
+    {
+        inputPtr = _a2;
+    }
+    else if (inputType == "GYRO")
+    {
+    }
+    else if (inputType == "POWER")
+    {
+    }
+
     Serial.println("Condition[" + String(index) + "]: IF(" + inputType + String(inputPort) + String(oprt) + String(setpoint) + ")-->" + outputType + String(outputPort) + "=" + String(outputValue));
 }
 
 Conditions::~Conditions()
 {
-    ConditionCount--;
+    // ConditionCount--;
 }
 
 void Conditions::setDim(int val)
@@ -215,7 +232,7 @@ void Conditions::doWork()
             setOut();
         }
     }
-    else if (oprt == "==")
+    else if (oprt == "=")
     {
         if (val == setpoint)
         {

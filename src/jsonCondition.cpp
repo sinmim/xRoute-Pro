@@ -109,12 +109,12 @@ void ConditionsReader::readJsonConditionsFromFile(String filename)
     // buttons[i].port = condition["port"];
     // buttons[i].image = condition["image"];
     String _inputType = condition["inType"];
-    int _inputPort = condition["inPrt"];
-    String _oprt = condition["oprt"];
-    float _setpoint = condition["setPnt"];
+    int _inputPort = condition["inPort"];
+    String _oprt = condition["opr"];
+    float _setpoint = condition["setpoint"];
     String _outputType = condition["outType"];
-    int _outputPort = condition["outputPort"];
-    int _outputValue = condition["outputValue"];
+    int _outputPort = condition["outPort"];
+    int _outputValue = condition["outVal"];
     condCreator(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue);
   }
 
