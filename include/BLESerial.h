@@ -17,4 +17,8 @@ void BLEsend(char *str);
 void remove_all_bonded_devices(void);
 void bleSendLongString(String longString);
 
+void bleDirectReadingStart();
+void bleDirectReadingStop();
+std::string bleDirectRead();
+
 #endif

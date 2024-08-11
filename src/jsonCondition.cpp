@@ -7,7 +7,6 @@ int ConditionsReader::conditionCount = 0;
 
 ConditionsReader::ConditionsReader()
 {
-  
 }
 
 void (*condCreator)(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue);

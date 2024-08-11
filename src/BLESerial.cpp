@@ -103,12 +103,20 @@ class MyServerCallbacks : public BLEServerCallbacks
     }
 };
 
+bool directReadingFlg = false;
+bool dataReady = false;
+std::string strBLE;
 class MyCallbacks : public BLECharacteristicCallbacks
 {
     void onWrite(BLECharacteristic *pCharacteristic)
     {
-        std::string strBLE = pCharacteristic->getValue();
-        // Serial.print("BLE:");
+        strBLE = pCharacteristic->getValue();
+        if (directReadingFlg)
+        {
+            dataReady = true;
+            return;
+        }
+
         for (int i = 0; i < strBLE.length(); i++)
         {
             // Serial.print(strBLE[i]);          // print received data to terminal
@@ -122,6 +130,24 @@ class MyCallbacks : public BLECharacteristicCallbacks
     {
     }
 };
+
+void bleDirectReadingStart()
+{
+    directReadingFlg = true;
+}
+void bleDirectReadingStop()
+{
+    directReadingFlg = false;
+}
+std::string bleDirectRead()
+{
+    while (!dataReady)
+    {
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    dataReady = false;
+    return strBLE;
+}
 
 class SecurityCallback : public BLESecurityCallbacks
 {

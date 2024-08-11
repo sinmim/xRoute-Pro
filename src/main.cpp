@@ -1920,47 +1920,30 @@ void MainStringProcessTask(void *parameters)
     {
       sendConfig();
     }
-    else
-    {
-      Serial.print(mainRxStr);
-    }
-    /*
     else if (!strncmp(mainRxStr, "TakeConditions=", 14))
     {
-      CondFileComming = true;
-      MeasurmentTaskPause=true;
-      Serial.print(mainRxStr);
+      Serial.println("START----->");
+      bleDirectReadingStart();
+      confAndCondStrBuffer = "";
+      while (1)
+      {
+        String str = bleDirectRead().c_str();
+        confAndCondStrBuffer += str;
+        if (str.indexOf("END") > 0)
+        {
+          Serial.println("-------ConditionFinished");
+          jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
+          break;
+        }
+        vTaskDelay(pdTICKS_TO_MS(1));
+      }
+      bleDirectReadingStop();
     }
     else
     {
-      if (CondFileComming == true)
-      {
-        String strtmp = String(mainRxStr);
-        Serial.print(strtmp);
-        if (strtmp.indexOf("END") > 0)
-        {
-          strtmp = strtmp.substring(0, strtmp.lastIndexOf("END"));
-          CondFileComming = false;
-          MeasurmentTaskPause=false;
-        }
-        confAndCondStrBuffer += strtmp;
-
-        if (CondFileComming == false)
-        {
-          // Serial.println("Data:" + ConFileStr + "Finish");
-          jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
-          confAndCondStrBuffer.clear();
-          Serial.println("Condition receiver OK . RESTARTING in ");
-          vTaskDelay(pdMS_TO_TICKS(2000));
-          esp_restart();
-        }
-      }
-      else
-      {
-        Serial.println(mainRxStr);
-      }
+      Serial.println(mainRxStr);
     }
-    */
+
     /*main string process ends here*/
     mainRxStr[0] = '\0'; // delet main string
     mainStrIsFree = true;
@@ -1973,16 +1956,6 @@ void stringHandelingTask(void *parameters)
   {
     if (UpdatingFlg)
       vTaskDelete(NULL);
-
-    /*if (BLE_DATA.RxDataReadyFlag)
-    {
-      // wait untill main process on str finished
-      while (mainStrIsFree == false)
-        vTaskDelay(1 / portTICK_PERIOD_MS);
-      strcpy(mainRxStr, BLE_DATA.bleRxStr);
-      // Serial.printf("mainRxStr=%s", mainRxStr);
-      BLE_DATA.RxDataReadyFlag = false;
-    }*/
     // this is the new parser added to convert a single compound message to multiple commands : 23/5/2024
     if (BLE_DATA.RxDataReadyFlag)
     {
