@@ -12,5 +12,5 @@ void initLED_PWM()
         ledcSetup(channelTable[i], FREQ + FREQ_STEP * i, RESULUTION);
         ledcAttachPin(LED_PWM_GPIO[i], channelTable[i]);
     }
-    Serial.println("PWM init OK !");
+    //Serial.println("PWM init OK !");
 }

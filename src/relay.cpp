@@ -25,7 +25,7 @@ void initRelay()
     pinMode(DATA_PRT, OUTPUT);
     pinMode(RST_PRT, OUTPUT);
     setRelay(0, SupplyVoltage);
-    Serial.println("Relay init ok !");
+    //Serial.println("Relay init ok !");
 }
 void setRelayNum(int relNum, relConfig *relays, bool state)
 {

@@ -2631,11 +2631,11 @@ void createCondition(String _inputType, int _inputPort, String _oprt, float _set
 void setup()
 {
   Serial.begin(115200);
+  Serial.println("\n//======STARTING=====//");
   initRelay();
   initLED_PWM();
   uint32_t flashSize = ESP.getFlashChipSize();
   float flashSizeMB = (float)flashSize / (1024.0 * 1024.0);//MB
-  Serial.println("\n//======STARTING=====//");
   Serial.print("FlashSize:");
   Serial.println(flashSizeMB);
   Serial.println("Version:" + Version);
