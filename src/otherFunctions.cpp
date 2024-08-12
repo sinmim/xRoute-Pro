@@ -165,7 +165,7 @@ bool SaveStringToFile(String str, String path)
 }
 String readStringFromFile(String path)
 {
-  Serial.println("readStringFromFile:" + path);
+  //Serial.println("readStringFromFile:" + path);
   File file = SPIFFS.open(path, FILE_READ);
   if (!file)
   {

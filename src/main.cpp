@@ -689,8 +689,8 @@ void ConditionsTask(void *parameters)
 }
 void loadStateFromFile()
 {
-  Serial.println("Loading Last States");
-  // Open the file for reading
+  // Serial.println("Loading Last States");
+  //  Open the file for reading
   File f = SPIFFS.open(statesFile, FILE_READ);
   if (!f)
   {
@@ -710,8 +710,7 @@ void loadStateFromFile()
   DimValChanged = true;
 
   // Optionally print the loaded values for debugging
-  Serial.printf("Loaded state: RELAYS:%d,D0:%f,D1:%f,D2:%f,D3:%f,D4:%f,D5:%f,D6:%f\n",
-                RELAYS.relPos, dimTmp[0], dimTmp[1], dimTmp[2], dimTmp[3], dimTmp[4], dimTmp[5], dimTmp[6]);
+  // Serial.printf("Loaded state: RELAYS:%d,D0:%f,D1:%f,D2:%f,D3:%f,D4:%f,D5:%f,D6:%f\n",RELAYS.relPos, dimTmp[0], dimTmp[1], dimTmp[2], dimTmp[3], dimTmp[4], dimTmp[5], dimTmp[6]);
 }
 void saveStatesToFile()
 {
@@ -2634,11 +2633,18 @@ void setup()
   Serial.begin(115200);
   initRelay();
   initLED_PWM();
+  uint32_t flashSize = ESP.getFlashChipSize();
+  float flashSizeMB = (float)flashSize / (1024.0 * 1024.0);//MB
+  Serial.println("\n//======STARTING=====//");
+  Serial.print("FlashSize:");
+  Serial.println(flashSizeMB);
+  Serial.println("Version:" + Version);
+  EEPROM.begin(512);
+
   if (SPIFFS.begin(true))
   {
     Serial.println("SPIFF OK !");
     loadStateFromFile();
-    // SaveStringToFile(String(defaultConfig), ConfigFile); // for test and it should be removed
     // UI Config File
     if (!SPIFFS.exists(ConfigFile))
     {
@@ -2648,7 +2654,7 @@ void setup()
       }
     }
     String fileContent = readStringFromFile(ConfigFile);
-    Serial.println("Config File Content: " + fileContent);
+    // Serial.println("Config File Content: " + fileContent);
     // CONDITIONS
     // SaveStringToFile(String(defaultCondition), CondFile); // for test and you need to disable it otherwise it will default it again every reset
     if (!SPIFFS.exists(CondFile))
@@ -2674,14 +2680,6 @@ void setup()
   setcondCreatorFunction(&createCondition);
   jsonCon.readJsonConditionsFromFile(CondFile);
 
-  uint32_t flashSize = ESP.getFlashChipSize();
-  // Convert flash size from bytes to megabytes
-  float flashSizeMB = (float)flashSize / (1024.0 * 1024.0);
-  Serial.println("\n//======STARTING=====//");
-  Serial.print("FlashSize:");
-  Serial.println(flashSizeMB);
-  Serial.println("Version:" + Version);
-  EEPROM.begin(512);
   loadSavedValue();
   Serial.println("BLE PASS:" + String(blePass));
   bleSetPass(blePass);
@@ -2964,6 +2962,5 @@ void dimmerShortCircuitIntrupt()
 // baraye 24 volt bayad devidere voltago dorost fekr koni barash chon alan majboori avazesh koni
 // az tabeye constrain baraye limit kardane valuehat estefade kon tooye hamejaye kod ke value ha alaki naran asemoono....
 // detect floaters
-
 // problems
 //  i dont send the value from APDIM to other BLE devices in line 920
