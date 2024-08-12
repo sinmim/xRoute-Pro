@@ -2690,7 +2690,7 @@ void setup()
   // Serial.println("General Lisence:" + GeneralLisence);
   SerialBT.begin("LabobinxSmart"); // Bluetooth device name
   setupBLE();
-  giveMeMacAdress();
+  //giveMeMacAdress();
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
 #define TasksEnabled
