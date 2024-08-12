@@ -677,7 +677,7 @@ int dimShortNum = 0;
 //-------------------------------------------------TASKS
 void ConditionsTask(void *parameters)
 {
-  vTaskDelay(pdMS_TO_TICKS(4000));
+  vTaskDelay(pdMS_TO_TICKS(6000));
   Serial.println("Conditions Task Started");
   for (;;)
   {
@@ -2345,8 +2345,6 @@ void BatteryTask(void *parameters)
       }
       b = constrain(myBattery.btPerV, 0, 1) * 100;
     }
-    // Serial.println(b);
-
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
