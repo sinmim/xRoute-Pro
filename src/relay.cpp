@@ -14,11 +14,11 @@ void setRelPWM(float volt, float SuplyVol)
     int max = pow(2, REL_PWM_RES);
     ledcWrite(REL_PWM_CHANNEL, (1 - duty) * max); // 1-duty becaus i need inverted pwm
 }
-
+ 
 void initRelay()
 {
-    ledcAttachPin(REL_PWM_PIN, REL_PWM_CHANNEL);
     ledcSetup(REL_PWM_CHANNEL, REL_PWM_FREQ, REL_PWM_RES);
+    ledcAttachPin(REL_PWM_PIN, REL_PWM_CHANNEL);
     setRelPWM(0, SupplyVoltage);
     pinMode(LATCH_PRT, OUTPUT);
     pinMode(CLK_PRT, OUTPUT);
