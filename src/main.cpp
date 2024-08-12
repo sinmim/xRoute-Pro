@@ -677,6 +677,7 @@ int dimShortNum = 0;
 //-------------------------------------------------TASKS
 void ConditionsTask(void *parameters)
 {
+  vTaskDelay(pdMS_TO_TICKS(4000));
   Serial.println("Conditions Task Started");
   for (;;)
   {
