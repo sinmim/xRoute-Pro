@@ -70,26 +70,26 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
     }
     else if (inputType == "CURRENT")
     {
-        if (inputPort == 0)
+        if (inputPort == 1)
         {
             inputPtr = _a0;
         }
-        else if (inputPort == 1)
+        else if (inputPort == 2)
         {
             inputPtr = _a1;
         }
     }
     else if (inputType == "FLOATER")
     {
-        if (inputPort == 0)
+        if (inputPort == 1)
         {
             inputPtr = _cwPrcnt;
         }
-        else if (inputPort == 1)
+        else if (inputPort == 2)
         {
             inputPtr = _gwPrcnt;
         }
-        else if (inputPort == 2)
+        else if (inputPort == 3)
         {
             inputPtr = _dwPrcnt;
         }

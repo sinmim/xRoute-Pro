@@ -1929,10 +1929,11 @@ void MainStringProcessTask(void *parameters)
       {
         String str = bleDirectRead().c_str();
         confAndCondStrBuffer += str;
-        if (str.indexOf("END") > 0)
+        if (str.indexOf(";") > 0)
         {
           Serial.println("-------ConditionFinished");
           jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
+          esp_restart();
           break;
         }
         vTaskDelay(pdTICKS_TO_MS(1));
@@ -2634,7 +2635,7 @@ void setup()
   initRelay();
   initLED_PWM();
   uint32_t flashSize = ESP.getFlashChipSize();
-  float flashSizeMB = (float)flashSize / (1024.0 * 1024.0);//MB
+  float flashSizeMB = (float)flashSize / (1024.0 * 1024.0); // MB
   Serial.print("FlashSize:");
   Serial.println(flashSizeMB);
   Serial.println("Version:" + Version);
@@ -2664,7 +2665,7 @@ void setup()
       }
     }
     fileContent = readStringFromFile(CondFile);
-    //Serial.println("Condition File Content: " + fileContent);
+    // Serial.println("Condition File Content: " + fileContent);
   }
   else
   {
@@ -2680,7 +2681,7 @@ void setup()
   jsonCon.readJsonConditionsFromFile(CondFile);
 
   loadSavedValue();
-  //Serial.println("BLE PASS:" + String(blePass));
+  // Serial.println("BLE PASS:" + String(blePass));
   bleSetPass(blePass);
   initADC();
   strip.begin();
@@ -2689,7 +2690,7 @@ void setup()
   // Serial.println("General Lisence:" + GeneralLisence);
   SerialBT.begin("LabobinxSmart"); // Bluetooth device name
   setupBLE();
-  //giveMeMacAdress();
+  // giveMeMacAdress();
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
 #define TasksEnabled

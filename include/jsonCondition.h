@@ -14,7 +14,7 @@ public:
     static int conditionCount;
 
 private:
-    StaticJsonDocument<2048> doc;
+    StaticJsonDocument<4096> doc;
 };
 
 #endif // CONFIG_READER_H
