@@ -123,7 +123,7 @@ void giveMeMacAdress()
   // Print ESP32 BLE MAC address
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_BT);
-  Serial.print("BLE MAC Address: ");
+  //Serial.print("BLE MAC Address: ");
   for (int i = 0; i < 6; i++)
   {
     Serial.printf("%02X", mac[i]);

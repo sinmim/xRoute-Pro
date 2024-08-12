@@ -2665,7 +2665,7 @@ void setup()
       }
     }
     fileContent = readStringFromFile(CondFile);
-    Serial.println("Condition File Content: " + fileContent);
+    //Serial.println("Condition File Content: " + fileContent);
   }
   else
   {
@@ -2681,7 +2681,7 @@ void setup()
   jsonCon.readJsonConditionsFromFile(CondFile);
 
   loadSavedValue();
-  Serial.println("BLE PASS:" + String(blePass));
+  //Serial.println("BLE PASS:" + String(blePass));
   bleSetPass(blePass);
   initADC();
   strip.begin();

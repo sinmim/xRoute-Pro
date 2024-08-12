@@ -45,7 +45,7 @@ void initADC(void)
         pinMode(MUX_GPIO[i], OUTPUT);
     }
     analogSetWidth(12); // 12bit
-    Serial.println("ADC MUX init ok !");
+    //Serial.println("ADC MUX init ok !");
     if (false)
     {
         float refVol = 0;
