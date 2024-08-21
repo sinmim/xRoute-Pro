@@ -7,9 +7,8 @@
 #include <EEPROM.h>
 #include "defaultValues.h"
 #include "save_load.h"
-//#include <BluetoothSerial.h>
-#include <BLESerial.h>
-#include <BLEDevice.h>
+// #include <BluetoothSerial.h>
+// #include <BLESerial.h>
 #include "relay.h"
 #include "otherFunctions.h"
 #include "ledPwm.h"
@@ -178,10 +177,10 @@ int DFLT_CABLE_RES_MILI_OHM = 0;
 float pressurCalOffset = 0.04F; // psi
 // END---------------------------------Default Values
 extern relConfig RELAYS;
-//BluetoothSerial SerialBT;
+// BluetoothSerial SerialBT;
 int blePass;
 //--------------------------DATA'S
-extern struct bleData BLE_DATA;
+// BLE//extern struct bleData BLE_DATA;
 char mainRxStr[128];
 char mainTxStr[128];
 bool mainStrIsFree = true;
@@ -674,6 +673,15 @@ void dimmerShortCircuitIntrupt();
 void defaultCalibrations();
 int dimShortFlg = false;
 int dimShortNum = 0;
+//=======================TEST
+#include <NimBLEDevice.h>
+BLEServer* pServer = NULL;
+BLECharacteristic* pCharacteristic = NULL;
+bool deviceConnected = false;
+bool oldDeviceConnected = false;
+uint32_t value = 0;
+#define SERVICE_UUID        "0000ffe0-0000-1000-8000-00805f9b34fb"
+#define CHARACTERISTIC_UUID "0000ffe1-0000-1000-8000-00805f9b34fb"
 //-------------------------------------------------TASKS
 void ConditionsTask(void *parameters)
 {
@@ -843,7 +851,7 @@ void sendConfig()
   String str = "ConfigFile=" + readStringFromFile(ConfigFile) + "END";
   Serial.println("inside:" + str);
   // SendToAll((const char *)str.c_str());
-  bleSendLongString(str);
+  // BLE//bleSendLongString(str);
   MeasurmentTaskPause = false;
 }
 void MainStringProcessTask(void *parameters)
@@ -1608,9 +1616,9 @@ void MainStringProcessTask(void *parameters)
       Serial.println(blePass);
       EEPROM.writeUInt(E2ADD.blePassSave, blePass);
       EEPROM.commit();
-      bleSetPass(blePass);
-      remove_all_bonded_devices();
-      //      ESP.restart();
+      // BLE//bleSetPass(blePass);
+      // BLE//remove_all_bonded_devices();
+      //       ESP.restart();
     }
     else if (!strcmp(mainRxStr, "GETBLEPASSWORD"))
     {
@@ -1780,11 +1788,11 @@ void MainStringProcessTask(void *parameters)
         unsigned long time;
         unsigned long timeout;
 
-        //SerialBT.setTimeout(1000);
+        // SerialBT.setTimeout(1000);
         String strTmp = mainRxStr;
         strTmp = strTmp.substring(12, strTmp.indexOf("Bytes"));
         updateLen = atoi(strTmp.c_str());
-        //SerialBT.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
+        // SerialBT.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
         Serial.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
         Update.begin(updateLen);
 
@@ -1797,15 +1805,15 @@ void MainStringProcessTask(void *parameters)
         for (int i = 0; i < chunkCntr; i++)
         {
           timeout = millis();
-          //SerialBT.write(aknoledge, 6);
-          //SerialBT.flush();
+          // SerialBT.write(aknoledge, 6);
+          // SerialBT.flush();
 
-          //SerialBT.readBytes(dataBuff, CHUNK_SIZE);
+          // SerialBT.readBytes(dataBuff, CHUNK_SIZE);
           if ((millis() - timeout) > 900)
           {
-            //SerialBT.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
+            // SerialBT.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
             Serial.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
-            //SerialBT.flush();
+            // SerialBT.flush();
             Serial.flush();
             ESP.restart();
           }
@@ -1817,60 +1825,60 @@ void MainStringProcessTask(void *parameters)
             if (prgrs > lastPrgrs)
             {
               sprintf(str, "PRGU=%d\xFF\xFF\xFF", prgrs);
-              //SerialBT.println(str);
+              // SerialBT.println(str);
               Serial.println(str);
             }
             lastPrgrs = prgrs;
           }
         }
-        //SerialBT.write(aknoledge, 6);
-        //SerialBT.flush();
+        // SerialBT.write(aknoledge, 6);
+        // SerialBT.flush();
 
-        //SerialBT.readBytes(dataBuff, byteCntr);
-        // Decrypt the remaining bytes
+        // SerialBT.readBytes(dataBuff, byteCntr);
+        //  Decrypt the remaining bytes
         aes.decrypt(dataBuff, byteCntr, dataBuff, key, sizeof(key), iv);
         Update.write(dataBuff, byteCntr);
-        //SerialBT.println(Update.progress());
+        // SerialBT.println(Update.progress());
         if (Update.end() == true)
         {
           time = millis() - time;
           sprintf(str, "PRGU=100\xFF\xFF\xFF");
-          //SerialBT.println(str);
+          // SerialBT.println(str);
           Serial.println(str);
-          //SerialBT.flush();
+          // SerialBT.flush();
           Serial.flush();
-          //SerialBT.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
+          // SerialBT.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
           Serial.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
-          //SerialBT.flush();
+          // SerialBT.flush();
           Serial.flush();
-          //SerialBT.println("Restarting in \xFF\xFF\xFF");
+          // SerialBT.println("Restarting in \xFF\xFF\xFF");
           Serial.println("Restarting in \xFF\xFF\xFF");
-          //SerialBT.flush();
+          // SerialBT.flush();
           Serial.flush();
           for (int i = 5; i > 0; i--)
           {
-            //SerialBT.println(i);
+            // SerialBT.println(i);
             Serial.println(i);
             vTaskDelay(1000 / portTICK_PERIOD_MS);
-            //SerialBT.flush();
+            // SerialBT.flush();
             Serial.flush();
           }
           ESP.restart();
         }
         else
         {
-          //SerialBT.print("\nFailed !\xFF\xFF\xFF");
-          //SerialBT.println(Update.errorString());
+          // SerialBT.print("\nFailed !\xFF\xFF\xFF");
+          // SerialBT.println(Update.errorString());
         }
       }
       else
       {
         sprintf(str, "PRGU=100\xFF\xFF\xFF");
-        //SerialBT.println(str);
+        // SerialBT.println(str);
         sprintf(str, "XrouteAlarm= Your Device Memory is %dMB and Dose Not Support Update !", flashSizeMB);
         SendToAll(str);
-        //SerialBT.print("\nFailed !\xFF\xFF\xFF");
-        //SerialBT.println(Update.errorString());
+        // SerialBT.print("\nFailed !\xFF\xFF\xFF");
+        // SerialBT.println(Update.errorString());
       }
     }
     else if (!strncmp(mainRxStr, "TakeUiConfig=", 13))
@@ -1880,11 +1888,11 @@ void MainStringProcessTask(void *parameters)
       //        SerialBT.write(aknoledge, 6);
       MeasurmentTaskPause = true;
       vTaskDelay(1000 / portTICK_PERIOD_MS);
-      //SerialBT.setTimeout(1000);
+      // SerialBT.setTimeout(1000);
       String strTmp = mainRxStr;
       strTmp = strTmp.substring(13, strTmp.indexOf("Bytes"));
       configLen = atoi(strTmp.c_str());
-      //SerialBT.println("Update Received : " + String(configLen) + " Bytes\xFF\xFF\xFF");
+      // SerialBT.println("Update Received : " + String(configLen) + " Bytes\xFF\xFF\xFF");
       Serial.println("Config File Size: " + String(configLen) + " Bytes\xFF\xFF\xFF");
       Serial.flush();
       int chunkCntr = configLen / CHUNK_SIZE;
@@ -1893,18 +1901,18 @@ void MainStringProcessTask(void *parameters)
       confAndCondStrBuffer.clear();
       for (int i = 0; i < chunkCntr; i++)
       {
-        //SerialBT.write(aknoledge, 6);
-        //SerialBT.flush();
-        //dataSize = SerialBT.readBytes(dataBuff, CHUNK_SIZE);
+        // SerialBT.write(aknoledge, 6);
+        // SerialBT.flush();
+        // dataSize = SerialBT.readBytes(dataBuff, CHUNK_SIZE);
         for (int i = 0; i < dataSize; i++)
         {
           confAndCondStrBuffer += (char)dataBuff[i];
         }
       }
-      //SerialBT.write(aknoledge, 6);
-      //SerialBT.flush();
+      // SerialBT.write(aknoledge, 6);
+      // SerialBT.flush();
 
-      //SerialBT.readBytes(dataBuff, byteCntr);
+      // SerialBT.readBytes(dataBuff, byteCntr);
       for (int i = 0; i < byteCntr; i++)
       {
         confAndCondStrBuffer += (char)dataBuff[i];
@@ -1923,11 +1931,11 @@ void MainStringProcessTask(void *parameters)
     else if (!strncmp(mainRxStr, "TakeConditions=", 14))
     {
       Serial.println("START----->");
-      bleDirectReadingStart();
+      // BLE//bleDirectReadingStart();
       confAndCondStrBuffer = "";
       while (1)
       {
-        String str = bleDirectRead().c_str();
+        String str; // BLE//= bleDirectRead().c_str();
         confAndCondStrBuffer += str;
         if (str.indexOf(";") > 0)
         {
@@ -1939,7 +1947,7 @@ void MainStringProcessTask(void *parameters)
         }
         vTaskDelay(pdTICKS_TO_MS(1));
       }
-      bleDirectReadingStop();
+      // BLE//bleDirectReadingStop();
     }
     else
     {
@@ -1959,24 +1967,25 @@ void stringHandelingTask(void *parameters)
     if (UpdatingFlg)
       vTaskDelete(NULL);
     // this is the new parser added to convert a single compound message to multiple commands : 23/5/2024
-    if (BLE_DATA.RxDataReadyFlag)
-    {
-      String str = BLE_DATA.bleRxStr;
-      //      str=str.substring(0,str.lastIndexOf('\n'));
-      while (1)
-      {
-        int indx = str.indexOf('\n');
-        if (indx < 1)
-          break;
-        String Str2 = str.substring(0, indx);
-        str = str.substring(indx + 1);
-        while (mainStrIsFree == false || strlen(mainRxStr) != 0)
-          vTaskDelay(pdMS_TO_TICKS(1));
-        strcpy(mainRxStr, Str2.c_str());
-        // Serial.printf("mainRxStr=%s", mainRxStr);
-      }
-      BLE_DATA.RxDataReadyFlag = false;
-    }
+    // BLE//
+    // if (BLE_DATA.RxDataReadyFlag)
+    // {
+    //   String str = BLE_DATA.bleRxStr;
+    //   //      str=str.substring(0,str.lastIndexOf('\n'));
+    //   while (1)
+    //   {
+    //     int indx = str.indexOf('\n');
+    //     if (indx < 1)
+    //       break;
+    //     String Str2 = str.substring(0, indx);
+    //     str = str.substring(indx + 1);
+    //     while (mainStrIsFree == false || strlen(mainRxStr) != 0)
+    //       vTaskDelay(pdMS_TO_TICKS(1));
+    //     strcpy(mainRxStr, Str2.c_str());
+    //     // Serial.printf("mainRxStr=%s", mainRxStr);
+    //   }
+    //   BLE_DATA.RxDataReadyFlag = false;
+    // }
 
     // if (SerialBT.connected())
     // {
@@ -2005,7 +2014,7 @@ void BLE_TASK(void *parameters)
     if (UpdatingFlg)
       vTaskDelete(NULL);
 
-    BLEloop();
+    // BLE//BLEloop();
     vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }
@@ -2117,16 +2126,17 @@ void led_indicator_task(void *parameters)
     {
       if (frsTime2 == true)
       {
-        //esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+        // esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
         Serial.println("ESP_BT_DISCOVERABLE");
         frsTime2 = false;
         frsTime = true;
       }
     }
-    if (BLE_DATA.deviceConnected == true)
-      ws2812Blink(COLOR_BLUE);
-    if (BLE_DATA.deviceConnected == false)
-      ws2812Blink(COLOR_RED);
+    // BLE//
+    //   if (BLE_DATA.deviceConnected == true)
+    //     ws2812Blink(COLOR_BLUE);
+    // if (BLE_DATA.deviceConnected == false)
+    //   ws2812Blink(COLOR_RED);
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
@@ -2626,7 +2636,6 @@ void createCondition(String _inputType, int _inputPort, String _oprt, float _set
 {
   cndtions.push_back(Conditions(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue)); // 0
 }
-
 void setup()
 {
   Serial.begin(115200);
@@ -2681,14 +2690,64 @@ void setup()
 
   loadSavedValue();
   // Serial.println("BLE PASS:" + String(blePass));
-  bleSetPass(blePass);
+  // BLE//bleSetPass(blePass);
+  //=========TEST
+  // Create the BLE Device
+  BLEDevice::init("LabobinxSmart");
+
+  // Create the BLE Server
+  pServer = BLEDevice::createServer();
+
+  // Create the BLE Service
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  // Create a BLE Characteristic
+  pCharacteristic = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID,
+                /******* Enum Type NIMBLE_PROPERTY now *******
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_WRITE  |
+                      BLECharacteristic::PROPERTY_NOTIFY |
+                      BLECharacteristic::PROPERTY_INDICATE
+                    );
+                **********************************************/
+                      NIMBLE_PROPERTY::READ   |
+                      NIMBLE_PROPERTY::WRITE  |
+                      NIMBLE_PROPERTY::NOTIFY |
+                      NIMBLE_PROPERTY::INDICATE
+                    );
+
+  // Create a BLE Descriptor
+  /***************************************************
+   NOTE: DO NOT create a 2902 descriptor
+   it will be created automatically if notifications
+   or indications are enabled on a characteristic.
+
+   pCharacteristic->addDescriptor(new BLE2902());
+  ****************************************************/
+
+  // Start the service
+  pService->start();
+
+  // Start advertising
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(false);
+  /** Note, this could be left out as that is the default value */
+  pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
+
+  BLEDevice::startAdvertising();
+  Serial.println("Waiting a client connection to notify...");
+
+  //========TEST
+
   initADC();
   strip.begin();
   GyroLicense = new lisence("Gyro", "G9933");   // Key for Gyro
   VoiceLicense = new lisence("Voice", "V5612"); // Key For Voice
   // Serial.println("General Lisence:" + GeneralLisence);
-  //SerialBT.begin("LabobinxSmart"); // Bluetooth device name
-  setupBLE();
+  // SerialBT.begin("LabobinxSmart"); // Bluetooth device name
+  // BLE//setupBLE();
   // giveMeMacAdress();
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
@@ -2778,18 +2837,36 @@ void setup()
       NULL,
       3,
       NULL);
-xTaskCreate(
-    ramMonitorTask,
-    "ramMonitorTask",
-    1024, // stack size
-    NULL, // task argument
-    1,    // task priority
-    NULL);
+  xTaskCreate(
+      ramMonitorTask,
+      "ramMonitorTask",
+      1024, // stack size
+      NULL, // task argument
+      1,    // task priority
+      NULL);
 #endif
 }
 void loop()
 {
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
+     // notify changed value
+    if (deviceConnected) {
+        pCharacteristic->setValue((uint8_t*)&value, 4);
+        pCharacteristic->notify();
+        value++;
+        delay(10); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
+    }
+    // disconnecting
+    if (!deviceConnected && oldDeviceConnected) {
+        delay(500); // give the bluetooth stack the chance to get things ready
+        pServer->startAdvertising(); // restart advertising
+        Serial.println("start advertising");
+        oldDeviceConnected = deviceConnected;
+    }
+    // connecting
+    if (deviceConnected && !oldDeviceConnected) {
+        // do stuff here on connecting
+        oldDeviceConnected = deviceConnected;
+    }
 }
 void loadSavedValue()
 {
@@ -2944,23 +3021,22 @@ void dimmerShortCircuitIntrupt()
     sum = 0;
   }
 }
-
-//USE https://github.com/h2zero/NimBLE-Arduino/tree/master 
-// END----------------------------------------------FUNCTIONS
+// USE https://github.com/h2zero/NimBLE-Arduino/tree/master
+//  END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
-// ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham
-// dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
-// voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
-// amper ke eshtebah kalibre beshe eshtebahi mire too ye protection
-// *vaghti raft tooye protection mode bayad message bede ke amper kheyli ziyade va badesh ke ok shod bayad ba ye payame ok az khata darbiyad
-// *password bezar baraye blt
-// ezafe kardane ye delaye koochik vaghti ke calibratione chizi ro ancam dadim ta inke baes beshe tooye textbox dide beshe ta beshe baraye meghdare defaultha unu khoondesh ya mishe printesh kard too serial
-// avaz kardane hajme flash baraye inke alan flashet 2 barabar shode
-// Saman for ALI: ye geraphice khoob baraye ali baraye gyro hazer kon
-// connect ya disconnect shodane hame chizo mitooni tashkhis bedi az tarighe sathe voltaga
-// VAGHTI GYRO RESET MISHE LOW PASS SEFR BESHE CHONKE KHEYLI TOOL MIKESHE
-// baraye 24 volt bayad devidere voltago dorost fekr koni barash chon alan majboori avazesh koni
-// az tabeye constrain baraye limit kardane valuehat estefade kon tooye hamejaye kod ke value ha alaki naran asemoono....
-// detect floaters
-// problems
-//  i dont send the value from APDIM to other BLE devices in line 920
+//  ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham
+//  dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
+//  voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
+//  amper ke eshtebah kalibre beshe eshtebahi mire too ye protection
+//  *vaghti raft tooye protection mode bayad message bede ke amper kheyli ziyade va badesh ke ok shod bayad ba ye payame ok az khata darbiyad
+//  *password bezar baraye blt
+//  ezafe kardane ye delaye koochik vaghti ke calibratione chizi ro ancam dadim ta inke baes beshe tooye textbox dide beshe ta beshe baraye meghdare defaultha unu khoondesh ya mishe printesh kard too serial
+//  avaz kardane hajme flash baraye inke alan flashet 2 barabar shode
+//  Saman for ALI: ye geraphice khoob baraye ali baraye gyro hazer kon
+//  connect ya disconnect shodane hame chizo mitooni tashkhis bedi az tarighe sathe voltaga
+//  VAGHTI GYRO RESET MISHE LOW PASS SEFR BESHE CHONKE KHEYLI TOOL MIKESHE
+//  baraye 24 volt bayad devidere voltago dorost fekr koni barash chon alan majboori avazesh koni
+//  az tabeye constrain baraye limit kardane valuehat estefade kon tooye hamejaye kod ke value ha alaki naran asemoono....
+//  detect floaters
+//  problems
+//   i dont send the value from APDIM to other BLE devices in line 920

@@ -2,26 +2,26 @@
 #define MYNIMBLE_H
 
 #include <NimBLEDevice.h>
+#include <string>
 
-// Define the service and characteristic UUIDs here
-#define SERVICE_UUID           "0000ffe0-0000-1000-8000-00805f9b34fb"
-#define CHARACTERISTIC_UUID_RXTX "0000ffe1-0000-1000-8000-00805f9b34fb"
-
-// Callback type definition
-typedef void (*DataReceivedCallback)(NimBLECharacteristic* pCharacteristic);
-
-class MyNimBLE {
+class MyNimBLE : public NimBLECharacteristicCallbacks {
 public:
+    // Constructor
     MyNimBLE();
-    void begin(const char* deviceName, const char* passKey, DataReceivedCallback callback);
+
+    // Initialize BLE and start advertising
+    void begin(const char* deviceName, const char* passKey, const char* serviceUUID, const char* characteristicUUID);
+
+    // Handle characteristic writes
+    void onWrite(NimBLECharacteristic* pCharacteristic) override;
 
 private:
+    // Process received data
+    void processReceivedData(const std::string& data);
+
     NimBLEServer* pServer;
     NimBLEService* pService;
     NimBLECharacteristic* pCharacteristic;
-    DataReceivedCallback dataCallback;
-
-    static void onCharacteristicWritten(NimBLECharacteristic* pCharacteristic);
 };
 
 #endif // MYNIMBLE_H

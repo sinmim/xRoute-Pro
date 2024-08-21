@@ -4,7 +4,7 @@
 #include <SHA256.h>
 #include "otherFunctions.h"
 #include "relay.h"
-#include "BLESerial.h"
+//BLE//#include "BLESerial.h"
 #include "BluetoothSerial.h"
 #include "main.h"
 #include "stdio.h"
@@ -71,7 +71,7 @@ void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit)
 }
 void SendToAll(char *str)
 {
-  BLEsend(str);
+  //BLE//BLEsend(str);
   //if (SerialBT.connected())
   //  SerialBT.println(str);
 }
