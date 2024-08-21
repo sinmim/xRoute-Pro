@@ -7,7 +7,7 @@
 #include <EEPROM.h>
 #include "defaultValues.h"
 #include "save_load.h"
-#include <BluetoothSerial.h>
+//#include <BluetoothSerial.h>
 #include <BLESerial.h>
 #include <BLEDevice.h>
 #include "relay.h"
@@ -178,7 +178,7 @@ int DFLT_CABLE_RES_MILI_OHM = 0;
 float pressurCalOffset = 0.04F; // psi
 // END---------------------------------Default Values
 extern relConfig RELAYS;
-BluetoothSerial SerialBT;
+//BluetoothSerial SerialBT;
 int blePass;
 //--------------------------DATA'S
 extern struct bleData BLE_DATA;
@@ -958,8 +958,8 @@ void MainStringProcessTask(void *parameters)
       DimValChanged = true;
       dimTmp[mainRxStr[5] - '0' - 1] = 32768 * val / 255 * dimLimit[mainRxStr[5] - '0' - 1];
       sprintf(str, "DIMER%c.val=%d\xFF\xFF\xFF", mainRxStr[5], (int)val);
-      if (SerialBT.connected())
-        SerialBT.println(str);
+      // if (SerialBT.connected())
+      //   SerialBT.println(str);
     }
     else if (!strcmp(mainRxStr, "DefaultAllCalibrations"))
     {
@@ -1780,11 +1780,11 @@ void MainStringProcessTask(void *parameters)
         unsigned long time;
         unsigned long timeout;
 
-        SerialBT.setTimeout(1000);
+        //SerialBT.setTimeout(1000);
         String strTmp = mainRxStr;
         strTmp = strTmp.substring(12, strTmp.indexOf("Bytes"));
         updateLen = atoi(strTmp.c_str());
-        SerialBT.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
+        //SerialBT.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
         Serial.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
         Update.begin(updateLen);
 
@@ -1797,15 +1797,15 @@ void MainStringProcessTask(void *parameters)
         for (int i = 0; i < chunkCntr; i++)
         {
           timeout = millis();
-          SerialBT.write(aknoledge, 6);
-          SerialBT.flush();
+          //SerialBT.write(aknoledge, 6);
+          //SerialBT.flush();
 
-          SerialBT.readBytes(dataBuff, CHUNK_SIZE);
+          //SerialBT.readBytes(dataBuff, CHUNK_SIZE);
           if ((millis() - timeout) > 900)
           {
-            SerialBT.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
+            //SerialBT.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
             Serial.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
-            SerialBT.flush();
+            //SerialBT.flush();
             Serial.flush();
             ESP.restart();
           }
@@ -1817,60 +1817,60 @@ void MainStringProcessTask(void *parameters)
             if (prgrs > lastPrgrs)
             {
               sprintf(str, "PRGU=%d\xFF\xFF\xFF", prgrs);
-              SerialBT.println(str);
+              //SerialBT.println(str);
               Serial.println(str);
             }
             lastPrgrs = prgrs;
           }
         }
-        SerialBT.write(aknoledge, 6);
-        SerialBT.flush();
+        //SerialBT.write(aknoledge, 6);
+        //SerialBT.flush();
 
-        SerialBT.readBytes(dataBuff, byteCntr);
+        //SerialBT.readBytes(dataBuff, byteCntr);
         // Decrypt the remaining bytes
         aes.decrypt(dataBuff, byteCntr, dataBuff, key, sizeof(key), iv);
         Update.write(dataBuff, byteCntr);
-        SerialBT.println(Update.progress());
+        //SerialBT.println(Update.progress());
         if (Update.end() == true)
         {
           time = millis() - time;
           sprintf(str, "PRGU=100\xFF\xFF\xFF");
-          SerialBT.println(str);
+          //SerialBT.println(str);
           Serial.println(str);
-          SerialBT.flush();
+          //SerialBT.flush();
           Serial.flush();
-          SerialBT.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
+          //SerialBT.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
           Serial.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
-          SerialBT.flush();
+          //SerialBT.flush();
           Serial.flush();
-          SerialBT.println("Restarting in \xFF\xFF\xFF");
+          //SerialBT.println("Restarting in \xFF\xFF\xFF");
           Serial.println("Restarting in \xFF\xFF\xFF");
-          SerialBT.flush();
+          //SerialBT.flush();
           Serial.flush();
           for (int i = 5; i > 0; i--)
           {
-            SerialBT.println(i);
+            //SerialBT.println(i);
             Serial.println(i);
             vTaskDelay(1000 / portTICK_PERIOD_MS);
-            SerialBT.flush();
+            //SerialBT.flush();
             Serial.flush();
           }
           ESP.restart();
         }
         else
         {
-          SerialBT.print("\nFailed !\xFF\xFF\xFF");
-          SerialBT.println(Update.errorString());
+          //SerialBT.print("\nFailed !\xFF\xFF\xFF");
+          //SerialBT.println(Update.errorString());
         }
       }
       else
       {
         sprintf(str, "PRGU=100\xFF\xFF\xFF");
-        SerialBT.println(str);
+        //SerialBT.println(str);
         sprintf(str, "XrouteAlarm= Your Device Memory is %dMB and Dose Not Support Update !", flashSizeMB);
         SendToAll(str);
-        SerialBT.print("\nFailed !\xFF\xFF\xFF");
-        SerialBT.println(Update.errorString());
+        //SerialBT.print("\nFailed !\xFF\xFF\xFF");
+        //SerialBT.println(Update.errorString());
       }
     }
     else if (!strncmp(mainRxStr, "TakeUiConfig=", 13))
@@ -1880,11 +1880,11 @@ void MainStringProcessTask(void *parameters)
       //        SerialBT.write(aknoledge, 6);
       MeasurmentTaskPause = true;
       vTaskDelay(1000 / portTICK_PERIOD_MS);
-      SerialBT.setTimeout(1000);
+      //SerialBT.setTimeout(1000);
       String strTmp = mainRxStr;
       strTmp = strTmp.substring(13, strTmp.indexOf("Bytes"));
       configLen = atoi(strTmp.c_str());
-      SerialBT.println("Update Received : " + String(configLen) + " Bytes\xFF\xFF\xFF");
+      //SerialBT.println("Update Received : " + String(configLen) + " Bytes\xFF\xFF\xFF");
       Serial.println("Config File Size: " + String(configLen) + " Bytes\xFF\xFF\xFF");
       Serial.flush();
       int chunkCntr = configLen / CHUNK_SIZE;
@@ -1893,18 +1893,18 @@ void MainStringProcessTask(void *parameters)
       confAndCondStrBuffer.clear();
       for (int i = 0; i < chunkCntr; i++)
       {
-        SerialBT.write(aknoledge, 6);
-        SerialBT.flush();
-        dataSize = SerialBT.readBytes(dataBuff, CHUNK_SIZE);
+        //SerialBT.write(aknoledge, 6);
+        //SerialBT.flush();
+        //dataSize = SerialBT.readBytes(dataBuff, CHUNK_SIZE);
         for (int i = 0; i < dataSize; i++)
         {
           confAndCondStrBuffer += (char)dataBuff[i];
         }
       }
-      SerialBT.write(aknoledge, 6);
-      SerialBT.flush();
+      //SerialBT.write(aknoledge, 6);
+      //SerialBT.flush();
 
-      SerialBT.readBytes(dataBuff, byteCntr);
+      //SerialBT.readBytes(dataBuff, byteCntr);
       for (int i = 0; i < byteCntr; i++)
       {
         confAndCondStrBuffer += (char)dataBuff[i];
@@ -1933,6 +1933,7 @@ void MainStringProcessTask(void *parameters)
         {
           Serial.println("-------ConditionFinished");
           jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
+          SendToAll("Condition Received Successfully");
           esp_restart();
           break;
         }
@@ -1977,23 +1978,23 @@ void stringHandelingTask(void *parameters)
       BLE_DATA.RxDataReadyFlag = false;
     }
 
-    if (SerialBT.connected())
-    {
-      while (SerialBT.available())
-      {
-        while (mainStrIsFree == false || strlen(mainRxStr) != 0) ////////
-          vTaskDelay(10 / portTICK_PERIOD_MS);                   //////???
-        mainStrIsFree = false;                                   /////////
-        str = SerialBT.readStringUntil('\n');
-        // Serial.println("|"+str+"|");
-        for (int i = 0; i < str.length(); i++)
-        {
-          mainRxStr[i] = str[i];
-        }
-        mainRxStr[str.length()] = '\0';
-        mainStrIsFree = true; //////////
-      }
-    }
+    // if (SerialBT.connected())
+    // {
+    //   while (SerialBT.available())
+    //   {
+    //     while (mainStrIsFree == false || strlen(mainRxStr) != 0) ////////
+    //       vTaskDelay(10 / portTICK_PERIOD_MS);                   //////???
+    //     mainStrIsFree = false;                                   /////////
+    //     str = SerialBT.readStringUntil('\n');
+    //     // Serial.println("|"+str+"|");
+    //     for (int i = 0; i < str.length(); i++)
+    //     {
+    //       mainRxStr[i] = str[i];
+    //     }
+    //     mainRxStr[str.length()] = '\0';
+    //     mainStrIsFree = true; //////////
+    //   }
+    // }
     vTaskDelay(1 / portTICK_PERIOD_MS);
   }
 }
@@ -2097,27 +2098,26 @@ void led_indicator_task(void *parameters)
       ws2812Blink(COLOR_WHITE);
       vTaskDelay(50 / portTICK_PERIOD_MS);
     }
-
     if (overCrntFlg == true)
     {
       ws2812Blink(COLOR_ORANG);
     }
-    else if (SerialBT.connected() == true)
-    {
-      if (frsTime == true)
-      {
-        esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-        frsTime = false;
-        frsTime2 = true;
-        Serial.println("ESP_BT_NON_DISCOVERABLE");
-      }
-      ws2812Blink(COLOR_GREEN);
-    }
+    // else if (SerialBT.connected() == true)
+    // {
+    //   if (frsTime == true)
+    //   {
+    //     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
+    //     frsTime = false;
+    //     frsTime2 = true;
+    //     Serial.println("ESP_BT_NON_DISCOVERABLE");
+    //   }
+    //   ws2812Blink(COLOR_GREEN);
+    // }
     else
     {
       if (frsTime2 == true)
       {
-        esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+        //esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
         Serial.println("ESP_BT_DISCOVERABLE");
         frsTime2 = false;
         frsTime = true;
@@ -2125,8 +2125,7 @@ void led_indicator_task(void *parameters)
     }
     if (BLE_DATA.deviceConnected == true)
       ws2812Blink(COLOR_BLUE);
-    if (SerialBT.connected() == false && BLE_DATA.deviceConnected == false)
-
+    if (BLE_DATA.deviceConnected == false)
       ws2812Blink(COLOR_RED);
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
@@ -2688,7 +2687,7 @@ void setup()
   GyroLicense = new lisence("Gyro", "G9933");   // Key for Gyro
   VoiceLicense = new lisence("Voice", "V5612"); // Key For Voice
   // Serial.println("General Lisence:" + GeneralLisence);
-  SerialBT.begin("LabobinxSmart"); // Bluetooth device name
+  //SerialBT.begin("LabobinxSmart"); // Bluetooth device name
   setupBLE();
   // giveMeMacAdress();
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
@@ -2779,13 +2778,13 @@ void setup()
       NULL,
       3,
       NULL);
-// xTaskCreate(
-//     ramMonitorTask,
-//     "ramMonitorTask",
-//     1024, // stack size
-//     NULL, // task argument
-//     1,    // task priority
-//     NULL);
+xTaskCreate(
+    ramMonitorTask,
+    "ramMonitorTask",
+    1024, // stack size
+    NULL, // task argument
+    1,    // task priority
+    NULL);
 #endif
 }
 void loop()
@@ -2946,6 +2945,7 @@ void dimmerShortCircuitIntrupt()
   }
 }
 
+//USE https://github.com/h2zero/NimBLE-Arduino/tree/master 
 // END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
 // ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham

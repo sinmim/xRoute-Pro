@@ -11,7 +11,7 @@
 #include <SPIFFS.h>
 #include <FS.h>
 
-extern BluetoothSerial SerialBT;
+//extern BluetoothSerial SerialBT;
 extern relConfig RELAYS;
 extern float dimTmp[];
 extern float dimLimit[];
@@ -55,10 +55,10 @@ void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit)
   {
     float val = (dimTmp[i] / (32768 * dimLimit[i])) * 255;
     sprintf(str, "DIMER%d.val=%d\xFF\xFF\xFF", i + 1, (int)val);
-    if (SerialBT.connected())
-    {
-      SerialBT.println(str);
-    }
+    // if (SerialBT.connected())
+    // {
+    //   SerialBT.println(str);
+    // }
   }
 
   for (int i = 0; i < 7; i++)
@@ -72,8 +72,8 @@ void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit)
 void SendToAll(char *str)
 {
   BLEsend(str);
-  if (SerialBT.connected())
-    SerialBT.println(str);
+  //if (SerialBT.connected())
+  //  SerialBT.println(str);
 }
 void SendToAll(const char *str)
 {

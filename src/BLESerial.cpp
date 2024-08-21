@@ -119,7 +119,7 @@ class MyCallbacks : public BLECharacteristicCallbacks
 
         for (int i = 0; i < strBLE.length(); i++)
         {
-            // Serial.print(strBLE[i]);          // print received data to terminal
+            Serial.print(strBLE[i]);          // print received data to terminal
             BLE_DATA.bleRxStr[i] = strBLE[i]; // fill data buffer
         }
         // BLE_DATA.bleRxStr[strBLE.length() - 1] = '\0'; // delet the last buffer to avoid \n character
