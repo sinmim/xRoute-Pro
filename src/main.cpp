@@ -51,12 +51,12 @@
 String Version = "2.1.0";
 //========Update
 #include "Update.h"
-#include "AESLib.h"
+//_#include "AESLib.h"
 long int updateLen;
 #define CHUNK_SIZE 512
 // #define CHUNK_SIZE 256
 uint8_t dataBuff[CHUNK_SIZE];
-AESLib aes;
+//_AESLib aes;
 // AES decryption key (16 bytes)
 uint8_t key[] = {53, 42, 12, 23, 72, 99, 33, 56, 12, 132, 38, 250, 180, 1, 2, 3};
 // IV for AES decryption (16 bytes)
@@ -674,14 +674,55 @@ void defaultCalibrations();
 int dimShortFlg = false;
 int dimShortNum = 0;
 //=======================TEST
-#include <NimBLEDevice.h>
-BLEServer* pServer = NULL;
-BLECharacteristic* pCharacteristic = NULL;
-bool deviceConnected = false;
-bool oldDeviceConnected = false;
-uint32_t value = 0;
-#define SERVICE_UUID        "0000ffe0-0000-1000-8000-00805f9b34fb"
-#define CHARACTERISTIC_UUID "0000ffe1-0000-1000-8000-00805f9b34fb"
+#include <myBle.h>
+
+// Create an instance of MyBle in server mode
+MyBle myBle(false); // false indicates server mode
+
+// Callback function to handle data received from the client
+void onDataReceived(BLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
+{
+  String receivedData = "";
+  for (size_t i = 0; i < length; i++)
+  {
+    receivedData += (char)pData[i];
+  }
+  Serial.print("Received data: ");
+  Serial.println(receivedData);
+
+  // Example: Echo the data back to the client
+  myBle.sendData(receivedData.c_str());
+}
+
+void setup()
+{
+  Serial.begin(115200);
+
+  // Initialize the BLE server and pass the callback function
+  myBle.beginServer(onDataReceived);
+
+  Serial.println("BLE server started.");
+}
+
+void loop()
+{
+  if (myBle.isConnected())
+  {
+    static int n = 0;
+    n++;
+    Serial.print("Sending data: ");
+    Serial.println(n);
+    myBle.sendData(String(n).c_str());
+  }
+  else
+  {
+    Serial.println("Waiting for client connection...");
+  }
+
+  vTaskDelay(pdMS_TO_TICKS(1000)); // Increase delay to avoid overwhelming the connection
+}
+
+
 //-------------------------------------------------TASKS
 void ConditionsTask(void *parameters)
 {
@@ -1817,7 +1858,7 @@ void MainStringProcessTask(void *parameters)
             Serial.flush();
             ESP.restart();
           }
-          aes.decrypt(dataBuff, CHUNK_SIZE, dataBuff, key, sizeof(key), iv);
+          //_aes.decrypt(dataBuff, CHUNK_SIZE, dataBuff, key, sizeof(key), iv);
           Update.write(dataBuff, CHUNK_SIZE);
           if (((i * CHUNK_SIZE) % 4096) == 0)
           {
@@ -1836,7 +1877,7 @@ void MainStringProcessTask(void *parameters)
 
         // SerialBT.readBytes(dataBuff, byteCntr);
         //  Decrypt the remaining bytes
-        aes.decrypt(dataBuff, byteCntr, dataBuff, key, sizeof(key), iv);
+        //_aes.decrypt(dataBuff, byteCntr, dataBuff, key, sizeof(key), iv);
         Update.write(dataBuff, byteCntr);
         // SerialBT.println(Update.progress());
         if (Update.end() == true)
@@ -2636,7 +2677,10 @@ void createCondition(String _inputType, int _inputPort, String _oprt, float _set
 {
   cndtions.push_back(Conditions(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue)); // 0
 }
-void setup()
+//==============
+
+//==============
+void setup2()
 {
   Serial.begin(115200);
   Serial.println("\n//======STARTING=====//");
@@ -2692,53 +2736,7 @@ void setup()
   // Serial.println("BLE PASS:" + String(blePass));
   // BLE//bleSetPass(blePass);
   //=========TEST
-  // Create the BLE Device
-  BLEDevice::init("LabobinxSmart");
-
-  // Create the BLE Server
-  pServer = BLEDevice::createServer();
-
-  // Create the BLE Service
-  BLEService *pService = pServer->createService(SERVICE_UUID);
-
-  // Create a BLE Characteristic
-  pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
-                /******* Enum Type NIMBLE_PROPERTY now *******
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_WRITE  |
-                      BLECharacteristic::PROPERTY_NOTIFY |
-                      BLECharacteristic::PROPERTY_INDICATE
-                    );
-                **********************************************/
-                      NIMBLE_PROPERTY::READ   |
-                      NIMBLE_PROPERTY::WRITE  |
-                      NIMBLE_PROPERTY::NOTIFY |
-                      NIMBLE_PROPERTY::INDICATE
-                    );
-
-  // Create a BLE Descriptor
-  /***************************************************
-   NOTE: DO NOT create a 2902 descriptor
-   it will be created automatically if notifications
-   or indications are enabled on a characteristic.
-
-   pCharacteristic->addDescriptor(new BLE2902());
-  ****************************************************/
-
-  // Start the service
-  pService->start();
-
-  // Start advertising
-  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setScanResponse(false);
-  /** Note, this could be left out as that is the default value */
-  pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
-
-  BLEDevice::startAdvertising();
-  Serial.println("Waiting a client connection to notify...");
-
+  myBle.beginServer(onDataReceived);
   //========TEST
 
   initADC();
@@ -2837,36 +2835,25 @@ void setup()
       NULL,
       3,
       NULL);
-  xTaskCreate(
-      ramMonitorTask,
-      "ramMonitorTask",
-      1024, // stack size
-      NULL, // task argument
-      1,    // task priority
-      NULL);
+  // xTaskCreate(
+  //     ramMonitorTask,
+  //     "ramMonitorTask",
+  //     1024, // stack size
+  //     NULL, // task argument
+  //     1,    // task priority
+  //     NULL);
 #endif
 }
-void loop()
+void loop1()
 {
-     // notify changed value
-    if (deviceConnected) {
-        pCharacteristic->setValue((uint8_t*)&value, 4);
-        pCharacteristic->notify();
-        value++;
-        delay(10); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
-    }
-    // disconnecting
-    if (!deviceConnected && oldDeviceConnected) {
-        delay(500); // give the bluetooth stack the chance to get things ready
-        pServer->startAdvertising(); // restart advertising
-        Serial.println("start advertising");
-        oldDeviceConnected = deviceConnected;
-    }
-    // connecting
-    if (deviceConnected && !oldDeviceConnected) {
-        // do stuff here on connecting
-        oldDeviceConnected = deviceConnected;
-    }
+  if (myBle.isConnected())
+  {
+    static int n = 0;
+    n++;
+    myBle.sendData(String(n).c_str());
+  }
+
+  vTaskDelay(pdMS_TO_TICKS(100));
 }
 void loadSavedValue()
 {
