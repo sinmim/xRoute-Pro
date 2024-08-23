@@ -1,13 +1,13 @@
 #include "myBle.h"
 
-static BLEUUID serviceUUID("0000ffe0-0000-1000-8000-00805f9b34fb");
-static BLEUUID charUUID("0000ffe1-0000-1000-8000-00805f9b34fb");
-static BLERemoteCharacteristic *pRemoteCharacteristic;
-static BLECharacteristic *pServerCharacteristic;
+static NimBLEUUID serviceUUID("0000ffe0-0000-1000-8000-00805f9b34fb");
+static NimBLEUUID charUUID("0000ffe1-0000-1000-8000-00805f9b34fb");
+static NimBLERemoteCharacteristic *pRemoteCharacteristic;
+static NimBLECharacteristic *pServerCharacteristic;
 
 bool MyBle::connectedFlg = false;
 bool MyBle::newConnectionMade = false;
-BLEAddress *MyBle::pServerAddress = nullptr;
+NimBLEAddress *MyBle::pServerAddress = nullptr;
 String MyBle::bleAddTmp = "";
 
 MyBle::MyBle(bool clientMode) : isClientMode(clientMode)
@@ -19,91 +19,142 @@ MyBle::MyBle(bool clientMode) : isClientMode(clientMode)
 MyBle::~MyBle()
 {
     vSemaphoreDelete(sendQueueMutex);
+    if (pServerAddress != nullptr)
+    {
+        delete pServerAddress;
+        pServerAddress = nullptr;
+    }
 }
 
-void MyBle::begin(std::function<void(BLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb)
+void MyBle::begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb)
 {
     clientCallBack = cb;
     if (isClientMode)
     {
-        BLEDevice::init("LabobinxSmart");
-        pClient = BLEDevice::createClient();
+        NimBLEDevice::init("LabobinxSmart");
+        pClient = NimBLEDevice::createClient();
+        pClient->setClientCallbacks(new MyClientCallback());
     }
 }
 
-void MyBle::beginServer(std::function<void(BLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> cb)
+void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> cb)
 {
     serverCallBack = cb;
     if (!isClientMode)
     {
-        BLEDevice::init("LabobinxSmart");
-        pServer = BLEDevice::createServer();
+        NimBLEDevice::init("LabobinxSmart");
+
+        pServer = NimBLEDevice::createServer();
         pServer->setCallbacks(new MyServerCallbacks());
 
-        BLEService *pService = pServer->createService(serviceUUID);
+        NimBLEService *pService = pServer->createService(serviceUUID);
         pServerCharacteristic = pService->createCharacteristic(
             charUUID,
-            BLECharacteristic::PROPERTY_READ |
-                BLECharacteristic::PROPERTY_WRITE |
-                BLECharacteristic::PROPERTY_NOTIFY |
-                BLECharacteristic::PROPERTY_INDICATE);
+            NIMBLE_PROPERTY::READ |
+                NIMBLE_PROPERTY::WRITE |
+                NIMBLE_PROPERTY::NOTIFY
+            // NIMBLE_PROPERTY::READ_ENC |
+            // NIMBLE_PROPERTY::WRITE_ENC
+        );
+        // Add NimBLE2904 descriptor
+        NimBLE2904 *pDescriptor = (NimBLE2904 *)pServerCharacteristic->createDescriptor(
+            NimBLEUUID((uint16_t)0x2904),
+            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+        pDescriptor->setFormat(NimBLE2904::FORMAT_UTF8);
 
-        pServerCharacteristic->addDescriptor(new BLE2902());
+        pServerCharacteristic->setCallbacks(new MyCallbacks(*this));
+
         pService->start();
 
-        BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+        NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
         pAdvertising->addServiceUUID(serviceUUID);
         pAdvertising->setScanResponse(false);
-        pAdvertising->setMinPreferred(0x06); // Helps with iPhone connections
-        pAdvertising->setMinPreferred(0x12); // Default value
+        pAdvertising->setMinPreferred(0x0);
         pAdvertising->start();
-        Serial.println("Advertising started...");
+        Serial.println("BLE Server is advertising...");
     }
 }
 
-bool MyBle::connectToServer(BLEAddress pAddress)
+void MyBle::sendTask(void *param)
 {
-    if (!isClientMode)
-        return false;
+    MyBle *pMyBle = static_cast<MyBle *>(param);
 
-    connectedFlg = false;
-    disconnect();
-    pClient->setClientCallbacks(new MyClientCallback());
-    pClient->connect(pAddress);
-    vTaskDelay(pdTICKS_TO_MS(1000));
-    BLERemoteService *pRemoteService = pClient->getService(serviceUUID);
-
-    if (pRemoteService == nullptr)
+    while (true)
     {
-        return false;
-    }
+        if (pMyBle->isClientMode || pMyBle->sendQueue.empty())
+        {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
 
-    pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
-    if (pRemoteCharacteristic == nullptr)
+        if (xSemaphoreTake(pMyBle->sendQueueMutex, portMAX_DELAY) == pdTRUE)
+        {
+            String data = pMyBle->sendQueue.front();
+            pMyBle->sendQueue.pop();
+            xSemaphoreGive(pMyBle->sendQueueMutex);
+
+            pServerCharacteristic->setValue(data.c_str());
+            pServerCharacteristic->notify();
+            Serial.println("Sent string: " + data);
+        }
+    }
+}
+
+bool MyBle::connectToServer(NimBLEAddress pAddress)
+{
+    if (pClient->connect(pAddress))
     {
-        return false;
+        pRemoteCharacteristic = pClient->getService(serviceUUID)->getCharacteristic(charUUID);
+        if (pRemoteCharacteristic)
+        {
+            pRemoteCharacteristic->registerForNotify(clientCallBack);
+            connectedFlg = true;
+            return true;
+        }
+        else
+        {
+            pClient->disconnect();
+            return false;
+        }
     }
-
-    pRemoteCharacteristic->registerForNotify(clientCallBack);
-    connectedFlg = true;
-    return true;
+    return false;
 }
 
 bool MyBle::connectToMac(String macAddress)
 {
-    if (!isClientMode)
-        return false;
+    NimBLEAddress address(macAddress.c_str());
+    return connectToServer(address);
+}
 
-    pServerAddress = new BLEAddress(macAddress.c_str());
-    return connectToServer(*pServerAddress);
+void MyBle::sendString(String str)
+{
+    if (xSemaphoreTake(sendQueueMutex, portMAX_DELAY) == pdTRUE)
+    {
+        sendQueue.push(str);
+        xSemaphoreGive(sendQueueMutex);
+    }
+}
+
+void MyBle::justSend(String str)
+{
+    pServerCharacteristic->setValue(str);
+    pServerCharacteristic->notify();
+}
+
+void MyBle::sendData(const char *data)
+{
+    sendString(String(data));
 }
 
 void MyBle::disconnect()
 {
-    if (isClientMode && pClient != nullptr && pClient->isConnected())
+    if (isClientMode)
     {
         pClient->disconnect();
-        pClient = nullptr;
+    }
+    else
+    {
+        pServer->disconnect(0);
     }
     connectedFlg = false;
 }
@@ -111,35 +162,6 @@ void MyBle::disconnect()
 bool MyBle::isConnected()
 {
     return connectedFlg;
-}
-
-void MyBle::sendString(String str)
-{
-    if (xSemaphoreTake(sendQueueMutex, portMAX_DELAY))
-    {
-        sendQueue.push(str);
-        xSemaphoreGive(sendQueueMutex);
-    }
-}
-
-void MyBle::sendData(const char *data)
-{
-    if (isConnected())
-    {
-        if (isClientMode && pRemoteCharacteristic != nullptr)
-        {
-            pRemoteCharacteristic->writeValue(data, strlen(data));
-        }
-        else if (!isClientMode && pServerCharacteristic != nullptr)
-        {
-            pServerCharacteristic->setValue(data);
-            pServerCharacteristic->notify();
-        }
-    }
-    else
-    {
-        Serial.println("NotConnected");
-    }
 }
 
 void MyBle::pause()
@@ -157,22 +179,24 @@ bool MyBle::isRunning()
     return runFlg;
 }
 
-void MyBle::sendTask(void *parameter)
+bool MyBle::isNewConnection()
 {
-    MyBle *myBle = static_cast<MyBle *>(parameter);
-    for (;;)
+    if (newConnectionMade)
     {
-        if (!myBle->sendQueue.empty())
-        {
-            if (xSemaphoreTake(myBle->sendQueueMutex, portMAX_DELAY))
-            {
-                String str = myBle->sendQueue.front();
-                myBle->sendQueue.pop();
-                xSemaphoreGive(myBle->sendQueueMutex);
+        newConnectionMade = false;
+        return true;
+    }
+    return false;
+}
 
-                myBle->sendData(str.c_str());
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(1));
+void MyBle::onResult(NimBLEAdvertisedDevice *advertisedDevice)
+{
+    Serial.println("Advertised Device found: ");
+    Serial.println(advertisedDevice->toString().c_str());
+
+    if (advertisedDevice->haveServiceUUID() && advertisedDevice->isAdvertisingService(serviceUUID))
+    {
+        bleAddTmp = advertisedDevice->getAddress().toString().c_str();
+        NimBLEDevice::getScan()->stop();
     }
 }

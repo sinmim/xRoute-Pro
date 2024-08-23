@@ -2,72 +2,39 @@
 #define MY_BLE_H
 
 #include <Arduino.h>
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEScan.h>
-#include <BLEAdvertisedDevice.h>
-#include <BLEClient.h>
-#include <BLEServer.h>
-#include <BLE2902.h>
-
+#include <NimBLEDevice.h>
 #include <queue>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
 
-class MySecurity : public BLESecurityCallbacks
-{
-  uint32_t onPassKeyRequest()
-  {
-    Serial.println("onPassKeyRequest");
-    return 123456;
-  }
-  void onPassKeyNotify(uint32_t pass_key) {}
-  bool onConfirmPIN(uint32_t pass_key)
-  {
-    Serial.println("onConfirmPIN");
-    return true;
-  }
-  bool onSecurityRequest()
-  {
-    Serial.println("onSecurityRequest");
-    return true;
-  }
-  void onAuthenticationComplete(esp_ble_auth_cmpl_t auth_cmpl)
-  {
-    if (auth_cmpl.success)
-    {
-      Serial.println("Authentication successful");
-    }
-  }
-};
-
 class MyBle
 {
 private:
   bool isClientMode;
-  BLEClient *pClient;
-  BLEServer *pServer;
-  BLESecurity *pSecurity;
-  BLECharacteristic *pCharacteristic;
-  static BLEAddress *pServerAddress;
+  NimBLEClient *pClient;
+  NimBLEServer *pServer;
+  NimBLECharacteristic *pCharacteristic;
+  static NimBLEAddress *pServerAddress;
   bool runFlg = true;
   static bool connectedFlg;
   static bool newConnectionMade;
-  std::function<void(BLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> clientCallBack;
-  std::function<void(BLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> serverCallBack;
+  std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> clientCallBack;
+  std::function<void(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> serverCallBack;
   std::queue<String> sendQueue;
   SemaphoreHandle_t sendQueueMutex;
   static void sendTask(void *parameter);
 
+protected:
+  void onResult(NimBLEAdvertisedDevice *advertisedDevice); // Ensure this is declared
 public:
   static String bleAddTmp;
 
   MyBle(bool clientMode = true);
   ~MyBle();
-  void begin(std::function<void(BLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb);
-  void beginServer(std::function<void(BLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> cb);
-  bool connectToServer(BLEAddress pAddress);
+  void begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb);
+  void beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> cb);
+  bool connectToServer(NimBLEAddress pAddress);
   bool connectToMac(String macAddress);
   void sendString(String str);
   void sendData(const char *data);
@@ -76,41 +43,61 @@ public:
   void pause();
   void resume();
   bool isRunning();
-  bool isNewConnection()
+  bool isNewConnection();
+  void justSend(String str);
+
+  // MyClientCallback class
+  class MyClientCallback : public NimBLEClientCallbacks
   {
-    if (newConnectionMade)
-    {
-      newConnectionMade = false;
-      return true;
-    }
-    else
-      return false;
-  }
-  class MyClientCallback : public BLEClientCallbacks
-  {
-    void onConnect(BLEClient *pclient)
+    void onConnect(NimBLEClient *pclient) override
     {
       newConnectionMade = true;
     }
-    void onDisconnect(BLEClient *pclient)
+
+    void onDisconnect(NimBLEClient *pclient) override
     {
       connectedFlg = false;
     }
   };
 
-  class MyServerCallbacks : public BLEServerCallbacks
+  // MyServerCallbacks class
+  class MyServerCallbacks : public NimBLEServerCallbacks
   {
-    void onConnect(BLEServer *pServer)
+    void onConnect(NimBLEServer *pServer) override
     {
       connectedFlg = true;
-      Serial.println("Client connected");
     }
-    void onDisconnect(BLEServer *pServer)
+
+    void onDisconnect(NimBLEServer *pServer) override
     {
       connectedFlg = false;
-      Serial.println("Client disconnected");
-      pServer->getAdvertising()->start(); // Restart advertising
-      Serial.println("Advertising restarted...");
+    }
+  };
+
+  // MyCallbacks class
+  class MyCallbacks : public NimBLECharacteristicCallbacks
+  {
+  private:
+    MyBle &parent;
+
+  public:
+    MyCallbacks(MyBle &ble) : parent(ble) {}
+
+    void onWrite(NimBLECharacteristic *pCharacteristic) override
+    {
+      std::string value = pCharacteristic->getValue();
+      if (parent.serverCallBack)
+      {
+        parent.serverCallBack(pCharacteristic, (uint8_t *)value.data(), value.length());
+      }
+    }
+
+    void onRead(NimBLECharacteristic *pCharacteristic) override
+    {
+      Serial.print("Characteristic ");
+      Serial.print(pCharacteristic->getUUID().toString().c_str());
+      Serial.print(" was read, value: ");
+      Serial.println(pCharacteristic->getValue().c_str());
     }
   };
 };

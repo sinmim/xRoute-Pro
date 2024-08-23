@@ -675,12 +675,13 @@ int dimShortFlg = false;
 int dimShortNum = 0;
 //=======================TEST
 #include <myBle.h>
+void ramMonitorTask(void *pvParameters);
 
 // Create an instance of MyBle in server mode
 MyBle myBle(false); // false indicates server mode
 
 // Callback function to handle data received from the client
-void onDataReceived(BLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
+void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
   String receivedData = "";
   for (size_t i = 0; i < length; i++)
@@ -691,7 +692,7 @@ void onDataReceived(BLECharacteristic *pCharacteristic, uint8_t *pData, size_t l
   Serial.println(receivedData);
 
   // Example: Echo the data back to the client
-  myBle.sendData(receivedData.c_str());
+  // myBle.sendData(receivedData.c_str());
 }
 
 void setup()
@@ -708,20 +709,19 @@ void loop()
 {
   if (myBle.isConnected())
   {
-    static int n = 0;
-    n++;
-    Serial.print("Sending data: ");
-    Serial.println(n);
-    myBle.sendData(String(n).c_str());
+    static int i = 0;
+    if (i++ == 120)
+      i = 0;
+    String newValue = "M.V1.val=" + String(i) + "\xFF\xFF\xFF";
+    myBle.justSend(newValue);
   }
   else
   {
     Serial.println("Waiting for client connection...");
   }
 
-  vTaskDelay(pdMS_TO_TICKS(1000)); // Increase delay to avoid overwhelming the connection
+  vTaskDelay(pdMS_TO_TICKS(100)); // Increase delay to avoid overwhelming the connection
 }
-
 
 //-------------------------------------------------TASKS
 void ConditionsTask(void *parameters)
