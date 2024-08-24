@@ -7,8 +7,6 @@
 #include <EEPROM.h>
 #include "defaultValues.h"
 #include "save_load.h"
-// #include <BluetoothSerial.h>
-// #include <BLESerial.h>
 #include "relay.h"
 #include "otherFunctions.h"
 #include "ledPwm.h"
@@ -676,6 +674,7 @@ int dimShortNum = 0;
 //=======================TEST
 #include <myNimBle.h>
 MyBle myBle(false); // false indicates server mode
+void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
 void ConditionsTask(void *parameters)
 {
@@ -1184,13 +1183,13 @@ void defaultCalibrations()
 }
 void sendCmndToMainStringProcessorTask(char *str)
 {
-  while (mainStrIsFree == false)
-  {
-    vTaskDelay(pdTICKS_TO_MS(1));
-  }
-  mainStrIsFree = false;
-  strcpy(mainRxStr, str);
-  mainStrIsFree = true;
+// Simulate BLE data reception
+  uint8_t *pData = reinterpret_cast<uint8_t*>(const_cast<char*>(str));
+  size_t length = strlen(str);
+
+  // Call onDataReceived with the simulated data
+  onDataReceived(nullptr, pData, length); // Pass nullptr for the characteristic if not needed
+
 }
 // END----------------------------------------------TASKS
 //-------------------------------------------------FUNCTIONS
@@ -1200,7 +1199,6 @@ void createCondition(String _inputType, int _inputPort, String _oprt, float _set
 }
 //--------------------EVENTS
 // Callback function to handle data received from the client
-
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
   static std::string accumulatedData; // Holds data across multiple BLE packets
@@ -2158,7 +2156,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
   }
 }
-
 //--------------------
 void setup()
 {
