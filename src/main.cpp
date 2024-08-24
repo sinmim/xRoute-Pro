@@ -674,55 +674,8 @@ void defaultCalibrations();
 int dimShortFlg = false;
 int dimShortNum = 0;
 //=======================TEST
-#include <myBle.h>
-void ramMonitorTask(void *pvParameters);
-
-// Create an instance of MyBle in server mode
+#include <myNimBle.h>
 MyBle myBle(false); // false indicates server mode
-
-// Callback function to handle data received from the client
-void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
-{
-  String receivedData = "";
-  for (size_t i = 0; i < length; i++)
-  {
-    receivedData += (char)pData[i];
-  }
-  Serial.print("Received data: ");
-  Serial.println(receivedData);
-
-  // Example: Echo the data back to the client
-  // myBle.sendData(receivedData.c_str());
-}
-
-void setup()
-{
-  Serial.begin(115200);
-
-  // Initialize the BLE server and pass the callback function
-  myBle.beginServer(onDataReceived);
-
-  Serial.println("BLE server started.");
-}
-
-void loop()
-{
-  if (myBle.isConnected())
-  {
-    static int i = 0;
-    if (i++ == 120)
-      i = 0;
-    String newValue = "M.V1.val=" + String(i) + "\xFF\xFF\xFF";
-    myBle.justSend(newValue);
-  }
-  else
-  {
-    Serial.println("Waiting for client connection...");
-  }
-
-  vTaskDelay(pdMS_TO_TICKS(100)); // Increase delay to avoid overwhelming the connection
-}
-
 //-------------------------------------------------TASKS
 void ConditionsTask(void *parameters)
 {
@@ -792,16 +745,6 @@ bool MeasurmentTaskPause = false;
 void MeasurmentTask(void *parameters)
 {
   char str[64];
-  // SetNextion(RELAYS.relPos);
-  // volt = ADC_LPF(VOLT_MUX_IN, 5, volt, 0.0);
-  // amp0 = ADC_LPF(AMPER0_MUX_IN, 5, amp0, 0.0);
-  // amp1 = ADC_LPF(AMPER_MUX_IN, 5, amp1, 0.0);
-  // amp2 = ADC_LPF(AIR_QUALITY_MUX_IN, 5, amp2, 0.0);
-  // clnWtr = ADC_LPF(GAUGE1_MUX_IN, 5, clnWtr, 0.0);
-  // drtWtr = ADC_LPF(GAUGE2_MUX_IN, 5, drtWtr, 0.0);
-  // gryWtr = ADC_LPF(GAUGE3_MUX_IN, 5, gryWtr, 0.0);
-  // pt100 = ADC_LPF(PT100_MUX_IN, 5, pt100, 0.0);
-  vTaskDelay(1000); // wait for adc reading task to loop for a while
   for (;;)
   {
     if (UpdatingFlg)
@@ -840,49 +783,40 @@ void MeasurmentTask(void *parameters)
     cwPrcnt = (clnWtr - clnWtrMin) / (clnWtrMax - clnWtrMin) * 1000;
     dwPrcnt = (drtWtr - drtWtrMin) / (drtWtrMax - drtWtrMin) * 1000;
     gwPrcnt = (gryWtr - gryWtrMin) / (gryWtrMax - gryWtrMin) * 1000;
-    if (cwPrcnt > 1820)
-      cwPrcnt = 1820;
-    if (dwPrcnt > 1820)
-      dwPrcnt = 1820;
-    if (gwPrcnt > 1820)
-      gwPrcnt = 1820;
-    if (cwPrcnt < 0)
-      cwPrcnt = 0;
-    if (dwPrcnt < 0)
-      dwPrcnt = 0;
-    if (gwPrcnt < 0)
-      gwPrcnt = 0;
+
+    cwPrcnt = constrain(cwPrcnt, 0, 1820);
+    dwPrcnt = constrain(dwPrcnt, 0, 1820);
+    gwPrcnt = constrain(gwPrcnt, 0, 1820);
+
     pt100mv = pt100 * PT_mvCal;
-    sprintf(str, "M.V1.val=%d\xFF\xFF\xFF", (int)v);
-    SendToAll(str);
-    sprintf(str, "M.A0.val=%d\xFF\xFF\xFF", (int)a0);
-    SendToAll(str);
-    sprintf(str, "M.A1.val=%d\xFF\xFF\xFF", (int)a1);
-    SendToAll(str);
-    sprintf(str, "M.W1.val=%d\xFF\xFF\xFF", (int)w);
-    SendToAll(str);
-    sprintf(str, "M.BatPr.val=%d\xFF\xFF\xFF", (int)b);
-    SendToAll(str);
-    sprintf(str, "M.G1TXT.val=%d\xFF\xFF\xFF", ((int)cwPrcnt) / 10 * 10);
-    SendToAll(str);
-    sprintf(str, "M.G2TXT.val=%d\xFF\xFF\xFF", ((int)dwPrcnt) / 10 * 10);
-    SendToAll(str);
-    sprintf(str, "M.G3TXT.val=%d\xFF\xFF\xFF", ((int)gwPrcnt) / 10 * 10);
-    SendToAll(str);
-    sprintf(str, "M.T1.val=%d\xFF\xFF\xFF", (int)(10 * ReadPT100_Temp(pt100mv, 510))); // PT100
-    SendToAll(str);
-    sprintf(str, "M.T2.val=%d\xFF\xFF\xFF", ((int)(digitalTemp * 100)) / 10);
-    SendToAll(str);
-    sprintf(str, "M.Hum.val=%d\xFF\xFF\xFF", (int)digitalHum);
-    SendToAll(str);
-    sprintf(str, "M.Pre.val=%d\xFF\xFF\xFF", (int)digitalAlt);
-    SendToAll(str);
-    sprintf(str, "S.PTmv.val=%d\xFF\xFF\xFF", (int)pt100mv * 10);
-    SendToAll(str);
-    sprintf(str, "M.A2.val=%d\xFF\xFF\xFF", (int)a2);
-    SendToAll(str);
-    sprintf(str, "M.BattHourLeft.val=%d\xFF\xFF\xFF", (int)battHourLeft / 10);
-    SendToAll(str);
+    sprintf(str, "VOL1=%d\n", (int)v);
+    myBle.sendString(str);
+    sprintf(str, "AMP0=%d\n", (int)a0);
+    myBle.sendString(str);
+    sprintf(str, "AMP1=%d\n", (int)a1);
+    myBle.sendString(str);
+    sprintf(str, "AMP2=%d\n", (int)a2);
+    myBle.sendString(str);
+    sprintf(str, "WAT1=%d\n", (int)w);
+    myBle.sendString(str);
+    sprintf(str, "BAT=%d\n", (int)b);
+    myBle.sendString(str);
+    sprintf(str, "FLT1=%d\n", ((int)cwPrcnt) / 10 * 10);
+    myBle.sendString(str);
+    sprintf(str, "FLT2=%d\n", ((int)dwPrcnt) / 10 * 10);
+    myBle.sendString(str);
+    sprintf(str, "FLT3=%d\n", ((int)gwPrcnt) / 10 * 10);
+    myBle.sendString(str);
+    sprintf(str, "TMP1=%d\n", (int)(10 * ReadPT100_Temp(pt100mv, 510))); // PT100
+    myBle.sendString(str);
+    sprintf(str, "TMP2=%d\n", ((int)(digitalTemp * 100)) / 10);
+    myBle.sendString(str);
+    sprintf(str, "HUM1=%d\n", (int)digitalHum);
+    myBle.sendString(str);
+    sprintf(str, "ALT1=%d\n", (int)digitalAlt);
+    myBle.sendString(str);
+    sprintf(str, "BATHUR=%d\n", (int)battHourLeft / 10);
+    myBle.sendString(str);
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
@@ -891,7 +825,7 @@ void sendConfig()
   MeasurmentTaskPause = true; // preventing sending other string
   String str = "ConfigFile=" + readStringFromFile(ConfigFile) + "END";
   Serial.println("inside:" + str);
-  // SendToAll((const char *)str.c_str());
+  // sendToAll((const char *)str.c_str());
   // BLE//bleSendLongString(str);
   MeasurmentTaskPause = false;
 }
@@ -911,20 +845,20 @@ void MainStringProcessTask(void *parameters)
     {
       if (lowVoltageFlg)
       {
-        SendToAll("XrouteAlarm=Voltage is low !\nPlease check the battery voltage or measurement ports!\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=Voltage is low !\nPlease check the battery voltage or measurement ports!\xFF\xFF\xFF");
       }
       // extract the relay number from string
       int relayNum = atoi(mainRxStr + 2);
       if ((RELAYS.relPos & (1UL << RELAYS.cnfgLookup[relayNum - 1])) == 0) //-1 is beqause of lookup table is zero based
       {
         sprintf(str, "sw%d.val=1\xFF\xFF\xFF", relayNum);
-        SendToAll(str);
+        sendToAll(str);
         RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[relayNum - 1]); //-1 is beqause of lookup table is zero based
       }
       else
       {
         sprintf(str, "sw%d.val=0\xFF\xFF\xFF", relayNum);
-        SendToAll(str);
+        sendToAll(str);
         RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[relayNum - 1]); //-1 is beqause of lookup table is zero based
       }
       setRelay(RELAYS.relPos, v / 10);
@@ -940,7 +874,7 @@ void MainStringProcessTask(void *parameters)
       RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[14 - 1]);
       setRelay(RELAYS.relPos, v / 10);
       sprintf(str, "M1UP.val=1\xFF\xFF\xFF");
-      // SendToAll(str);
+      // sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "MOTOR1=DOWN"))
     {
@@ -948,7 +882,7 @@ void MainStringProcessTask(void *parameters)
       RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[13 - 1]);
       setRelay(RELAYS.relPos, v / 10);
       sprintf(str, "M1Down.val=1\xFF\xFF\xFF");
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "MOTOR1=STOP"))
     {
@@ -957,9 +891,9 @@ void MainStringProcessTask(void *parameters)
       setRelay(RELAYS.relPos, v / 10);
 
       sprintf(str, "M1UP.val=0\xFF\xFF\xFF");
-      SendToAll(str);
+      sendToAll(str);
       sprintf(str, "M1Down.val=0\xFF\xFF\xFF");
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "MOTOR2=UP"))
     {
@@ -968,7 +902,7 @@ void MainStringProcessTask(void *parameters)
       setRelay(RELAYS.relPos, v / 10);
 
       sprintf(str, "M2UP.val=1\xFF\xFF\xFF");
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "MOTOR2=DOWN"))
     {
@@ -977,7 +911,7 @@ void MainStringProcessTask(void *parameters)
       setRelay(RELAYS.relPos, v / 10);
 
       sprintf(str, "M2Down.val=1\xFF\xFF\xFF");
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "MOTOR2=STOP"))
     {
@@ -985,9 +919,9 @@ void MainStringProcessTask(void *parameters)
       RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[16 - 1]);
       setRelay(RELAYS.relPos, v / 10);
       sprintf(str, "M1Down.val=0\xFF\xFF\xFF");
-      SendToAll(str);
+      sendToAll(str);
       sprintf(str, "M1UP.val=0\xFF\xFF\xFF"); // just for graphic reson
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (strncmp(mainRxStr, "DIMER", 5) == 0) // DIMER1.val=X
     {
@@ -997,7 +931,7 @@ void MainStringProcessTask(void *parameters)
       dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
       DimValChanged = true;
       sprintf(str, "APDIM%c.val=%d\n", mainRxStr[5], mainRxStr[11]);
-      SendToAll(str); /////MUST BE SEND TO BLE
+      sendToAll(str); /////MUST BE SEND TO BLE
     }
     else if (strncmp(mainRxStr, "APDIM", 5) == 0) // APDIM1.val=123
     {
@@ -1024,7 +958,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffset);
       EEPROM.commit();
       sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\xFF\xFF\xFF", VcalCo, NegVoltOffset);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "VoltageCalibrate"))
     {
@@ -1038,19 +972,19 @@ void MainStringProcessTask(void *parameters)
       EEPROM.commit();
 
       sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\xFF\xFF\xFF", VcalCo, NegVoltOffset);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "VoltageCalibrate++"))
     {
       DFLT_V_CAL++;
       sprintf(str, "Vcal.val=%d\xFF\xFF\xFF", DFLT_V_CAL);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "VoltageCalibrate--"))
     {
       DFLT_V_CAL--;
       sprintf(str, "Vcal.val=%d\xFF\xFF\xFF", DFLT_V_CAL);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "AmperOffset"))
     {
@@ -1060,11 +994,11 @@ void MainStringProcessTask(void *parameters)
         EEPROM.writeFloat(E2ADD.ampOffsetSave, amp1Offset);
         EEPROM.commit();
         sprintf(str, "show.txt=\"amp1Offset=%f\"\xFF\xFF\xFF", amp1Offset);
-        SendToAll(str);
+        sendToAll(str);
       }
       else
       {
-        SendToAll("XrouteAlarm=No External Ampermeter Detected !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=No External Ampermeter Detected !\xFF\xFF\xFF");
       }
     }
     else if (strncmp(mainRxStr, "ACalTo=", 7) == 0)
@@ -1076,11 +1010,11 @@ void MainStringProcessTask(void *parameters)
         EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
         EEPROM.commit();
         sprintf(str, "show.txt=\"A1calCo=%f\"\xFF\xFF\xFF", A1calCo);
-        SendToAll(str);
+        sendToAll(str);
       }
       else
       {
-        SendToAll("XrouteAlarm=No External Ampermeter Detected !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=No External Ampermeter Detected !\xFF\xFF\xFF");
       }
     }
     else if (!strcmp(mainRxStr, "AmperCalibrate"))
@@ -1091,11 +1025,11 @@ void MainStringProcessTask(void *parameters)
         EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
         EEPROM.commit();
         sprintf(str, "show.txt=\"A1calCo=%f\"\xFF\xFF\xFF", A1calCo);
-        SendToAll(str);
+        sendToAll(str);
       }
       else
       {
-        SendToAll("XrouteAlarm=No External Ampermeter Detected !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=No External Ampermeter Detected !\xFF\xFF\xFF");
       }
     }
     else if (!strcmp(mainRxStr, "AmperCalibratePlus"))
@@ -1109,7 +1043,7 @@ void MainStringProcessTask(void *parameters)
       }
       else
       {
-        SendToAll("XrouteAlarm=No External Ampermeter Detected !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=No External Ampermeter Detected !\xFF\xFF\xFF");
       }
     }
     else if (!strcmp(mainRxStr, "AmperCalibrate++"))
@@ -1117,14 +1051,14 @@ void MainStringProcessTask(void *parameters)
 
       DFLT_A_CAL++;
       sprintf(str, "Acal.val=%d\xFF\xFF\xFF", DFLT_A_CAL);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "AmperCalibrate--"))
     {
 
       DFLT_A_CAL--;
       sprintf(str, "Acal.val=%d\xFF\xFF\xFF", DFLT_A_CAL);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Amper0Offset"))
     {
@@ -1133,7 +1067,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0Offset);
       EEPROM.commit();
       sprintf(str, "show.txt=\"amp0Offset=%f\"\xFF\xFF\xFF", amp0Offset);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (strncmp(mainRxStr, "A0CalTo=", 8) == 0)
     {
@@ -1141,7 +1075,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
       EEPROM.commit();
       sprintf(str, "show.txt=\"A0calCo=%f\"\xFF\xFF\xFF", A0calCo);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Amper0Calibrate"))
     {
@@ -1150,7 +1084,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
       EEPROM.commit();
       sprintf(str, "show.txt=\"A0calCo=%f\"\xFF\xFF\xFF", A0calCo);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Amper0CalibratePlus"))
     {
@@ -1163,13 +1097,13 @@ void MainStringProcessTask(void *parameters)
     {
       DFLT_A0_CAL++;
       sprintf(str, "A0cal.val=%d\xFF\xFF\xFF", DFLT_A0_CAL);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Amper0Calibrate--"))
     {
       DFLT_A0_CAL--;
       sprintf(str, "A0cal.val=%d\xFF\xFF\xFF", DFLT_A0_CAL);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Amper2Offset"))
     {
@@ -1178,7 +1112,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2Offset);
       EEPROM.commit();
       sprintf(str, "show.txt=\"amp2Offset=%f\"\xFF\xFF\xFF", amp2Offset);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (strncmp(mainRxStr, "A2CalTo=", 8) == 0)
     {
@@ -1186,7 +1120,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
       EEPROM.commit();
       sprintf(str, "show.txt=\"A2calCo=%f\"\xFF\xFF\xFF", A2calCo);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Amper2Calibrate"))
     {
@@ -1195,7 +1129,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
       EEPROM.commit();
       sprintf(str, "show.txt=\"A2calCo=%f\"\xFF\xFF\xFF", A2calCo);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Amper2CalibratePlus"))
     {
@@ -1208,27 +1142,27 @@ void MainStringProcessTask(void *parameters)
     {
       DFLT_A2_CAL++;
       sprintf(str, "A2cal.val=%d\xFF\xFF\xFF", DFLT_A2_CAL);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Amper2Calibrate--"))
     {
       DFLT_A2_CAL--;
       sprintf(str, "A2cal.val=%d\xFF\xFF\xFF", DFLT_A2_CAL);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "BattCapCalibrate++"))
     {
       DFLT_BATT_CAP += 10;
       DFLT_BATT_CAP = constrain(DFLT_BATT_CAP, 0, 1000);
       sprintf(str, "BattCap.val=%d\xFF\xFF\xFF", DFLT_BATT_CAP);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "BattCapCalibrate--"))
     {
       DFLT_BATT_CAP -= 10;
       DFLT_BATT_CAP = constrain(DFLT_BATT_CAP, 10, 1000);
       sprintf(str, "BattCap.val=%d\xFF\xFF\xFF", DFLT_BATT_CAP);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (strncmp(mainRxStr, "BattCapCalTo=", 13) == 0)
     {
@@ -1237,7 +1171,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.commit();
       batteryCap = DFLT_BATT_CAP;
       sprintf(str, "BattCapTxt.val=%d\xFF\xFF\xFF", (int)batteryCap);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "BattCapCalibrate"))
     {
@@ -1245,7 +1179,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.commit();
       batteryCap = DFLT_BATT_CAP;
       sprintf(str, "BattCapTxt.val=%d\xFF\xFF\xFF", (int)batteryCap);
-      SendToAll(str);
+      sendToAll(str);
       myBattery.setBatteryCap(batteryCap);
       myBattery.setPercent(myBattery.getBtPerV());
     }
@@ -1254,11 +1188,11 @@ void MainStringProcessTask(void *parameters)
       DFLT_PT_MV_CAL++;
       PT_mvCal = DFLT_PT_MV_CAL / pt100;
       sprintf(str, "Pt_mvCal.val=%d\xFF\xFF\xFF", DFLT_PT_MV_CAL);
-      SendToAll(str);
+      sendToAll(str);
       if (humSensorType != HUM_SENSOR_TYPE_NON)
       {
         sprintf(str, "show.txt=\"DigitalTemp=%.1f °C\"\xFF\xFF\xFF", digitalTemp);
-        SendToAll(str);
+        sendToAll(str);
       }
     }
     else if (!strcmp(mainRxStr, "PTmvCalibrate--"))
@@ -1266,11 +1200,11 @@ void MainStringProcessTask(void *parameters)
       DFLT_PT_MV_CAL--;
       PT_mvCal = DFLT_PT_MV_CAL / pt100;
       sprintf(str, "Pt_mvCal.val=%d\xFF\xFF\xFF", DFLT_PT_MV_CAL);
-      SendToAll(str);
+      sendToAll(str);
       if (humSensorType != HUM_SENSOR_TYPE_NON)
       {
         sprintf(str, "show.txt=\"DigitalTemp=%.1f °C\"\xFF\xFF\xFF", digitalTemp);
-        SendToAll(str);
+        sendToAll(str);
       }
     }
     else if (strncmp(mainRxStr, "PTCalTo=", 8) == 0)
@@ -1295,7 +1229,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
       EEPROM.commit();
       sprintf(str, "show.txt=\"PT_mvCal=%f\"\xFF\xFF\xFF", PT_mvCal);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "PT100Calibrate"))
     {
@@ -1304,7 +1238,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
       EEPROM.commit();
       sprintf(str, "show.txt=\"PT_mvCal=%f\"\xFF\xFF\xFF", PT_mvCal);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "BattFull+"))
     {
@@ -1313,17 +1247,17 @@ void MainStringProcessTask(void *parameters)
       if (DFLT_BATT_FULL_VOLT > 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_12V)
       {
         myBattery.setBatteryArrangment(BATTERY_CONFIG_24V);
-        SendToAll("XrouteAlarm=You are using 2 Battery in Series = 24v config !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=You are using 2 Battery in Series = 24v config !\xFF\xFF\xFF");
       }
       battFullVoltage = DFLT_BATT_FULL_VOLT;
       sprintf(str, "BattFullVolt.val=%d\xFF\xFF\xFF", DFLT_BATT_FULL_VOLT);
-      SendToAll(str);
-      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, SendToAll);
+      sendToAll(str);
+      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
       if (myBattery.batteryType != BATTERY_TYPE_NON)
       {
         DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
         sprintf(str, "BattEmptyVolt.val=%d\xFF\xFF\xFF", DFLT_BATT_EMPTY_VOLT);
-        SendToAll(str);
+        sendToAll(str);
       }
     }
     else if (!strcmp(mainRxStr, "BattFull-"))
@@ -1333,17 +1267,17 @@ void MainStringProcessTask(void *parameters)
       if (DFLT_BATT_FULL_VOLT < 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_24V)
       {
         myBattery.setBatteryArrangment(BATTERY_CONFIG_12V);
-        SendToAll("XrouteAlarm=You are using 1 Battery = 12v config !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=You are using 1 Battery = 12v config !\xFF\xFF\xFF");
       }
       battFullVoltage = DFLT_BATT_FULL_VOLT;
       sprintf(str, "BattFullVolt.val=%d\xFF\xFF\xFF", DFLT_BATT_FULL_VOLT);
-      SendToAll(str);
-      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, SendToAll);
+      sendToAll(str);
+      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
       if (myBattery.batteryType != BATTERY_TYPE_NON)
       {
         DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
         sprintf(str, "BattEmptyVolt.val=%d\xFF\xFF\xFF", DFLT_BATT_EMPTY_VOLT);
-        SendToAll(str);
+        sendToAll(str);
       }
     }
     else if (!strcmp(mainRxStr, "BattfullVoltageCalibrate"))
@@ -1358,7 +1292,7 @@ void MainStringProcessTask(void *parameters)
       DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
       battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
       sprintf(str, "BattEmptyVolt.val=%d\xFF\xFF\xFF", DFLT_BATT_EMPTY_VOLT);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "BattEmpty+"))
     {
@@ -1366,7 +1300,7 @@ void MainStringProcessTask(void *parameters)
       DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
       battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
       sprintf(str, "BattEmptyVolt.val=%d\xFF\xFF\xFF", DFLT_BATT_EMPTY_VOLT);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "BattEmptyVoltageCalibrate"))
     {
@@ -1381,27 +1315,27 @@ void MainStringProcessTask(void *parameters)
       if (mainRxStr[12] == '1') // AGM
       {
         myBattery.setBatType(BATTERY_TYPE_AGM);
-        SendToAll("XrouteAlarm= AGM BATTERY \xFF\xFF\xFF");
+        sendToAll("XrouteAlarm= AGM BATTERY \xFF\xFF\xFF");
       }
       else if (mainRxStr[12] == '2') // GEL
       {
         myBattery.setBatType(BATTERY_TYPE_GEL);
-        SendToAll("XrouteAlarm= GEL BATTERY \xFF\xFF\xFF");
+        sendToAll("XrouteAlarm= GEL BATTERY \xFF\xFF\xFF");
       }
       else if (mainRxStr[12] == '3') // ACID
       {
         myBattery.setBatType(BATTERY_TYPE_ACID);
-        SendToAll("XrouteAlarm= ACID BATTERY \xFF\xFF\xFF");
+        sendToAll("XrouteAlarm= ACID BATTERY \xFF\xFF\xFF");
       }
       else if (mainRxStr[12] == '4') // LITHIUM
       {
         myBattery.setBatType(BATTERY_TYPE_LITIUM);
-        SendToAll("XrouteAlarm= LITHIUM BATTERY \xFF\xFF\xFF");
+        sendToAll("XrouteAlarm= LITHIUM BATTERY \xFF\xFF\xFF");
       }
       else if (mainRxStr[12] == '5') // LIFPO4
       {
         myBattery.setBatType(BATTERY_TYPE_LIFEPO4);
-        SendToAll("XrouteAlarm= LIFEPO4 BATTERY \xFF\xFF\xFF");
+        sendToAll("XrouteAlarm= LIFEPO4 BATTERY \xFF\xFF\xFF");
       }
 
       battFullVoltage = floor(myBattery.getBatteryFullVoltage() * 10);
@@ -1413,13 +1347,13 @@ void MainStringProcessTask(void *parameters)
     {
       DFLT_CABLE_RES_MILI_OHM++;
       sprintf(str, "CableRes.val=%d\xFF\xFF\xFF", DFLT_CABLE_RES_MILI_OHM);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "CableRes-"))
     {
       DFLT_CABLE_RES_MILI_OHM--;
       sprintf(str, "CableRes.val=%d\xFF\xFF\xFF", DFLT_CABLE_RES_MILI_OHM);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "CableResCalibrate"))
     {
@@ -1436,7 +1370,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMin);
       EEPROM.commit();
       sprintf(str, "show.txt=\"clnWtrMin=%f\"\xFF\xFF\xFF", clnWtrMin);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "CleanWaterMax"))
     {
@@ -1445,7 +1379,7 @@ void MainStringProcessTask(void *parameters)
       EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMax);
       EEPROM.commit();
       sprintf(str, "show.txt=\"clnWtrMax=%f\"\xFF\xFF\xFF", clnWtrMax);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "DirtyWaterMin"))
     {
@@ -1483,7 +1417,7 @@ void MainStringProcessTask(void *parameters)
       dimTmp[dimNum] = (double)32767 * dimLimit[dimNum];
       DimValChanged = true;
       sprintf(str, "show.txt=\"Dim%d MaxLimit=%d\"\xFF\xFF\xFF", dimNum + 1, (int)(32768 * dimLimit[dimNum]));
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "LoadDimLimits"))
     {
@@ -1491,7 +1425,7 @@ void MainStringProcessTask(void *parameters)
       {
         float val = dimLimit[i] * 128;
         sprintf(str, "dimMax%d.val=%d\xFF\xFF\xFF", i + 1, (int)val);
-        SendToAll(str);
+        sendToAll(str);
         vTaskDelay(10 / portTICK_PERIOD_MS);
       }
     }
@@ -1503,7 +1437,7 @@ void MainStringProcessTask(void *parameters)
         EEPROM.commit();
       }
       sprintf(str, "XrouteAlarm=Limit Saved OK! \xFF\xFF\xFF");
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (strncmp(mainRxStr, "GiveMeBalance=", 14) == 0)
     {
@@ -1526,9 +1460,9 @@ void MainStringProcessTask(void *parameters)
       accSensitivity *= 2;
 
       sprintf(str, "Accx.val=%d\xFF\xFF\xFF", (int)(roundf(len * cos(alpha) * 100)));
-      SendToAll(str);
+      sendToAll(str);
       sprintf(str, "Accy.val=%d\xFF\xFF\xFF", (int)(roundf(len * sin(alpha) * 100)));
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "AccelZeroOffset"))
     {
@@ -1542,14 +1476,14 @@ void MainStringProcessTask(void *parameters)
       accYValueOffset = EEPROM.readFloat(E2ADD.accYValueOffsetSave);
 
       sprintf(str, "XrouteAlarm=accXValueOffset=%f,accYValueOffset=%f\xFF\xFF\xFF", accXValueOffset, accYValueOffset);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "GiveMeSysInfo"))
     {
       uint64_t chipid = ESP.getEfuseMac();
       sprintf(str, "MacAddress:%012llX,%s,Version:%s\xFF\xFF\xFF", chipid, GeneralLisence.c_str(), Version);
       Serial.println(str);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "GyroPass:deactive"))
     {
@@ -1592,26 +1526,26 @@ void MainStringProcessTask(void *parameters)
     {
       uint64_t chipid = ESP.getEfuseMac();
       sprintf(str, "Orientation=%s\xFF\xFF\xFF", GyroOriantation);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "PreCalibrate"))
     {
       EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffset);
       EEPROM.commit();
       sprintf(str, "show.txt=\"PresOffset=%f\"\xFF\xFF\xFF", pressurCalOffset);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Pre+"))
     {
       pressurCalOffset += 0.01;
       sprintf(str, "Pcal.val=%d\xFF\xFF\xFF", (int)(pressurCalOffset * 100));
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (!strcmp(mainRxStr, "Pre-"))
     {
       pressurCalOffset -= 0.01;
       sprintf(str, "Pcal.val=%d\xFF\xFF\xFF", (int)(pressurCalOffset * 100));
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (strncmp(mainRxStr, "PreCalTo=", 9) == 0)
     {
@@ -1620,7 +1554,7 @@ void MainStringProcessTask(void *parameters)
       float error = 1; // to get into the loop
       float pressurCalOffsetTemp = pressurCalOffset;
       sprintf(str, "show.txt=\"Calibrating=\"\xFF\xFF\xFF");
-      SendToAll(str);
+      sendToAll(str);
 
       while (fabs(error) > 0.1)
       {
@@ -1634,7 +1568,7 @@ void MainStringProcessTask(void *parameters)
         tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffsetTemp);
         Serial.println("PrOffset=" + String(pressurCalOffsetTemp, 5));
         sprintf(str, "M.Pre.val=%d\xFF\xFF\xFF", (int)tempAlt);
-        SendToAll(str);
+        sendToAll(str);
         vTaskDelay(10 / portTICK_PERIOD_MS);
       }
 
@@ -1645,7 +1579,7 @@ void MainStringProcessTask(void *parameters)
         EEPROM.commit();
       }
       sprintf(str, "show.txt=\"pressurCalOffset=%f\"\xFF\xFF\xFF", pressurCalOffset);
-      SendToAll(str);
+      sendToAll(str);
     }
     else if (strncmp(mainRxStr, "BLEPASSWORD=", 12) == 0)
     {
@@ -1666,7 +1600,7 @@ void MainStringProcessTask(void *parameters)
       char str[32];
       blePass = EEPROM.readUInt(E2ADD.blePassSave);
       sprintf(str, "BLEPASSWORD=%d\xFF\xFF\xFF", blePass);
-      SendToAll(str);
+      sendToAll(str);
       Serial.println(str);
     }
     else if (!strncmp(mainRxStr, "LPM=", 4))
@@ -1685,7 +1619,7 @@ void MainStringProcessTask(void *parameters)
       char str1[64];
       Serial.println(mainRxStr);
       sprintf(str1, "XrouteAlarm=Low Voltage Parameters Set succesfully!\xFF\xFF\xFF");
-      SendToAll(str1);
+      sendToAll(str1);
     }
     else if (!strncmp(mainRxStr, "CPM=", 4))
     {
@@ -1703,7 +1637,7 @@ void MainStringProcessTask(void *parameters)
       char str1[64];
       Serial.println(mainRxStr);
       sprintf(str1, "XrouteAlarm=Critical Voltage Parameters Set succesfully\xFF\xFF\xFF");
-      SendToAll(str1);
+      sendToAll(str1);
     }
     else if (!strncmp(mainRxStr, "GiveMeLPM", 9))
     {
@@ -1715,7 +1649,7 @@ void MainStringProcessTask(void *parameters)
               bitRead(BatteryLowPrcntRelays, 10), bitRead(BatteryLowPrcntRelays, 9), bitRead(BatteryLowPrcntRelays, 8), bitRead(BatteryLowPrcntRelays, 7),
               bitRead(BatteryLowPrcntRelays, 6), bitRead(BatteryLowPrcntRelays, 5), bitRead(BatteryLowPrcntRelays, 4), bitRead(BatteryLowPrcntRelays, 3),
               bitRead(BatteryLowPrcntRelays, 2), bitRead(BatteryLowPrcntRelays, 1), bitRead(BatteryLowPrcntRelays, 0), BatteryLowPrcnt);
-      SendToAll(str);
+      sendToAll(str);
       Serial.println(str);
     }
     else if (!strncmp(mainRxStr, "GiveMeCPM", 9))
@@ -1728,7 +1662,7 @@ void MainStringProcessTask(void *parameters)
               bitRead(BattCriticalPrcntRelays, 10), bitRead(BattCriticalPrcntRelays, 9), bitRead(BattCriticalPrcntRelays, 8), bitRead(BattCriticalPrcntRelays, 7),
               bitRead(BattCriticalPrcntRelays, 6), bitRead(BattCriticalPrcntRelays, 5), bitRead(BattCriticalPrcntRelays, 4), bitRead(BattCriticalPrcntRelays, 3),
               bitRead(BattCriticalPrcntRelays, 2), bitRead(BattCriticalPrcntRelays, 1), bitRead(BattCriticalPrcntRelays, 0), BattCriticalPrcnt);
-      SendToAll(str);
+      sendToAll(str);
       Serial.println(str);
     }
     else if (!strncmp(mainRxStr, "DEF=", 4))
@@ -1808,7 +1742,7 @@ void MainStringProcessTask(void *parameters)
       }
       EEPROM.commit();
       loadSavedValue();
-      SendToAll("XrouteAlarm=Default OK\xFF\xFF\xFF");
+      sendToAll("XrouteAlarm=Default OK\xFF\xFF\xFF");
     }
     else if (!strncmp(mainRxStr, "StartUpdate=", 12))
     {
@@ -1917,7 +1851,7 @@ void MainStringProcessTask(void *parameters)
         sprintf(str, "PRGU=100\xFF\xFF\xFF");
         // SerialBT.println(str);
         sprintf(str, "XrouteAlarm= Your Device Memory is %dMB and Dose Not Support Update !", flashSizeMB);
-        SendToAll(str);
+        sendToAll(str);
         // SerialBT.print("\nFailed !\xFF\xFF\xFF");
         // SerialBT.println(Update.errorString());
       }
@@ -1982,7 +1916,7 @@ void MainStringProcessTask(void *parameters)
         {
           Serial.println("-------ConditionFinished");
           jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
-          SendToAll("Condition Received Successfully");
+          sendToAll("Condition Received Successfully");
           esp_restart();
           break;
         }
@@ -2133,10 +2067,6 @@ void adcReadingTask(void *parameters)
 }
 void led_indicator_task(void *parameters)
 {
-  int cntr = 0;
-  bool frsTime = true;
-  bool frsTime2 = true;
-
   for (;;)
   {
     if (UpdatingFlg)
@@ -2152,32 +2082,11 @@ void led_indicator_task(void *parameters)
     {
       ws2812Blink(COLOR_ORANG);
     }
-    // else if (SerialBT.connected() == true)
-    // {
-    //   if (frsTime == true)
-    //   {
-    //     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-    //     frsTime = false;
-    //     frsTime2 = true;
-    //     Serial.println("ESP_BT_NON_DISCOVERABLE");
-    //   }
-    //   ws2812Blink(COLOR_GREEN);
-    // }
-    else
-    {
-      if (frsTime2 == true)
-      {
-        // esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-        Serial.println("ESP_BT_DISCOVERABLE");
-        frsTime2 = false;
-        frsTime = true;
-      }
-    }
     // BLE//
-    //   if (BLE_DATA.deviceConnected == true)
-    //     ws2812Blink(COLOR_BLUE);
-    // if (BLE_DATA.deviceConnected == false)
-    //   ws2812Blink(COLOR_RED);
+    if (myBle.isConnected() == true)
+      ws2812Blink(COLOR_BLUE);
+    if (myBle.isConnected() == false)
+      ws2812Blink(COLOR_RED);
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
@@ -2199,9 +2108,9 @@ void OVR_CRNT_PRTCT_TASK(void *parameters)
     {
       ledcWrite(channelTable[dimShortNum], 0);
       sprintf(str, "DIMER%d.val=%d\xFF\xFF\xFF", dimShortNum + 1, 0);
-      SendToAll(str);
+      sendToAll(str);
       sprintf(str, "XrouteAlarm= PROTECTION! Over current at DIMMER : %d\xFF\xFF\xFF", dimShortNum + 1);
-      SendToAll(str);
+      sendToAll(str);
       vTaskDelay(1000);
       dimShortFlg = false;
     }
@@ -2214,7 +2123,7 @@ void OVR_CRNT_PRTCT_TASK(void *parameters)
         if (!overCrntFlg)
         {
           sprintf(str, "XrouteAlarm=OVER CURRENT protection. Amp > 14.0 \xFF\xFF\xFF");
-          SendToAll(str);
+          sendToAll(str);
         }
         for (int i = 0; i < 7; i++)
         {
@@ -2242,88 +2151,6 @@ void inline WaitForStrQueToFinish()
   while (mainStrIsFree == false || strlen(mainRxStr) > 0)
   {
     vTaskDelay(1 / portTICK_PERIOD_MS);
-  }
-}
-void LOWPOWER_CONTROL_TASK(void *parameters)
-{
-  char str[32];
-  vTaskDelay(3000 / portTICK_PERIOD_MS);
-  Serial.println("Low Voltage Protaction Activated !");
-  for (;;)
-  {
-    if (UpdatingFlg)
-      vTaskDelete(NULL);
-    // Serial.println("Percent:" + String(b) + "LpPrcnt:" + String(BatteryLowPrcnt / 10) + "BattCriticalPrcnt" + String(BattCriticalPrcnt / 10));
-    if (b < BatteryLowPrcnt / 10 && b > BattCriticalPrcnt / 10)
-    {
-      static boolean flg = false;
-      for (int i = 0; i < 7; i++)
-      {
-        if (bitRead(BattLowPrcntDimers, i) == true && dimTmp[i] > 10)
-        {
-          flg = true;
-          dimLPF[i] = 0;
-          sprintf(str, "APDIM%d.val=0\n", i + 1);
-          WaitForStrQueToFinish();
-          sendCmndToMainStringProcessorTask(str);
-          sprintf(str, "DIMER%d.val=\x00\n", i + 1);
-          WaitForStrQueToFinish();
-          sendCmndToMainStringProcessorTask(str);
-          Serial.println(str);
-        }
-      }
-      for (int i = 0; i < 16; i++)
-      {
-        if (bitRead(BatteryLowPrcntRelays, i) == true && relState_0_15(i) == true)
-        {
-          flg = true;
-          sprintf(str, "sw%d\n", i + 1);
-          WaitForStrQueToFinish();
-          sendCmndToMainStringProcessorTask(str);
-          Serial.println(str);
-        }
-      }
-      if (flg)
-      {
-        SendToAll("XrouteAlarm=Voltage is low ! please check the battery voltage measurement ports\xFF\xFF\xFF");
-        flg = false;
-      }
-    }
-    else if (b < BatteryLowPrcnt / 10 && b < BattCriticalPrcnt / 10)
-    {
-      static boolean flg = false;
-      for (int i = 0; i < 7; i++)
-      {
-        if (bitRead(BattCriticalPrcntDimers, i) == true && dimTmp[i] > 10)
-        {
-          flg = true;
-          dimLPF[i] = 0;
-          sprintf(str, "APDIM%d.val=0\n", i + 1);
-          WaitForStrQueToFinish();
-          sendCmndToMainStringProcessorTask(str);
-          sprintf(str, "DIMER%d.val=\x00\n", i + 1);
-          // sendCmndToMainStringProcessorTask(str);
-          Serial.println(str);
-        }
-      }
-      for (int i = 0; i < 16; i++)
-      {
-        if (bitRead(BattCriticalPrcntRelays, i) == true && relState_0_15(i) == true)
-        {
-          flg = true;
-          sprintf(str, "sw%d\n", i + 1);
-          WaitForStrQueToFinish();
-          sendCmndToMainStringProcessorTask(str);
-          Serial.println(str);
-        }
-      }
-      if (flg)
-      {
-        SendToAll("XrouteAlarm=Voltage is in critical level !\xFF\xFF\xFF");
-        flg = false;
-      }
-    }
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 void ramMonitorTask(void *pvParameters)
@@ -2381,7 +2208,7 @@ void BatteryTask(void *parameters)
     {
       if (!ampSenisConnected)
       {
-        SendToAll("XrouteAlarm=Amp Meter Connected !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=Amp Meter Connected !\xFF\xFF\xFF");
         ampSenisConnected = true;
         myBattery.setPercent(myBattery.getBtPerV());
       }
@@ -2391,7 +2218,7 @@ void BatteryTask(void *parameters)
     {
       if (ampSenisConnected)
       {
-        SendToAll("XrouteAlarm=Amp Meter Disconnected !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=Amp Meter Disconnected !\xFF\xFF\xFF");
         ampSenisConnected = false;
       }
       b = constrain(myBattery.btPerV, 0, 1) * 100;
@@ -2440,7 +2267,7 @@ void defaultCalibrations()
   if (EEPROM.commit())
   {
     sprintf(str, "XrouteAlarm=Default Saved OK !\xFF\xFF\xFF");
-    SendToAll(str);
+    sendToAll(str);
     loadSavedValue();
     for (int i = 0; i < 7; i++) // load dimmer defaults
     {
@@ -2450,14 +2277,14 @@ void defaultCalibrations()
     {
       float val = dimLimit[i] * 128;
       sprintf(str, "dimMax%d.val=%d\xFF\xFF\xFF", i + 1, (int)val);
-      SendToAll(str);
+      sendToAll(str);
       vTaskDelay(10 / portTICK_PERIOD_MS);
     }
   }
   else
   {
     sprintf(str, "XrouteAlarm=SAVE ERROR !\xFF\xFF\xFF");
-    SendToAll(str);
+    sendToAll(str);
   }
 }
 void sendCmndToMainStringProcessorTask(char *str)
@@ -2472,215 +2299,973 @@ void sendCmndToMainStringProcessorTask(char *str)
 }
 // END----------------------------------------------TASKS
 //-------------------------------------------------FUNCTIONS
-void generate433(uint16_t *Times)
-{
-#define SigPin 22
-#define SIG_HIGH() digitalWrite(SigPin, 1)
-#define SIG_LOW() digitalWrite(SigPin, 0)
-#define SIG_TOGGLE() digitalWrite(SigPin, !digitalRead(SigPin))
-  int edgCntr = 0;
-  while (Times[edgCntr] != 0)
-    edgCntr++;
-
-  pinMode(SigPin, OUTPUT);
-  SIG_HIGH();
-  bool flg = 1;
-  for (int i = 0; i < edgCntr; i++)
-  {
-    unsigned long time;
-    time = micros();
-    while ((micros() - time) < (Times[i] - 1))
-    {
-    }
-    if (i != (edgCntr - 1))
-      flg = !flg;
-    digitalWrite(SigPin, flg);
-  }
-}
-int getRemoteLen(uint16_t *data)
-{
-  int cnt = 0;
-  while (data[cnt] != 0)
-    cnt++;
-  return cnt;
-}
-void saveRemoteKey(uint16_t *times, int key)
-{
-  int count = getRemoteLen(times);
-  for (int i = 0; i < count; i++)
-  {
-    EEPROM.writeUInt(E2ADD.remoteKeysAddress[key + i * 2], times[i]);
-  }
-  EEPROM.commit();
-}
-void loadRemoteKey(uint16_t *times, int key)
-{
-  int i = 0;
-  do
-  {
-    times[i] = EEPROM.readUInt(E2ADD.remoteKeysAddress[key + i * 2]);
-  } while (times[i++] != 0);
-}
-void timeMeasure(uint16_t *keyData)
-{
-#define DataPin 27
-#define TimeOutUs 100000
-#define MaxTimeTorolant 0.75
-#define SIZE (64 * 2)
-  pinMode(DataPin, INPUT);
-#define WaitFor_1() while (!digitalRead(DataPin))
-#define WaitFor_0() while (digitalRead(DataPin))
-  Serial.println("Press Key : o");
-  while (1)
-  {
-    if (Serial.read() == 'o')
-    {
-      break;
-    }
-  }
-  unsigned long maxTime = 0;
-  //===============================Max time measure
-  uint16_t Times[SIZE];
-  WaitFor_1();
-  WaitFor_0();
-  for (int i = 0; i < SIZE; i++)
-  {
-    unsigned long time = micros();
-    WaitFor_1();
-    time = micros() - time;
-    if (time > TimeOutUs)
-    {
-      return;
-    }
-
-    if (time > maxTime)
-      maxTime = time;
-    WaitFor_0();
-  }
-  Serial.println("Max Time: ");
-  Serial.println(maxTime);
-  //==============================waite for maxtime to happen
-  WaitFor_0();
-  WaitFor_1();
-  while (1)
-  {
-    unsigned long time;
-    unsigned long t1;
-    if (digitalRead(DataPin))
-    {
-      t1 = micros();
-    }
-    time = micros() - t1;
-    if (time > (maxTime * MaxTimeTorolant))
-    {
-      break;
-    }
-  }
-  //==============================count Bits and TimeSave
-  int bitCnt = 0;
-  int edgCntr = 0;
-  while (1)
-  {
-    unsigned long lowTime, t1L;
-    unsigned long highTime, t1h;
-    WaitFor_1();
-    t1h = micros();
-    WaitFor_0();
-    Times[edgCntr++] = micros() - t1h;
-    t1L = micros();
-    bitCnt++;
-    if (bitCnt > SIZE)
-    {
-      Serial.println("Error in Bit Size");
-      return;
-    }
-
-    WaitFor_1()
-    {
-      lowTime = micros() - t1L;
-      if (lowTime > (maxTime * MaxTimeTorolant))
-        break;
-    }
-    Times[edgCntr++] = micros() - t1L;
-
-    if (lowTime > (maxTime * MaxTimeTorolant))
-      break;
-  }
-  Times[edgCntr - 1] = maxTime;
-  Times[edgCntr] = 0; // end of data
-                      //=====================================returns valid datas
-  for (int i = 0; i < edgCntr; i++)
-  {
-    keyData[i] = Times[i];
-  }
-  return; // END
-  //========================================GenerateSignal
-  WaitFor_1();
-  while (1)
-  {
-    if (Serial.read() == 's')
-    {
-      Serial.println("Sending 433");
-      for (int i = 0; i < 10; i++)
-      {
-        generate433(Times);
-      }
-      Serial.println("Done");
-    }
-    if (Serial.read() == 'a')
-    {
-      break;
-    }
-  }
-}
-void setup433()
-{
-  Serial.begin(115200);
-  Serial.println("Starting...");
-  EEPROM.begin(8704);
-
-  while (1)
-  {
-    uint16_t key1Data[64 * 2];
-    char c = Serial.read();
-
-    if (c == 'r')
-    {
-      Serial.println("Start Decoding ...");
-      timeMeasure(key1Data);
-      Serial.println("Finished decoding.");
-    }
-    if (c == 's')
-    {
-      Serial.println("Save Start");
-      saveRemoteKey(key1Data, 0);
-      Serial.println("Save Finish");
-    }
-    if (c == 'l')
-    {
-      Serial.println("Load Start");
-      loadRemoteKey(key1Data, 0);
-      Serial.println("Load Finish");
-    }
-    if (c == 'a')
-    {
-      Serial.println("Sending Start");
-      for (int i = 0; i < 10; i++)
-      {
-        generate433(key1Data);
-      }
-      Serial.println("Sendin Finish");
-    }
-  }
-}
 void createCondition(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue)
 {
   cndtions.push_back(Conditions(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue)); // 0
 }
-//==============
+//--------------------EVENTS
+// Callback function to handle data received from the client
 
-//==============
-void setup2()
+void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
+{
+  static std::string accumulatedData; // Holds data across multiple BLE packets
+
+  // Convert received data to std::string
+  std::string receivedData(reinterpret_cast<char *>(pData), length);
+  accumulatedData += receivedData;
+
+  // Check if the accumulated data contains one or more complete commands
+  size_t endPos;
+  while ((endPos = accumulatedData.find('\n')) != std::string::npos)
+  {
+    std::string command = accumulatedData.substr(0, endPos); // Extract command
+    accumulatedData.erase(0, endPos + 1);                    // Remove the processed command
+
+    Serial.print("Received command: ");
+    Serial.println(command.c_str());
+
+    // Command processing
+    if (command.rfind("sw", 0) == 0)
+    { // Matches "sw" at the start
+      if (lowVoltageFlg)
+      {
+        myBle.sendString("XrouteAlarm=Voltage is low ! Please check the battery voltage or measurement ports!\n");
+      }
+      int relayNum = atoi(command.c_str() + 2);
+      char str[128];
+
+      if ((RELAYS.relPos & (1UL << RELAYS.cnfgLookup[relayNum - 1])) == 0)
+      { // -1 due to lookup table being zero-based
+        sprintf(str, "sw%d.val=1\n", relayNum);
+        myBle.sendString(str);
+        RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[relayNum - 1]);
+      }
+      else
+      {
+        sprintf(str, "sw%d.val=0\n", relayNum);
+        myBle.sendString(str);
+        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[relayNum - 1]);
+      }
+      setRelay(RELAYS.relPos, v / 10);
+      saveStatesToFile();
+    }
+    else if (command == "InitNextion")
+    {
+      SetNextion(RELAYS.relPos, dimTmp, dimLimit);
+    }
+    else if (command == "MOTOR1=UP")
+    {
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[13 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[14 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("M1UP.val=1\n");
+    }
+    else if (command == "MOTOR1=DOWN")
+    {
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[14 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[13 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("M1Down.val=1\n");
+    }
+    else if (command == "MOTOR1=STOP")
+    {
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[13 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[14 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("M1UP.val=0\n");
+      myBle.sendString("M1Down.val=0\n");
+    }
+    else if (command == "MOTOR2=UP")
+    {
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[15 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[16 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("M2UP.val=1\n");
+    }
+    else if (command == "MOTOR2=DOWN")
+    {
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[16 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[15 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("M2Down.val=1\n");
+    }
+    else if (command == "MOTOR2=STOP")
+    {
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[15 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[16 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("M2UP.val=0\n");
+      myBle.sendString("M2Down.val=0\n");
+    }
+    else if (command.rfind("DIMER", 0) == 0)
+    { // DIMER1.val=X
+      float val = static_cast<float>(command[11]) / 255;
+      int dimNumber = command[5] - '0' - 1;
+      dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
+      DimValChanged = true;
+      char str[128];
+      sprintf(str, "APDIM%c.val=%d\n", command[5], command[11]);
+      myBle.sendString(str);
+    }
+    else if (command.rfind("APDIM", 0) == 0)
+    { // APDIM1.val=123
+      int val = atoi(command.c_str() + 11);
+      if (val > 255 || val < 0)
+        return;
+      DimValChanged = true;
+      dimTmp[command[5] - '0' - 1] = 32768 * val / 255 * dimLimit[command[5] - '0' - 1];
+      char str[128];
+      sprintf(str, "DIMER%c.val=%d\n", command[5], val);
+      myBle.sendString(str);
+    }
+    else if (command == "DefaultAllCalibrations")
+    {
+      defaultCalibrations();
+      sendAllcalibrations();
+    }
+    else if (command.rfind("VCalTo=", 0) == 0)
+    {
+      VcalCo = static_cast<float>(atoi(command.c_str() + 7)) / volt;
+      EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCo);
+      EEPROM.commit();
+      NegVoltOffset = ADC_LPF(NEG_VOLT_MUX_IN, 5, negv, 0.99);
+      EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffset);
+      EEPROM.commit();
+      char str[128];
+      sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
+      myBle.sendString(str);
+    }
+    else if (command == "VoltageCalibrate")
+    {
+      VcalCo = static_cast<float>(DFLT_V_CAL) / volt;
+      EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCo);
+      EEPROM.commit();
+      NegVoltOffset = ADC_LPF(NEG_VOLT_MUX_IN, 5, negv, 0.99);
+      EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffset);
+      EEPROM.commit();
+      char str[128];
+      sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
+      myBle.sendString(str);
+    }
+    else if (command == "VoltageCalibrate++")
+    {
+      DFLT_V_CAL++;
+      char str[128];
+      sprintf(str, "Vcal.val=%d\n", DFLT_V_CAL);
+      myBle.sendString(str);
+    }
+    else if (command == "VoltageCalibrate--")
+    {
+      DFLT_V_CAL--;
+      char str[128];
+      sprintf(str, "Vcal.val=%d\n", DFLT_V_CAL);
+      myBle.sendString(str);
+    }
+    else if (command == "AmperOffset")
+    {
+      if (ampSenisConnected)
+      {
+        amp1Offset = amp1;
+        EEPROM.writeFloat(E2ADD.ampOffsetSave, amp1Offset);
+        EEPROM.commit();
+        char str[128];
+        sprintf(str, "show.txt=\"amp1Offset=%f\"\n", amp1Offset);
+        myBle.sendString(str);
+      }
+      else
+      {
+        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+      }
+    }
+    else if (command.rfind("ACalTo=", 0) == 0)
+    {
+      if (ampSenisConnected)
+      {
+        Serial.println(command.c_str());
+        A1calCo = static_cast<float>(atoi(command.c_str() + 7)) / (amp1Offset - amp1);
+        EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
+        EEPROM.commit();
+        char str[128];
+        sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
+        myBle.sendString(str);
+      }
+      else
+      {
+        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+      }
+    }
+    else if (command == "AmperCalibrate")
+    {
+      if (ampSenisConnected)
+      {
+        A1calCo = static_cast<float>(DFLT_A_CAL) / (amp1Offset - amp1);
+        EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
+        EEPROM.commit();
+        char str[128];
+        sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
+        myBle.sendString(str);
+      }
+      else
+      {
+        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+      }
+    }
+    else if (command == "AmperCalibratePlus")
+    {
+      if (ampSenisConnected)
+      {
+        A1calCo = static_cast<float>(DFLT_A_CAL) / (amp1 - amp1Offset);
+        EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
+        EEPROM.commit();
+      }
+      else
+      {
+        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+      }
+    }
+    else if (command == "AmperCalibrate++")
+    {
+      DFLT_A_CAL++;
+      char str[128];
+      sprintf(str, "Acal.val=%d\n", DFLT_A_CAL);
+      myBle.sendString(str);
+    }
+    else if (command == "AmperCalibrate--")
+    {
+      DFLT_A_CAL--;
+      char str[128];
+      sprintf(str, "Acal.val=%d\n", DFLT_A_CAL);
+      myBle.sendString(str);
+    }
+    else if (command == "Amper0Offset")
+    {
+      amp0Offset = amp0;
+      EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0Offset);
+      EEPROM.commit();
+      char str[128];
+      sprintf(str, "show.txt=\"amp0Offset=%f\"\n", amp0Offset);
+      myBle.sendString(str);
+    }
+    else if (command.rfind("A0CalTo=", 0) == 0)
+    {
+      A0calCo = static_cast<float>(atoi(command.c_str() + 8)) / (amp0Offset - amp0);
+      EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
+      EEPROM.commit();
+      char str[128];
+      sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
+      myBle.sendString(str);
+    }
+    else if (command == "Amper0Calibrate")
+    {
+      A0calCo = DFLT_A0_CAL / (amp0Offset - amp0);
+      EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
+      EEPROM.commit();
+      String str = "show.txt=\"A0calCo=" + String(A0calCo) + "\"\n";
+      myBle.sendString(str);
+    }
+    else if (command == "Amper0CalibratePlus")
+    {
+      A0calCo = DFLT_A0_CAL / (amp0 - amp0Offset);
+      EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
+      EEPROM.commit();
+    }
+    else if (command == "Amper0Calibrate++")
+    {
+      DFLT_A0_CAL++;
+      String str = "A0cal.val=" + String(DFLT_A0_CAL) + "\n";
+      myBle.sendString(str);
+    }
+    else if (command == "Amper0Calibrate--")
+    {
+      DFLT_A0_CAL--;
+      String str = "A0cal.val=" + String(DFLT_A0_CAL) + "\n";
+      myBle.sendString(str);
+    }
+    else if (command == "Amper2Offset")
+    {
+      amp2Offset = amp2;
+      EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2Offset);
+      EEPROM.commit();
+      String str = "show.txt=\"amp2Offset=" + String(amp2Offset) + "\"\n";
+      myBle.sendString(str);
+    }
+    else if (command.rfind("A2CalTo=", 0) == 0)
+    {
+      A2calCo = static_cast<float>(std::stoi(command.substr(8))) / (amp2Offset - amp2);
+      EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
+      EEPROM.commit();
+      String str = "show.txt=\"A2calCo=" + String(A2calCo) + "\"\n";
+      myBle.sendString(str);
+    }
+    else if (command == "Amper2Calibrate")
+    {
+      A2calCo = DFLT_A2_CAL / (amp2Offset - amp2);
+      EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
+      EEPROM.commit();
+      String str = "show.txt=\"A2calCo=" + String(A2calCo) + "\"\n";
+      myBle.sendString(str);
+    }
+    else if (command == "Amper2CalibratePlus")
+    {
+      A2calCo = DFLT_A2_CAL / (amp2 - amp2Offset);
+      EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
+      EEPROM.commit();
+    }
+    else if (command == "Amper2Calibrate++")
+    {
+      DFLT_A2_CAL++;
+      String str = "A2cal.val=" + String(DFLT_A2_CAL) + "\n";
+      myBle.sendString(str);
+    }
+    else if (command == "Amper2Calibrate--")
+    {
+      DFLT_A2_CAL--;
+      String str = "A2cal.val=" + String(DFLT_A2_CAL) + "\n";
+      myBle.sendString(str);
+    }
+    else if (command == "BattCapCalibrate++")
+    {
+      DFLT_BATT_CAP += 10;
+      DFLT_BATT_CAP = constrain(DFLT_BATT_CAP, 0, 1000);
+      String str = "BattCap.val=" + String(DFLT_BATT_CAP) + "\n";
+      myBle.sendString(str);
+    }
+    else if (command == "BattCapCalibrate--")
+    {
+      DFLT_BATT_CAP -= 10;
+      DFLT_BATT_CAP = constrain(DFLT_BATT_CAP, 10, 1000);
+      String str = "BattCap.val=" + String(DFLT_BATT_CAP) + "\n";
+      myBle.sendString(str);
+    }
+    else if (command.rfind("BattCapCalTo=", 0) == 0)
+    {
+      float battCap = static_cast<float>(std::stoi(command.substr(13)));
+      DFLT_BATT_CAP = battCap;
+      EEPROM.writeFloat(E2ADD.batteryCapSave, DFLT_BATT_CAP);
+      EEPROM.commit();
+      batteryCap = DFLT_BATT_CAP;
+      myBle.sendString("BattCapTxt.val=" + String(static_cast<int>(batteryCap)) + "\n");
+    }
+    else if (command == "BattCapCalibrate")
+    {
+      EEPROM.writeFloat(E2ADD.batteryCapSave, DFLT_BATT_CAP);
+      EEPROM.commit();
+      batteryCap = DFLT_BATT_CAP;
+      myBle.sendString("BattCapTxt.val=" + String(static_cast<int>(batteryCap)) + "\n");
+      myBattery.setBatteryCap(batteryCap);
+      myBattery.setPercent(myBattery.getBtPerV());
+    }
+    else if (command == "PTmvCalibrate++")
+    {
+      DFLT_PT_MV_CAL++;
+      PT_mvCal = DFLT_PT_MV_CAL / pt100;
+      myBle.sendString("Pt_mvCal.val=" + String(DFLT_PT_MV_CAL) + "\n");
+      if (humSensorType != HUM_SENSOR_TYPE_NON)
+      {
+        myBle.sendString("show.txt=\"DigitalTemp=" + String(digitalTemp) + " °C\"\n");
+      }
+    }
+    else if (command == "PTmvCalibrate--")
+    {
+      DFLT_PT_MV_CAL--;
+      PT_mvCal = DFLT_PT_MV_CAL / pt100;
+      myBle.sendString("Pt_mvCal.val=" + String(DFLT_PT_MV_CAL) + "\n");
+      if (humSensorType != HUM_SENSOR_TYPE_NON)
+      {
+        myBle.sendString("show.txt=\"DigitalTemp=" + String(digitalTemp) + " °C\"\n");
+      }
+    }
+    else if (command.rfind("PTCalTo=", 0) == 0)
+    {
+      float aimTemp = static_cast<float>(std::stoi(command.substr(8))) / 10;
+      float temp = ReadPT100_Temp(pt100mv, 510);
+      while (temp < aimTemp && fabs(temp - aimTemp) > 0.1)
+      {
+        PT_mvCal = ++DFLT_PT_MV_CAL / pt100;
+        vTaskDelay(200);
+        temp = ReadPT100_Temp(pt100mv, 510);
+      }
+      vTaskDelay(1000);
+      while (temp > aimTemp && fabs(temp - aimTemp) > 0.1)
+      {
+        PT_mvCal = --DFLT_PT_MV_CAL / pt100;
+        vTaskDelay(200);
+        temp = ReadPT100_Temp(pt100mv, 510);
+      }
+
+      EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
+      EEPROM.commit();
+      myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
+    }
+    else if (command == "PT100Calibrate")
+    {
+      PT_mvCal = DFLT_PT_MV_CAL / pt100;
+
+      EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
+      EEPROM.commit();
+      myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
+    }
+    else if (command == "BattFull+")
+    {
+      DFLT_BATT_FULL_VOLT++;
+      DFLT_BATT_FULL_VOLT = constrain(DFLT_BATT_FULL_VOLT, DFLT_BATT_EMPTY_VOLT, 280);
+      if (DFLT_BATT_FULL_VOLT > 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_12V)
+      {
+        myBattery.setBatteryArrangment(BATTERY_CONFIG_24V);
+        myBle.sendString("XrouteAlarm=You are using 2 Battery in Series = 24v config !\n");
+      }
+      battFullVoltage = DFLT_BATT_FULL_VOLT;
+      myBle.sendString("BattFullVolt.val=" + String(DFLT_BATT_FULL_VOLT) + "\n");
+      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
+      if (myBattery.batteryType != BATTERY_TYPE_NON)
+      {
+        DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
+        myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
+      }
+    }
+    else if (command == "BattFull-")
+    {
+      DFLT_BATT_FULL_VOLT--;
+      DFLT_BATT_FULL_VOLT = constrain(DFLT_BATT_FULL_VOLT, DFLT_BATT_EMPTY_VOLT + 10, 280);
+      if (DFLT_BATT_FULL_VOLT < 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_24V)
+      {
+        myBattery.setBatteryArrangment(BATTERY_CONFIG_12V);
+        myBle.sendString("XrouteAlarm=You are using 1 Battery = 12v config !\n");
+      }
+      battFullVoltage = DFLT_BATT_FULL_VOLT;
+      myBle.sendString("BattFullVolt.val=" + String(DFLT_BATT_FULL_VOLT) + "\n");
+      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
+      if (myBattery.batteryType != BATTERY_TYPE_NON)
+      {
+        DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
+        myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
+      }
+    }
+    else if (command == "BattfullVoltageCalibrate")
+    {
+      EEPROM.writeFloat(E2ADD.battFullVoltageSave, DFLT_BATT_FULL_VOLT);
+      EEPROM.commit();
+      battFullVoltage = EEPROM.readFloat(E2ADD.battFullVoltageSave);
+    }
+    else if (command == "BattEmpty-")
+    {
+      DFLT_BATT_EMPTY_VOLT--;
+      DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
+      battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
+      myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
+    }
+    else if (command == "BattEmpty+")
+    {
+      DFLT_BATT_EMPTY_VOLT++;
+      DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
+      battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
+      myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
+    }
+    else if (command == "BattEmptyVoltageCalibrate")
+    {
+      EEPROM.writeFloat(E2ADD.battEmptyVoltageSave, DFLT_BATT_EMPTY_VOLT);
+      EEPROM.commit();
+      battEmptyVoltage = EEPROM.readFloat(E2ADD.battEmptyVoltageSave);
+    }
+    else if (command.rfind("BatteryType=", 0) == 0)
+    {
+      char batteryType = command[12];
+      switch (batteryType)
+      {
+      case '1':
+        myBattery.setBatType(BATTERY_TYPE_AGM);
+        myBle.sendString("XrouteAlarm= AGM BATTERY \n");
+        break;
+      case '2':
+        myBattery.setBatType(BATTERY_TYPE_GEL);
+        myBle.sendString("XrouteAlarm= GEL BATTERY \n");
+        break;
+      case '3':
+        myBattery.setBatType(BATTERY_TYPE_ACID);
+        myBle.sendString("XrouteAlarm= ACID BATTERY \n");
+        break;
+      case '4':
+        myBattery.setBatType(BATTERY_TYPE_LITIUM);
+        myBle.sendString("XrouteAlarm= LITHIUM BATTERY \n");
+        break;
+      case '5':
+        myBattery.setBatType(BATTERY_TYPE_LIFEPO4);
+        myBle.sendString("XrouteAlarm= LIFEPO4 BATTERY \n");
+        break;
+      default:
+        // Handle unknown battery type if necessary
+        break;
+      }
+      battFullVoltage = floor(myBattery.getBatteryFullVoltage() * 10);
+      EEPROM.writeFloat(E2ADD.battFullVoltageSave, battFullVoltage);
+      EEPROM.commit();
+      Serial.println("battFullVoltage(X10) =" + String(battFullVoltage));
+    }
+    else if (command == "CableRes+")
+    {
+      DFLT_CABLE_RES_MILI_OHM++;
+      myBle.sendString("CableRes.val=" + String(DFLT_CABLE_RES_MILI_OHM) + "\n");
+    }
+    else if (command == "CableRes-")
+    {
+      DFLT_CABLE_RES_MILI_OHM--;
+      myBle.sendString("CableRes.val=" + String(DFLT_CABLE_RES_MILI_OHM) + "\n");
+    }
+    else if (command == "CableResCalibrate")
+    {
+      EEPROM.writeFloat(E2ADD.cableResistanceSave, DFLT_CABLE_RES_MILI_OHM);
+      EEPROM.commit();
+
+      cableResistance = EEPROM.readFloat(E2ADD.cableResistanceSave);
+    }
+    else if (command == "CleanWaterMin")
+    {
+      clnWtrMin = clnWtr;
+
+      EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMin);
+      EEPROM.commit();
+      String response = "show.txt=\"clnWtrMin=" + String(clnWtrMin) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "CleanWaterMax")
+    {
+      clnWtrMax = clnWtr;
+
+      EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMax);
+      EEPROM.commit();
+      String response = "show.txt=\"clnWtrMax=" + String(clnWtrMax) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "DirtyWaterMin")
+    {
+      drtWtrMin = drtWtr;
+
+      EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMin);
+      EEPROM.commit();
+    }
+    else if (command == "DirtyWaterMax")
+    {
+      drtWtrMax = drtWtr;
+
+      EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMax);
+      EEPROM.commit();
+    }
+    else if (command == "GrayWaterMin")
+    {
+      gryWtrMin = gryWtr;
+
+      EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMin);
+      EEPROM.commit();
+    }
+    else if (command == "GrayWaterMax")
+    {
+      gryWtrMax = gryWtr;
+
+      EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMax);
+      EEPROM.commit();
+    }
+    else if (command.rfind("LimitDim", 0) == 0)
+    {
+      unsigned int dimNum = command[8] - '1';
+      float val = command[10] * 2;
+      dimLimit[dimNum] = val / 255;
+      dimTmp[dimNum] = static_cast<double>(32767) * dimLimit[dimNum];
+      DimValChanged = true;
+      String response = "show.txt=\"Dim" + String(dimNum + 1) + " MaxLimit=" + String(static_cast<int>(32768 * dimLimit[dimNum])) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "LoadDimLimits")
+    {
+      for (int i = 0; i < 7; i++)
+      {
+        float val = dimLimit[i] * 128;
+        String response = "dimMax" + String(i + 1) + ".val=" + String(static_cast<int>(val)) + "\n";
+        myBle.sendString(response.c_str());
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+      }
+    }
+    else if (command == "SaveDimerLimits")
+    {
+      for (int i = 0; i < 7; i++)
+      {
+        EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimit[i]);
+        EEPROM.commit();
+      }
+      String response = "XrouteAlarm=Limit Saved OK! \n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.rfind("GiveMeBalance=", 0) == 0)
+    {
+      float ofsetlesX = (accXValue - accXValueOffset) * revX;
+      float ofsetlesY = (accYValue - accYValueOffset) * revY;
+
+      alpha = atan(ofsetlesY / ofsetlesX);
+
+      if (ofsetlesX < 0 && ofsetlesY > 0)
+        alpha += PI;
+      if (ofsetlesX < 0 && ofsetlesY < 0)
+        alpha += PI;
+      if (ofsetlesX > 0 && ofsetlesY < 0)
+        alpha += (2 * PI);
+      len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY) * accSensitivity;
+
+      if (len > 1)
+        len = 1;
+      accSensitivity = command[14] - '0'; // to prevent \n i add '0' to slider
+      accSensitivity *= 2;
+
+      String response = "Accx.val=" + String(static_cast<int>(roundf(len * cos(alpha) * 100))) + "\n";
+      myBle.sendString(response.c_str());
+      response = "Accy.val=" + String(static_cast<int>(roundf(len * sin(alpha) * 100))) + "\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "AccelZeroOffset")
+    {
+      GyroOffsetingFlg = true;
+      while (GyroOffsetingFlg)
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+      EEPROM.writeFloat(E2ADD.accXValueOffsetSave, accXValue);
+      EEPROM.writeFloat(E2ADD.accYValueOffsetSave, accYValue);
+      EEPROM.commit();
+      accXValueOffset = EEPROM.readFloat(E2ADD.accXValueOffsetSave);
+      accYValueOffset = EEPROM.readFloat(E2ADD.accYValueOffsetSave);
+
+      String response = "XrouteAlarm=accXValueOffset=" + String(accXValueOffset) + ",accYValueOffset=" + String(accYValueOffset) + "\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "GiveMeSysInfo")
+    {
+      uint64_t chipid = ESP.getEfuseMac();
+      String response = "MacAddress:" + String(chipid) + "," + GeneralLisence + ",Version:" + Version + "\n";
+      Serial.println(response.c_str());
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "GyroPass:deactive")
+    {
+      GyroLicense->deactivate();
+    }
+    else if (command.rfind("GyroPass:", 0) == 0)
+    {
+
+      String tmp = String(command.substr(9, 16).c_str());
+      String response = "ReceivedPass:" + tmp;
+      Serial.println(response.c_str());
+      response = "InternalPass:" + String(GyroLicense->realSerial);
+      Serial.println(response.c_str());
+
+      if (String(GyroLicense->realSerial) == tmp)
+      {
+        GyroLicense->activate();
+      }
+    }
+    else if (command.rfind("GyroOrientation=", 0) == 0)
+    {
+      GyroOriantation = String(command.substr(16, 5).c_str());
+      EEPROM.writeString(E2ADD.GyroOriantationSave, GyroOriantation);
+      EEPROM.commit();
+      String strTmp = EEPROM.readString(E2ADD.GyroOriantationSave);
+      GyroOriantation = strTmp;
+    }
+    else if (command == "GiveMeOrientation")
+    {
+      String response = "Orientation=" + GyroOriantation + "\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "PreCalibrate")
+    {
+      EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffset);
+      EEPROM.commit();
+      String response = "show.txt=\"PresOffset=" + String(pressurCalOffset) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "Pre+")
+    {
+      pressurCalOffset += 0.01;
+      String response = "Pcal.val=" + String(static_cast<int>(pressurCalOffset * 100)) + "\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command == "Pre-")
+    {
+      pressurCalOffset -= 0.01;
+      String response = "Pcal.val=" + String(static_cast<int>(pressurCalOffset * 100)) + "\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.find("PreCalTo=") == 0)
+    {
+      float aimAlt = static_cast<float>(std::stoi(command.substr(9))); // altitude in meters
+      float tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffset);
+      float error = 1; // to get into the loop
+      float pressurCalOffsetTemp = pressurCalOffset;
+      String response = "show.txt=\"Calibrating=\"\n";
+      myBle.sendString(response.c_str());
+
+      while (fabs(error) > 0.1)
+      {
+        if (isnan(pressurCalOffsetTemp)) // for sometimes crashes
+        {
+          pressurCalOffsetTemp = 0;
+          Serial.println("ERROR");
+        }
+        error = aimAlt - tempAlt;
+        pressurCalOffsetTemp += (error / 5000);
+        tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffsetTemp);
+        Serial.println("PrOffset=" + String(pressurCalOffsetTemp));
+        response = "M.Pre.val=" + String(static_cast<int>(tempAlt)) + "\n";
+        myBle.sendString(response.c_str());
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+      }
+
+      if (!isnan(pressurCalOffsetTemp)) // for sometimes crashes
+      {
+        pressurCalOffset = pressurCalOffsetTemp;
+        EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffset);
+        EEPROM.commit();
+      }
+      response = "show.txt=\"pressurCalOffset=" + String(pressurCalOffset) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.find("BLEPASSWORD=") == 0)
+    {
+      String passStr = String(command.substr(12, 6).c_str());
+      int pass = atoi(passStr.c_str());
+      blePass = pass;
+      Serial.print("Password=");
+      Serial.println(blePass);
+      EEPROM.writeUInt(E2ADD.blePassSave, blePass);
+      EEPROM.commit();
+      // BLE//bleSetPass(blePass);
+      // BLE//remove_all_bonded_devices();
+      //       ESP.restart();
+    }
+    else if (command == "GETBLEPASSWORD")
+    {
+      String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
+      myBle.sendString(response.c_str());
+      Serial.println(response.c_str());
+    }
+    else if (command.find("DEF=") == 0)
+    {
+      String defType = String(command.substr(4).c_str());
+      if (defType == "VOLTAGE")
+      {
+        EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCoDeflt);
+        EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffsetDeflt);
+      }
+      else if (defType == "A0")
+      {
+        EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0OffsetDeflt);
+        EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCoDeflt);
+      }
+      else if (defType == "A")
+      {
+        EEPROM.writeFloat(E2ADD.ampOffsetSave, ampOffsetDeflt);
+        EEPROM.writeFloat(E2ADD.AcalCoSave, AcalCoDeflt);
+      }
+      else if (defType == "A2")
+      {
+        EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCoDeflt);
+        EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2OffsetDeflt);
+      }
+      else if (defType == "PT")
+      {
+        EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal_Deflt);
+      }
+      else if (defType == "CW_MIN")
+      {
+        EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMaxDeflt);
+      }
+      else if (defType == "CW_MAX")
+      {
+        EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMaxDeflt);
+      }
+      else if (defType == "DW_MIN")
+      {
+        EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
+      }
+      else if (defType == "DW_MAX")
+      {
+        EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
+      }
+      else if (defType == "GW_MIN")
+      {
+        EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
+      }
+      else if (defType == "GW_MAX")
+      {
+        EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
+      }
+      else if (defType == "DIMMER")
+      {
+        for (int i = 0; i < 7; i++) // save dimmer defaults
+        {
+          EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimitDeflt); // limit dimmers to %60
+        }
+      }
+      else if (defType == "ALTITUDE")
+      {
+        EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffsetDeflt);
+      }
+      else if (defType == "GAS_MIN" || defType == "GAS_MAX")
+      {
+        // Placeholder for future implementation
+      }
+      EEPROM.commit();
+      loadSavedValue();
+      String response = "XrouteAlarm=Default OK\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.rfind("StartUpdate=", 0) == 0)
+    {
+      // Get flash chip size in bytes
+      uint32_t flashSize = ESP.getFlashChipSize();
+      // Convert flash size from bytes to megabytes
+      float flashSizeMB = static_cast<float>(flashSize) / (1024.0 * 1024.0);
+      Serial.println("-----Flash info-----");
+      Serial.print("FlashSize:");
+      Serial.print(flashSizeMB);
+      Serial.println("MB");
+
+      if (flashSizeMB > 15)
+      {
+        String updateReceivedMsg = "Update Received : " + String(updateLen) + " Bytes\n";
+        Serial.println(updateReceivedMsg.c_str());
+
+        Update.begin(updateLen);
+
+        long progress = 0;
+        int chunkCntr = updateLen / CHUNK_SIZE;
+        int byteCntr = updateLen % CHUNK_SIZE;
+        int prgrs = 0;
+        int lastPrgrs = 0;
+        unsigned long time = millis();
+
+        for (int i = 0; i < chunkCntr; i++)
+        {
+          unsigned long timeout = millis();
+
+          if ((millis() - timeout) > 900)
+          {
+            Serial.println("TimeOut happened! UpdateFailed. Restarting...\n");
+            Serial.flush();
+            ESP.restart();
+          }
+
+          Update.write(dataBuff, CHUNK_SIZE);
+          if (((i * CHUNK_SIZE) % 4096) == 0)
+          {
+            prgrs = Update.progress() * 100 / updateLen;
+            if (prgrs > lastPrgrs)
+            {
+              String progressStr = "PRGU=" + String(prgrs) + "\n";
+              Serial.println(progressStr.c_str());
+            }
+            lastPrgrs = prgrs;
+          }
+        }
+
+        Update.write(dataBuff, byteCntr);
+
+        if (Update.end())
+        {
+          time = millis() - time;
+          String successStr = "PRGU=100\n";
+          Serial.println(successStr.c_str());
+          Serial.println("Update Successful in : (" + String(time / 1000) + ") Sec\n");
+          Serial.println("Restarting in \n");
+
+          for (int i = 5; i > 0; i--)
+          {
+            Serial.println(i);
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+          }
+          ESP.restart();
+        }
+        else
+        {
+          // Handle failure
+        }
+      }
+      else
+      {
+        String failStr = "XrouteAlarm= Your Device Memory is " + String(static_cast<int>(flashSizeMB)) + "MB and Does Not Support Update !";
+        myBle.sendString(failStr);
+      }
+    }
+    else if (command.rfind("TakeUiConfig=", 0) == 0)
+    {
+      int configLen;
+      String configReceivedMsg = "Config File Size: " + String(configLen) + " Bytes\n";
+      Serial.println(configReceivedMsg.c_str());
+
+      String strTmp = String(command.substr(13, command.find("Bytes") - 13).c_str());
+      configLen = atoi(strTmp.c_str());
+
+      MeasurmentTaskPause = true;
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+      int chunkCntr = configLen / CHUNK_SIZE;
+      int byteCntr = configLen % CHUNK_SIZE;
+
+      confAndCondStrBuffer.clear();
+      for (int i = 0; i < chunkCntr; i++)
+      {
+        // Data handling for chunks
+        for (int j = 0; j < CHUNK_SIZE; j++)
+        {
+          confAndCondStrBuffer += static_cast<char>(dataBuff[j]);
+        }
+      }
+
+      for (int i = 0; i < byteCntr; i++)
+      {
+        confAndCondStrBuffer += static_cast<char>(dataBuff[i]);
+      }
+
+      // BLE// confAndCondStrBuffer.resize(configLen);
+      SaveStringToFile(confAndCondStrBuffer, ConfigFile);
+      Serial.flush();
+      confAndCondStrBuffer.clear();
+      MeasurmentTaskPause = false;
+      sendConfig();
+    }
+    else if (command == "GiveMeConfigFile")
+    {
+      sendConfig();
+    }
+    else if (command.rfind("TakeConditions=", 0) == 0)
+    {
+      Serial.println("START----->");
+      confAndCondStrBuffer.clear();
+      // while (true)
+      // {
+      //   // BLE//String str = bleDirectRead(); // Example placeholder for BLE read function
+      //   // confAndCondStrBuffer += str;
+      //   // if (str.find(";") != String::npos)
+      //   // {
+      //   //   Serial.println("-------ConditionFinished");
+      //   //   jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
+      //   //   myBle.sendString("Condition Received Successfully");
+      //   //   ESP.restart();
+      //   //   break;
+      //   // }
+      //   // vTaskDelay(pdTICKS_TO_MS(1));
+      // }
+    }
+    else
+    {
+      Serial.println(command.c_str());
+    }
+  }
+}
+
+//--------------------
+void setup()
 {
   Serial.begin(115200);
   Serial.println("\n//======STARTING=====//");
@@ -2751,13 +3336,7 @@ void setup2()
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
 #define TasksEnabled
 #ifdef TasksEnabled
-  xTaskCreate(
-      LOWPOWER_CONTROL_TASK,
-      "LOWPOWER_CONTROL_TASK",
-      3.5 * 1024, // stack size
-      NULL,       // task argument
-      3,          // task priority
-      NULL);
+
   xTaskCreate(
       BLE_TASK,
       "BLE_TASK",
@@ -2844,15 +3423,8 @@ void setup2()
   //     NULL);
 #endif
 }
-void loop1()
+void loop()
 {
-  if (myBle.isConnected())
-  {
-    static int n = 0;
-    n++;
-    myBle.sendData(String(n).c_str());
-  }
-
   vTaskDelay(pdMS_TO_TICKS(100));
 }
 void loadSavedValue()
@@ -2929,22 +3501,23 @@ void loadSavedValue()
 }
 void ws2812Blink(int color)
 {
-#define MIN_LIGHT 4
-#define MAX_LIGHT 250
+#define MIN_LIGHT 1
+#define MAX_LIGHT 255
+#define STEP_INTERVAL_MS 3
 
   for (int i = MIN_LIGHT; i < MAX_LIGHT; i += 2)
   {
     strip.setLedColorData(0, color);
     strip.setBrightness(i);
     strip.show();
-    vTaskDelay(5 / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(STEP_INTERVAL_MS));
   }
   for (int i = MAX_LIGHT; i >= MIN_LIGHT; i -= 2)
   {
     strip.setLedColorData(0, color);
     strip.setBrightness(i);
     strip.show();
-    vTaskDelay(5 / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(STEP_INTERVAL_MS));
   }
 }
 void initMPU()
@@ -2956,26 +3529,26 @@ void initMPU()
 void sendAllcalibrations()
 {
   char str[64];
-  sprintf(str, "Vcal.val=%d\xFF\xFF\xFF", DFLT_V_CAL);
-  SendToAll(str);
-  sprintf(str, "Vcal.val=%d\xFF\xFF\xFF", DFLT_V_CAL);
-  SendToAll(str);
-  sprintf(str, "Acal.val=%d\xFF\xFF\xFF", DFLT_A_CAL);
-  SendToAll(str);
-  sprintf(str, "A0cal.val=%d\xFF\xFF\xFF", DFLT_A0_CAL);
-  SendToAll(str);
-  sprintf(str, "A2cal.val=%d\xFF\xFF\xFF", DFLT_A2_CAL);
-  SendToAll(str);
-  sprintf(str, "BattCap.val=%d\xFF\xFF\xFF", DFLT_BATT_CAP);
-  SendToAll(str);
-  sprintf(str, "Pt_mvCal.val=%d\xFF\xFF\xFF", DFLT_PT_MV_CAL);
-  SendToAll(str);
-  sprintf(str, "BattFullVolt.val=%d\xFF\xFF\xFF", DFLT_BATT_FULL_VOLT);
-  SendToAll(str);
-  sprintf(str, "BattEmptyVolt.val=%d\xFF\xFF\xFF", DFLT_BATT_EMPTY_VOLT);
-  SendToAll(str);
-  sprintf(str, "BattCapTxt.val=%d\xFF\xFF\xFF", (int)batteryCap);
-  SendToAll(str);
+  sprintf(str, "Vcal.val=%d\n", DFLT_V_CAL);
+  sendToAll(str);
+  sprintf(str, "Vcal.val=%d\n", DFLT_V_CAL);
+  sendToAll(str);
+  sprintf(str, "Acal.val=%d\n", DFLT_A_CAL);
+  sendToAll(str);
+  sprintf(str, "A0cal.val=%d\n", DFLT_A0_CAL);
+  sendToAll(str);
+  sprintf(str, "A2cal.val=%d\n", DFLT_A2_CAL);
+  sendToAll(str);
+  sprintf(str, "BattCap.val=%d\n", DFLT_BATT_CAP);
+  sendToAll(str);
+  sprintf(str, "Pt_mvCal.val=%d\n", DFLT_PT_MV_CAL);
+  sendToAll(str);
+  sprintf(str, "BattFullVolt.val=%d\n", DFLT_BATT_FULL_VOLT);
+  sendToAll(str);
+  sprintf(str, "BattEmptyVolt.val=%d\n", DFLT_BATT_EMPTY_VOLT);
+  sendToAll(str);
+  sprintf(str, "BattCapTxt.val=%d\n", (int)batteryCap);
+  sendToAll(str);
 }
 void dimmerShortCircuitIntrupt()
 {
@@ -3008,7 +3581,6 @@ void dimmerShortCircuitIntrupt()
     sum = 0;
   }
 }
-// USE https://github.com/h2zero/NimBLE-Arduino/tree/master
 //  END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
 //  ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham

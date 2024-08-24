@@ -42,12 +42,12 @@ void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit)
   char str[64];
 
   sprintf(str, "\xFF\xFF\xFF\xFF\xFF\xFF");
-  SendToAll(str);
+  sendToAll(str);
 
   for (int i = 0; i < 16; i++)
   {
     sprintf(str, "M.sw%d.val=%d\xFF\xFF\xFF", i + 1, RELAYS.relPos & (1UL << RELAYS.cnfgLookup[i]) ? 1 : 0);
-    SendToAll(str);
+    sendToAll(str);
     vTaskDelay(20 / portTICK_PERIOD_MS);
   }
 
@@ -65,19 +65,23 @@ void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit)
   {
     float val = (dimTmp[i] / (32768 * dimLimit[i])) * 255;
     sprintf(str, "APDIM%d.val=%d\n", i + 1, (int)val);
-    SendToAll(str);
+    sendToAll(str);
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
-void SendToAll(char *str)
+void sendToAll(char *str)
 {
   //BLE//BLEsend(str);
   //if (SerialBT.connected())
   //  SerialBT.println(str);
 }
-void SendToAll(const char *str)
+void sendToAll(const char *str)
 {
-  SendToAll((char *)str);
+  sendToAll((char *)str);
+}
+void sendToAll(String str)
+{
+  sendToAll((char *)str.c_str());
 }
 void SerialPrint(char *str)
 {

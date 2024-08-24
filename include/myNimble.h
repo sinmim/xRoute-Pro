@@ -1,27 +1,105 @@
-#ifndef MYNIMBLE_H
-#define MYNIMBLE_H
+#ifndef MY_NIM_BLE_H
+#define MY_NIM_BLE_H
 
+#include <Arduino.h>
 #include <NimBLEDevice.h>
-#include <string>
+#include <queue>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
-class MyNimBLE : public NimBLECharacteristicCallbacks {
-public:
-    // Constructor
-    MyNimBLE();
-
-    // Initialize BLE and start advertising
-    void begin(const char* deviceName, const char* passKey, const char* serviceUUID, const char* characteristicUUID);
-
-    // Handle characteristic writes
-    void onWrite(NimBLECharacteristic* pCharacteristic) override;
-
+class MyBle
+{
 private:
-    // Process received data
-    void processReceivedData(const std::string& data);
+  bool isClientMode;
+  NimBLEClient *pClient;
+  NimBLEServer *pServer;
+  NimBLECharacteristic *pCharacteristic;
+  static NimBLEAddress *pServerAddress;
+  bool runFlg = true;
+  static bool connectedFlg;
+  static bool newConnectionMade;
+  std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> clientCallBack;
+  std::function<void(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> serverCallBack;
+  std::queue<String> sendQueue;
+  SemaphoreHandle_t sendQueueMutex;
+  static void sendTask(void *parameter);
 
-    NimBLEServer* pServer;
-    NimBLEService* pService;
-    NimBLECharacteristic* pCharacteristic;
+protected:
+  void onResult(NimBLEAdvertisedDevice *advertisedDevice); // Ensure this is declared
+public:
+  static String bleAddTmp;
+
+  MyBle(bool clientMode = true);
+  ~MyBle();
+  void begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb);
+  void beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> cb);
+  bool connectToServer(NimBLEAddress pAddress);
+  bool connectToMac(String macAddress);
+  void sendString(String str);
+  void sendData(const char *data);
+  void disconnect();
+  bool isConnected();
+  void pause();
+  void resume();
+  bool isRunning();
+  bool isNewConnection();
+  void justSend(String str);
+
+  // MyClientCallback class
+  class MyClientCallback : public NimBLEClientCallbacks
+  {
+    void onConnect(NimBLEClient *pclient) override
+    {
+      newConnectionMade = true;
+    }
+
+    void onDisconnect(NimBLEClient *pclient) override
+    {
+      connectedFlg = false;
+    }
+  };
+
+  // MyServerCallbacks class
+  class MyServerCallbacks : public NimBLEServerCallbacks
+  {
+    void onConnect(NimBLEServer *pServer) override
+    {
+      connectedFlg = true;
+    }
+
+    void onDisconnect(NimBLEServer *pServer) override
+    {
+      connectedFlg = false;
+    }
+  };
+
+  // MyCallbacks class
+  class MyCallbacks : public NimBLECharacteristicCallbacks
+  {
+  private:
+    MyBle &parent;
+
+  public:
+    MyCallbacks(MyBle &ble) : parent(ble) {}
+
+    void onWrite(NimBLECharacteristic *pCharacteristic) override
+    {
+      std::string value = pCharacteristic->getValue();
+      if (parent.serverCallBack)
+      {
+        parent.serverCallBack(pCharacteristic, (uint8_t *)value.data(), value.length());
+      }
+    }
+
+    void onRead(NimBLECharacteristic *pCharacteristic) override
+    {
+      Serial.print("Characteristic ");
+      Serial.print(pCharacteristic->getUUID().toString().c_str());
+      Serial.print(" was read, value: ");
+      Serial.println(pCharacteristic->getValue().c_str());
+    }
+  };
 };
 
-#endif // MYNIMBLE_H
+#endif

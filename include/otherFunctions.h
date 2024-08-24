@@ -3,8 +3,9 @@
 void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit);
 void generatePass(char *result);
 bool checkPass(uint64_t uid, const char *pass);
-void SendToAll(char *str);
-void SendToAll(const char *str);
+void sendToAll(char *str);
+void sendToAll(const char *str);
+void sendToAll(String str);
 void SerialPrint(char *str);
 double psiToMeters(double x);
 double ACID_SOC_OCV(double V);
