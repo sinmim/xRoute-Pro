@@ -666,7 +666,7 @@ void I2C_SENSORS_TASK(void *parameters)
   }
 }
 void sendAllcalibrations();
-void sendCmndToMainStringProcessorTask(char *str);
+void sendCmdToExecute(char *str);
 void dimmerShortCircuitIntrupt();
 void defaultCalibrations();
 int dimShortFlg = false;
@@ -1181,7 +1181,7 @@ void defaultCalibrations()
     sendToAll(str);
   }
 }
-void sendCmndToMainStringProcessorTask(char *str)
+void sendCmdToExecute(char *str)
 {
 // Simulate BLE data reception
   uint8_t *pData = reinterpret_cast<uint8_t*>(const_cast<char*>(str));
@@ -2203,7 +2203,7 @@ void setup()
 
   // Config the Conditions
   conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt, &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2, &battHourLeft);
-  setCmdFunction(&sendCmndToMainStringProcessorTask);
+  setCmdFunction(&sendCmdToExecute);
   getRelayStateFunction(&relState_0_15);
   getDimValueFunction(&getDimVal);
   setcondCreatorFunction(&createCondition);
@@ -2466,6 +2466,7 @@ void dimmerShortCircuitIntrupt()
     sum = 0;
   }
 }
+//sendCmdToExecute needs wait for already incomming tasks
 //  END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
 //  ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham
