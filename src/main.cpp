@@ -828,54 +828,6 @@ void sendConfig()
   // BLE//bleSendLongString(str);
   MeasurmentTaskPause = false;
 }
-void stringHandelingTask(void *parameters)
-{
-  static String str;
-  for (;;)
-  {
-    if (UpdatingFlg)
-      vTaskDelete(NULL);
-    // this is the new parser added to convert a single compound message to multiple commands : 23/5/2024
-    // BLE//
-    // if (BLE_DATA.RxDataReadyFlag)
-    // {
-    //   String str = BLE_DATA.bleRxStr;
-    //   //      str=str.substring(0,str.lastIndexOf('\n'));
-    //   while (1)
-    //   {
-    //     int indx = str.indexOf('\n');
-    //     if (indx < 1)
-    //       break;
-    //     String Str2 = str.substring(0, indx);
-    //     str = str.substring(indx + 1);
-    //     while (mainStrIsFree == false || strlen(mainRxStr) != 0)
-    //       vTaskDelay(pdMS_TO_TICKS(1));
-    //     strcpy(mainRxStr, Str2.c_str());
-    //     // Serial.printf("mainRxStr=%s", mainRxStr);
-    //   }
-    //   BLE_DATA.RxDataReadyFlag = false;
-    // }
-
-    // if (SerialBT.connected())
-    // {
-    //   while (SerialBT.available())
-    //   {
-    //     while (mainStrIsFree == false || strlen(mainRxStr) != 0) ////////
-    //       vTaskDelay(10 / portTICK_PERIOD_MS);                   //////???
-    //     mainStrIsFree = false;                                   /////////
-    //     str = SerialBT.readStringUntil('\n');
-    //     // Serial.println("|"+str+"|");
-    //     for (int i = 0; i < str.length(); i++)
-    //     {
-    //       mainRxStr[i] = str[i];
-    //     }
-    //     mainRxStr[str.length()] = '\0';
-    //     mainStrIsFree = true; //////////
-    //   }
-    // }
-    vTaskDelay(1 / portTICK_PERIOD_MS);
-  }
-}
 void BLE_TASK(void *parameters)
 {
   for (;;)
@@ -1209,7 +1161,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
 
   // Check if the accumulated data contains one or more complete commands
   size_t endPos;
-  while ((endPos = accumulatedData.find('\n')) != std::string::npos)
+  while ((endPos = accumulatedData.find('\n')) != std::string::npos)//age find \n ro nadid npos mide bejaye index , npos ye constante
   {
     std::string command = accumulatedData.substr(0, endPos); // Extract command
     accumulatedData.erase(0, endPos + 1);                    // Remove the processed command
@@ -2210,11 +2162,9 @@ void setup()
   jsonCon.readJsonConditionsFromFile(CondFile);
 
   loadSavedValue();
-  // Serial.println("BLE PASS:" + String(blePass));
-  // BLE//bleSetPass(blePass);
-  //=========TEST
+
   myBle.beginServer(onDataReceived);
-  //========TEST
+
 
   initADC();
   strip.begin();
@@ -2228,20 +2178,12 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
 #define TasksEnabled
 #ifdef TasksEnabled
-
   xTaskCreate(
       BLE_TASK,
       "BLE_TASK",
       3 * 1024, // stack size
       NULL,     // task argument
       1,        // task priority
-      NULL);
-  xTaskCreate( // I just increased it from 1.5 to 2.5 to change fome functionality and it need optimization later
-      stringHandelingTask,
-      "stringHandelingTask",
-      3.5 * 1024, // stack size
-      NULL,       // task argument
-      1,          // task priority
       NULL);
   xTaskCreate(
       MeasurmentTask,

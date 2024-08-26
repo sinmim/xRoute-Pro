@@ -42,7 +42,16 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
     serverCallBack = cb;
     if (!isClientMode)
     {
-        NimBLEDevice::init("LabobinxSmart");
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);                                          // Read the MAC address
+        char uniqueID[7];                                                             // Buffer for the unique ID (6 hex digits + null terminator)
+        snprintf(uniqueID, sizeof(uniqueID), "%02X%02X%02X", mac[3], mac[4], mac[5]); // Use last 3 bytes
+
+        // Combine the base name with the unique ID
+        std::string deviceName = "xRoutePro";
+        deviceName += uniqueID;
+
+        NimBLEDevice::init(deviceName);
 
         pServer = NimBLEDevice::createServer();
         pServer->setCallbacks(new MyServerCallbacks());
@@ -68,8 +77,9 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
 
         NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
         pAdvertising->addServiceUUID(serviceUUID);
-        pAdvertising->setScanResponse(false);
-        pAdvertising->setMinPreferred(0x0);
+        pAdvertising->setScanResponse(true);
+        pAdvertising->setMinPreferred(0x06); // functions that help with iPhone connections issue
+        pAdvertising->setMaxPreferred(0x12);
         pAdvertising->start();
         Serial.println("BLE Server is advertising...");
     }
