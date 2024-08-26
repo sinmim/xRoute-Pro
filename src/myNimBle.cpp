@@ -43,15 +43,19 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
     if (!isClientMode)
     {
         uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_WIFI_STA);                                          // Read the MAC address
-        char uniqueID[7];                                                             // Buffer for the unique ID (6 hex digits + null terminator)
-        snprintf(uniqueID, sizeof(uniqueID), "%02X%02X%02X", mac[3], mac[4], mac[5]); // Use last 3 bytes
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);                              // Read the MAC address
+        char uniqueID[7];                                                 // Buffer for the unique ID (6 hex digits + null terminator)
+        snprintf(uniqueID, sizeof(uniqueID), "%02X%02X", mac[4], mac[5]); // Use last 3 bytes
 
         // Combine the base name with the unique ID
-        std::string deviceName = "xRoutePro";
+        std::string deviceName = "xRoutePro-";
         deviceName += uniqueID;
 
         NimBLEDevice::init(deviceName);
+
+        NimBLEDevice::setSecurityAuth(true, true, true);
+        NimBLEDevice::setSecurityPasskey(123456);
+        NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);
 
         pServer = NimBLEDevice::createServer();
         pServer->setCallbacks(new MyServerCallbacks());
@@ -61,10 +65,10 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             charUUID,
             NIMBLE_PROPERTY::READ |
                 NIMBLE_PROPERTY::WRITE |
-                NIMBLE_PROPERTY::NOTIFY
-            // NIMBLE_PROPERTY::READ_ENC |
-            // NIMBLE_PROPERTY::WRITE_ENC
-        );
+                NIMBLE_PROPERTY::NOTIFY |
+                NIMBLE_PROPERTY::READ_ENC |
+                NIMBLE_PROPERTY::WRITE_ENC);
+
         // Add NimBLE2904 descriptor
         NimBLE2904 *pDescriptor = (NimBLE2904 *)pServerCharacteristic->createDescriptor(
             NimBLEUUID((uint16_t)0x2904),

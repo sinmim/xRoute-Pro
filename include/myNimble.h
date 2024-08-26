@@ -11,6 +11,7 @@
 class MyBle
 {
 private:
+  u_int32_t password = 123456;
   bool isClientMode;
   NimBLEClient *pClient;
   NimBLEServer *pServer;
@@ -45,6 +46,7 @@ public:
   bool isRunning();
   bool isNewConnection();
   void justSend(String str);
+  void setPass(u_int32_t _password);
 
   // MyClientCallback class
   class MyClientCallback : public NimBLEClientCallbacks

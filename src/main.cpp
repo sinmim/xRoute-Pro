@@ -1154,11 +1154,9 @@ void createCondition(String _inputType, int _inputPort, String _oprt, float _set
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
   static std::string accumulatedData; // Holds data across multiple BLE packets
-
   // Convert received data to std::string
   std::string receivedData(reinterpret_cast<char *>(pData), length);
   accumulatedData += receivedData;
-
   // Check if the accumulated data contains one or more complete commands
   size_t endPos;
   while ((endPos = accumulatedData.find('\n')) != std::string::npos)//age find \n ro nadid npos mide bejaye index , npos ye constante
@@ -1220,28 +1218,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       myBle.sendString("M1UP.val=0\n");
       myBle.sendString("M1Down.val=0\n");
     }
-    else if (command == "MOTOR2=UP")
-    {
-      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[15 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[16 - 1]);
-      setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("M2UP.val=1\n");
-    }
-    else if (command == "MOTOR2=DOWN")
-    {
-      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[16 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[15 - 1]);
-      setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("M2Down.val=1\n");
-    }
-    else if (command == "MOTOR2=STOP")
-    {
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[15 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[16 - 1]);
-      setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("M2UP.val=0\n");
-      myBle.sendString("M2Down.val=0\n");
-    }
     else if (command.rfind("DIMER", 0) == 0)
     { // DIMER1.val=X
       float val = static_cast<float>(command[11]) / 255;
@@ -1278,32 +1254,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       EEPROM.commit();
       char str[128];
       sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
-      myBle.sendString(str);
-    }
-    else if (command == "VoltageCalibrate")
-    {
-      VcalCo = static_cast<float>(DFLT_V_CAL) / volt;
-      EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCo);
-      EEPROM.commit();
-      NegVoltOffset = ADC_LPF(NEG_VOLT_MUX_IN, 5, negv, 0.99);
-      EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffset);
-      EEPROM.commit();
-      char str[128];
-      sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
-      myBle.sendString(str);
-    }
-    else if (command == "VoltageCalibrate++")
-    {
-      DFLT_V_CAL++;
-      char str[128];
-      sprintf(str, "Vcal.val=%d\n", DFLT_V_CAL);
-      myBle.sendString(str);
-    }
-    else if (command == "VoltageCalibrate--")
-    {
-      DFLT_V_CAL--;
-      char str[128];
-      sprintf(str, "Vcal.val=%d\n", DFLT_V_CAL);
       myBle.sendString(str);
     }
     else if (command == "AmperOffset")
@@ -1355,33 +1305,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
         myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
       }
     }
-    else if (command == "AmperCalibratePlus")
-    {
-      if (ampSenisConnected)
-      {
-        A1calCo = static_cast<float>(DFLT_A_CAL) / (amp1 - amp1Offset);
-        EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
-        EEPROM.commit();
-      }
-      else
-      {
-        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
-      }
-    }
-    else if (command == "AmperCalibrate++")
-    {
-      DFLT_A_CAL++;
-      char str[128];
-      sprintf(str, "Acal.val=%d\n", DFLT_A_CAL);
-      myBle.sendString(str);
-    }
-    else if (command == "AmperCalibrate--")
-    {
-      DFLT_A_CAL--;
-      char str[128];
-      sprintf(str, "Acal.val=%d\n", DFLT_A_CAL);
-      myBle.sendString(str);
-    }
     else if (command == "Amper0Offset")
     {
       amp0Offset = amp0;
@@ -1400,32 +1323,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
       myBle.sendString(str);
     }
-    else if (command == "Amper0Calibrate")
-    {
-      A0calCo = DFLT_A0_CAL / (amp0Offset - amp0);
-      EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
-      EEPROM.commit();
-      String str = "show.txt=\"A0calCo=" + String(A0calCo) + "\"\n";
-      myBle.sendString(str);
-    }
-    else if (command == "Amper0CalibratePlus")
-    {
-      A0calCo = DFLT_A0_CAL / (amp0 - amp0Offset);
-      EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
-      EEPROM.commit();
-    }
-    else if (command == "Amper0Calibrate++")
-    {
-      DFLT_A0_CAL++;
-      String str = "A0cal.val=" + String(DFLT_A0_CAL) + "\n";
-      myBle.sendString(str);
-    }
-    else if (command == "Amper0Calibrate--")
-    {
-      DFLT_A0_CAL--;
-      String str = "A0cal.val=" + String(DFLT_A0_CAL) + "\n";
-      myBle.sendString(str);
-    }
     else if (command == "Amper2Offset")
     {
       amp2Offset = amp2;
@@ -1442,46 +1339,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       String str = "show.txt=\"A2calCo=" + String(A2calCo) + "\"\n";
       myBle.sendString(str);
     }
-    else if (command == "Amper2Calibrate")
-    {
-      A2calCo = DFLT_A2_CAL / (amp2Offset - amp2);
-      EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
-      EEPROM.commit();
-      String str = "show.txt=\"A2calCo=" + String(A2calCo) + "\"\n";
-      myBle.sendString(str);
-    }
-    else if (command == "Amper2CalibratePlus")
-    {
-      A2calCo = DFLT_A2_CAL / (amp2 - amp2Offset);
-      EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
-      EEPROM.commit();
-    }
-    else if (command == "Amper2Calibrate++")
-    {
-      DFLT_A2_CAL++;
-      String str = "A2cal.val=" + String(DFLT_A2_CAL) + "\n";
-      myBle.sendString(str);
-    }
-    else if (command == "Amper2Calibrate--")
-    {
-      DFLT_A2_CAL--;
-      String str = "A2cal.val=" + String(DFLT_A2_CAL) + "\n";
-      myBle.sendString(str);
-    }
-    else if (command == "BattCapCalibrate++")
-    {
-      DFLT_BATT_CAP += 10;
-      DFLT_BATT_CAP = constrain(DFLT_BATT_CAP, 0, 1000);
-      String str = "BattCap.val=" + String(DFLT_BATT_CAP) + "\n";
-      myBle.sendString(str);
-    }
-    else if (command == "BattCapCalibrate--")
-    {
-      DFLT_BATT_CAP -= 10;
-      DFLT_BATT_CAP = constrain(DFLT_BATT_CAP, 10, 1000);
-      String str = "BattCap.val=" + String(DFLT_BATT_CAP) + "\n";
-      myBle.sendString(str);
-    }
     else if (command.rfind("BattCapCalTo=", 0) == 0)
     {
       float battCap = static_cast<float>(std::stoi(command.substr(13)));
@@ -1490,35 +1347,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       EEPROM.commit();
       batteryCap = DFLT_BATT_CAP;
       myBle.sendString("BattCapTxt.val=" + String(static_cast<int>(batteryCap)) + "\n");
-    }
-    else if (command == "BattCapCalibrate")
-    {
-      EEPROM.writeFloat(E2ADD.batteryCapSave, DFLT_BATT_CAP);
-      EEPROM.commit();
-      batteryCap = DFLT_BATT_CAP;
-      myBle.sendString("BattCapTxt.val=" + String(static_cast<int>(batteryCap)) + "\n");
-      myBattery.setBatteryCap(batteryCap);
-      myBattery.setPercent(myBattery.getBtPerV());
-    }
-    else if (command == "PTmvCalibrate++")
-    {
-      DFLT_PT_MV_CAL++;
-      PT_mvCal = DFLT_PT_MV_CAL / pt100;
-      myBle.sendString("Pt_mvCal.val=" + String(DFLT_PT_MV_CAL) + "\n");
-      if (humSensorType != HUM_SENSOR_TYPE_NON)
-      {
-        myBle.sendString("show.txt=\"DigitalTemp=" + String(digitalTemp) + " °C\"\n");
-      }
-    }
-    else if (command == "PTmvCalibrate--")
-    {
-      DFLT_PT_MV_CAL--;
-      PT_mvCal = DFLT_PT_MV_CAL / pt100;
-      myBle.sendString("Pt_mvCal.val=" + String(DFLT_PT_MV_CAL) + "\n");
-      if (humSensorType != HUM_SENSOR_TYPE_NON)
-      {
-        myBle.sendString("show.txt=\"DigitalTemp=" + String(digitalTemp) + " °C\"\n");
-      }
     }
     else if (command.rfind("PTCalTo=", 0) == 0)
     {
@@ -1537,14 +1365,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
         vTaskDelay(200);
         temp = ReadPT100_Temp(pt100mv, 510);
       }
-
-      EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
-      EEPROM.commit();
-      myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
-    }
-    else if (command == "PT100Calibrate")
-    {
-      PT_mvCal = DFLT_PT_MV_CAL / pt100;
 
       EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
       EEPROM.commit();
@@ -1645,23 +1465,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       EEPROM.writeFloat(E2ADD.battFullVoltageSave, battFullVoltage);
       EEPROM.commit();
       Serial.println("battFullVoltage(X10) =" + String(battFullVoltage));
-    }
-    else if (command == "CableRes+")
-    {
-      DFLT_CABLE_RES_MILI_OHM++;
-      myBle.sendString("CableRes.val=" + String(DFLT_CABLE_RES_MILI_OHM) + "\n");
-    }
-    else if (command == "CableRes-")
-    {
-      DFLT_CABLE_RES_MILI_OHM--;
-      myBle.sendString("CableRes.val=" + String(DFLT_CABLE_RES_MILI_OHM) + "\n");
-    }
-    else if (command == "CableResCalibrate")
-    {
-      EEPROM.writeFloat(E2ADD.cableResistanceSave, DFLT_CABLE_RES_MILI_OHM);
-      EEPROM.commit();
-
-      cableResistance = EEPROM.readFloat(E2ADD.cableResistanceSave);
     }
     else if (command == "CleanWaterMin")
     {
@@ -1814,25 +1617,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     else if (command == "GiveMeOrientation")
     {
       String response = "Orientation=" + GyroOriantation + "\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command == "PreCalibrate")
-    {
-      EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffset);
-      EEPROM.commit();
-      String response = "show.txt=\"PresOffset=" + String(pressurCalOffset) + "\"\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command == "Pre+")
-    {
-      pressurCalOffset += 0.01;
-      String response = "Pcal.val=" + String(static_cast<int>(pressurCalOffset * 100)) + "\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command == "Pre-")
-    {
-      pressurCalOffset -= 0.01;
-      String response = "Pcal.val=" + String(static_cast<int>(pressurCalOffset * 100)) + "\n";
       myBle.sendString(response.c_str());
     }
     else if (command.find("PreCalTo=") == 0)
@@ -2121,6 +1905,7 @@ void setup()
   Serial.println(flashSizeMB);
   Serial.println("Version:" + Version);
   EEPROM.begin(512);
+  loadSavedValue();
 
   if (SPIFFS.begin(true))
   {
@@ -2161,11 +1946,6 @@ void setup()
   setcondCreatorFunction(&createCondition);
   jsonCon.readJsonConditionsFromFile(CondFile);
 
-  loadSavedValue();
-
-  myBle.beginServer(onDataReceived);
-
-
   initADC();
   strip.begin();
   GyroLicense = new lisence("Gyro", "G9933");   // Key for Gyro
@@ -2176,6 +1956,9 @@ void setup()
   // giveMeMacAdress();
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
+
+  myBle.beginServer(onDataReceived);
+
 #define TasksEnabled
 #ifdef TasksEnabled
   xTaskCreate(
@@ -2408,6 +2191,7 @@ void dimmerShortCircuitIntrupt()
     sum = 0;
   }
 }
+//2411
 //sendCmdToExecute needs wait for already incomming tasks
 //  END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
