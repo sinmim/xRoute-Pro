@@ -154,7 +154,14 @@ void Conditions::setRel(bool state)
     char str[50];
     if (getRel(outputPort - 1) != state)
     {
-        sprintf(str, "sw%d\n", outputPort);
+        if (state == true)
+        {
+            sprintf(str, "sw%d=ON\n", outputPort);
+        }
+        else
+        {
+            sprintf(str, "sw%d=OFF\n", outputPort);
+        }
         sendCmd(str);
         Serial.println("Condition[" + String(index) + "]: " + inputType + String(inputPort) + oprt + String(setpoint) + "-->" + outputType + String(outputPort) + "=" + String(outputValue));
     }

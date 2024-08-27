@@ -1135,13 +1135,12 @@ void defaultCalibrations()
 }
 void sendCmdToExecute(char *str)
 {
-// Simulate BLE data reception
-  uint8_t *pData = reinterpret_cast<uint8_t*>(const_cast<char*>(str));
+  // Simulate BLE data reception
+  uint8_t *pData = reinterpret_cast<uint8_t *>(const_cast<char *>(str));
   size_t length = strlen(str);
 
   // Call onDataReceived with the simulated data
   onDataReceived(nullptr, pData, length); // Pass nullptr for the characteristic if not needed
-
 }
 // END----------------------------------------------TASKS
 //-------------------------------------------------FUNCTIONS
@@ -1159,7 +1158,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
   accumulatedData += receivedData;
   // Check if the accumulated data contains one or more complete commands
   size_t endPos;
-  while ((endPos = accumulatedData.find('\n')) != std::string::npos)//age find \n ro nadid npos mide bejaye index , npos ye constante
+  while ((endPos = accumulatedData.find('\n')) != std::string::npos) // age find \n ro nadid npos mide bejaye index , npos ye constante
   {
     std::string command = accumulatedData.substr(0, endPos); // Extract command
     accumulatedData.erase(0, endPos + 1);                    // Remove the processed command
@@ -1167,56 +1166,73 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     Serial.print("Received command: ");
     Serial.println(command.c_str());
 
-    // Command processing
     if (command.rfind("sw", 0) == 0)
-    { // Matches "sw" at the start
-      if (lowVoltageFlg)
+    {
+      String temp = command.c_str();
+      int index = atoi(temp.substring(2, temp.indexOf('=')).c_str());
+      if (temp.lastIndexOf("ON") > 0)
       {
-        myBle.sendString("XrouteAlarm=Voltage is low ! Please check the battery voltage or measurement ports!\n");
+        RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
+        setRelay(RELAYS.relPos, v / 10);
+        myBle.sendString("sw" + String(index) + "=ON");
       }
-      int relayNum = atoi(command.c_str() + 2);
-      char str[128];
-
-      if ((RELAYS.relPos & (1UL << RELAYS.cnfgLookup[relayNum - 1])) == 0)
-      { // -1 due to lookup table being zero-based
-        sprintf(str, "sw%d.val=1\n", relayNum);
-        myBle.sendString(str);
-        RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[relayNum - 1]);
-      }
-      else
+      else if (temp.lastIndexOf("OFF") > 0)
       {
-        sprintf(str, "sw%d.val=0\n", relayNum);
-        myBle.sendString(str);
-        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[relayNum - 1]);
+        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
+        setRelay(RELAYS.relPos, v / 10);
+        myBle.sendString("sw" + String(index) + "=OFF");
       }
-      setRelay(RELAYS.relPos, v / 10);
-      saveStatesToFile();
     }
+
+    // // Command processing
+    // if (command.rfind("sw", 0) == 0)
+    // { // Matches "sw" at the start
+    //   if (lowVoltageFlg)
+    //   {
+    //     myBle.sendString("XrouteAlarm=Voltage is low ! Please check the battery voltage or measurement ports!\n");
+    //   }
+    //   int relayNum = atoi(command.c_str() + 2);
+    //   char str[128];
+
+    //   if ((RELAYS.relPos & (1UL << RELAYS.cnfgLookup[relayNum - 1])) == 0)
+    //   { // -1 due to lookup table being zero-based
+    //     sprintf(str, "sw%d=1\n", relayNum);
+    //     myBle.sendString(str);
+    //     RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[relayNum - 1]);
+    //   }
+    //   else
+    //   {
+    //     sprintf(str, "sw%d=0\n", relayNum);
+    //     myBle.sendString(str);
+    //     RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[relayNum - 1]);
+    //   }
+    //   setRelay(RELAYS.relPos, v / 10);
+    //   saveStatesToFile();
+    // }
     else if (command == "InitNextion")
     {
       SetNextion(RELAYS.relPos, dimTmp, dimLimit);
     }
-    else if (command == "MOTOR1=UP")
+    else if (command == "Motor1=Up")
     {
-      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[13 - 1]);
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("Motor1=Up\n");
+    }
+    else if (command == "Motor1=Down")
+    {
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("Motor1=Down\n");
+    }
+    else if (command == "Motor1=Stop")
+    {
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[13 - 1]);
       RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[14 - 1]);
       setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("M1UP.val=1\n");
-    }
-    else if (command == "MOTOR1=DOWN")
-    {
-      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[14 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[13 - 1]);
-      setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("M1Down.val=1\n");
-    }
-    else if (command == "MOTOR1=STOP")
-    {
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[13 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[14 - 1]);
-      setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("M1UP.val=0\n");
-      myBle.sendString("M1Down.val=0\n");
+      myBle.sendString("Motor1=Down\n");
     }
     else if (command.rfind("DIMER", 0) == 0)
     { // DIMER1.val=X
@@ -1888,7 +1904,9 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else
     {
-      Serial.println(command.c_str());
+      String errorMessage = "ParsError=" + String(command.c_str());
+      Serial.println(errorMessage);
+      myBle.sendString(errorMessage);
     }
   }
 }
@@ -1968,13 +1986,13 @@ void setup()
       NULL,     // task argument
       1,        // task priority
       NULL);
-  xTaskCreate(
-      MeasurmentTask,
-      "MeasurmentTask",
-      4 * 1024, // stack size
-      NULL,     // task argument
-      2,        // task priority
-      NULL);
+  // xTaskCreate(
+  //     MeasurmentTask,
+  //     "MeasurmentTask",
+  //     4 * 1024, // stack size
+  //     NULL,     // task argument
+  //     2,        // task priority
+  //     NULL);
   xTaskCreate(
       DimerTask,
       "DimerTask",
@@ -2024,13 +2042,13 @@ void setup()
       NULL,
       3,
       NULL);
-  xTaskCreate(
-      ramMonitorTask,
-      "ramMonitorTask",
-      1024, // stack size
-      NULL, // task argument
-      1,    // task priority
-      NULL);
+  // xTaskCreate(
+  //     ramMonitorTask,
+  //     "ramMonitorTask",
+  //     1024, // stack size
+  //     NULL, // task argument
+  //     1,    // task priority
+  //     NULL);
 #endif
 }
 void loop()
@@ -2191,23 +2209,23 @@ void dimmerShortCircuitIntrupt()
     sum = 0;
   }
 }
-//2411
-//sendCmdToExecute needs wait for already incomming tasks
-//  END----------------------------------------------FUNCTIONS
+// 2411
+// sendCmdToExecute needs wait for already incomming tasks
+//   END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
-//  ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham
-//  dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
-//  voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
-//  amper ke eshtebah kalibre beshe eshtebahi mire too ye protection
-//  *vaghti raft tooye protection mode bayad message bede ke amper kheyli ziyade va badesh ke ok shod bayad ba ye payame ok az khata darbiyad
-//  *password bezar baraye blt
-//  ezafe kardane ye delaye koochik vaghti ke calibratione chizi ro ancam dadim ta inke baes beshe tooye textbox dide beshe ta beshe baraye meghdare defaultha unu khoondesh ya mishe printesh kard too serial
-//  avaz kardane hajme flash baraye inke alan flashet 2 barabar shode
-//  Saman for ALI: ye geraphice khoob baraye ali baraye gyro hazer kon
-//  connect ya disconnect shodane hame chizo mitooni tashkhis bedi az tarighe sathe voltaga
-//  VAGHTI GYRO RESET MISHE LOW PASS SEFR BESHE CHONKE KHEYLI TOOL MIKESHE
-//  baraye 24 volt bayad devidere voltago dorost fekr koni barash chon alan majboori avazesh koni
-//  az tabeye constrain baraye limit kardane valuehat estefade kon tooye hamejaye kod ke value ha alaki naran asemoono....
-//  detect floaters
-//  problems
-//   i dont send the value from APDIM to other BLE devices in line 920
+//   ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham
+//   dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
+//   voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
+//   amper ke eshtebah kalibre beshe eshtebahi mire too ye protection
+//   *vaghti raft tooye protection mode bayad message bede ke amper kheyli ziyade va badesh ke ok shod bayad ba ye payame ok az khata darbiyad
+//   *password bezar baraye blt
+//   ezafe kardane ye delaye koochik vaghti ke calibratione chizi ro ancam dadim ta inke baes beshe tooye textbox dide beshe ta beshe baraye meghdare defaultha unu khoondesh ya mishe printesh kard too serial
+//   avaz kardane hajme flash baraye inke alan flashet 2 barabar shode
+//   Saman for ALI: ye geraphice khoob baraye ali baraye gyro hazer kon
+//   connect ya disconnect shodane hame chizo mitooni tashkhis bedi az tarighe sathe voltaga
+//   VAGHTI GYRO RESET MISHE LOW PASS SEFR BESHE CHONKE KHEYLI TOOL MIKESHE
+//   baraye 24 volt bayad devidere voltago dorost fekr koni barash chon alan majboori avazesh koni
+//   az tabeye constrain baraye limit kardane valuehat estefade kon tooye hamejaye kod ke value ha alaki naran asemoono....
+//   detect floaters
+//   problems
+//    i dont send the value from APDIM to other BLE devices in line 920
