@@ -177,11 +177,6 @@ float pressurCalOffset = 0.04F; // psi
 extern relConfig RELAYS;
 // BluetoothSerial SerialBT;
 int blePass;
-//--------------------------DATA'S
-// BLE//extern struct bleData BLE_DATA;
-char mainRxStr[128];
-char mainTxStr[128];
-bool mainStrIsFree = true;
 // END-----------------------DATA's
 #endif
 #define DEBUG
@@ -819,15 +814,23 @@ void MeasurmentTask(void *parameters)
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
-void sendConfig()
+void sendUiConfig()
 {
   MeasurmentTaskPause = true; // preventing sending other string
   String str = "ConfigFile=" + readStringFromFile(ConfigFile) + "END";
   Serial.println("inside:" + str);
-  // sendToAll((const char *)str.c_str());
-  // BLE//bleSendLongString(str);
+  myBle.sendLongString(str);
   MeasurmentTaskPause = false;
 }
+void sendConditions()
+{
+  MeasurmentTaskPause = true; // preventing sending other string
+  String str = "ConditionsFile=" + readStringFromFile(CondFile) + "END";
+  Serial.println("inside:" + str);
+  myBle.sendLongString(str);
+  MeasurmentTaskPause = false;
+}
+
 void BLE_TASK(void *parameters)
 {
   for (;;)
@@ -990,13 +993,6 @@ void OVR_CRNT_PRTCT_TASK(void *parameters)
       }
     }
     vTaskDelay(10 / portTICK_PERIOD_MS);
-  }
-}
-void inline WaitForStrQueToFinish()
-{
-  while (mainStrIsFree == false || strlen(mainRxStr) > 0)
-  {
-    vTaskDelay(1 / portTICK_PERIOD_MS);
   }
 }
 void ramMonitorTask(void *pvParameters)
@@ -1162,9 +1158,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
   {
     String command = accumulatedData.substring(0, endPos); // Extract command
     accumulatedData.remove(0, endPos + 1);                 // Remove the processed command
-    Serial.print("Received command: ");
-    Serial.println(command);
-
     // Command processing
     /*
         if (command.rfind("sw"))
@@ -1193,7 +1186,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     */
     if (command.startsWith("sw"))
-    {     
+    {
       int index = atoi(command.substring(2, command.indexOf('=')).c_str());
       if (command.lastIndexOf("ON") > 0)
       {
@@ -1347,8 +1340,8 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       myBle.sendString(str);
     }
     else if (command.startsWith("A2CalTo="))
-    {
-      A2calCo = static_cast<float>(std::stoi(command.substr(8))) / (amp2Offset - amp2);
+    { // original A2calCo = static_cast<float>(command.substring(8).toInt()) / (amp2Offset - amp2);
+      A2calCo = static_cast<float>(command.substring(8).toFloat()) / (amp2Offset - amp2);
       EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
       EEPROM.commit();
       String str = "show.txt=\"A2calCo=" + String(A2calCo) + "\"\n";
@@ -1356,7 +1349,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("BattCapCalTo="))
     {
-      float battCap = static_cast<float>(std::stoi(command.substr(13)));
+      float battCap = command.substring(13).toFloat();
       DFLT_BATT_CAP = battCap;
       EEPROM.writeFloat(E2ADD.batteryCapSave, DFLT_BATT_CAP);
       EEPROM.commit();
@@ -1365,7 +1358,9 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("PTCalTo="))
     {
-      float aimTemp = static_cast<float>(std::stoi(command.substr(8))) / 10;
+      // float aimTemp = command.substring(8).toInt() / 10.0;
+      float aimTemp = command.substring(8).toFloat() / 10.0;
+
       float temp = ReadPT100_Temp(pt100mv, 510);
       while (temp < aimTemp && fabs(temp - aimTemp) > 0.1)
       {
@@ -1610,7 +1605,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     else if (command.startsWith("GyroPass:"))
     {
 
-      String tmp = String(command.substr(9, 16).c_str());
+      String tmp = String(command.substring(9, 16).c_str());
       String response = "ReceivedPass:" + tmp;
       Serial.println(response.c_str());
       response = "InternalPass:" + String(GyroLicense->realSerial);
@@ -1623,7 +1618,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("GyroOrientation="))
     {
-      GyroOriantation = String(command.substr(16, 5).c_str());
+      GyroOriantation = String(command.substring(16, 5).c_str());
       EEPROM.writeString(E2ADD.GyroOriantationSave, GyroOriantation);
       EEPROM.commit();
       String strTmp = EEPROM.readString(E2ADD.GyroOriantationSave);
@@ -1636,7 +1631,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("PreCalTo="))
     {
-      float aimAlt = static_cast<float>(std::stoi(command.substr(9))); // altitude in meters
+      float aimAlt = command.substring(9).toInt(); // altitude in meters
       float tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffset);
       float error = 1; // to get into the loop
       float pressurCalOffsetTemp = pressurCalOffset;
@@ -1670,7 +1665,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("BLEPASSWORD="))
     {
-      String passStr = String(command.substr(12, 6).c_str());
+      String passStr = String(command.substring(12, 6).c_str());
       int pass = atoi(passStr.c_str());
       blePass = pass;
       Serial.print("Password=");
@@ -1689,7 +1684,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("DEF="))
     {
-      String defType = String(command.substr(4).c_str());
+      String defType = command.substring(4);
       if (defType == "VOLTAGE")
       {
         EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCoDeflt);
@@ -1847,7 +1842,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       String configReceivedMsg = "Config File Size: " + String(configLen) + " Bytes\n";
       Serial.println(configReceivedMsg.c_str());
 
-      String strTmp = String(command.substr(13, command.find("Bytes") - 13).c_str());
+      String strTmp = String(command.substring(13, command.indexOf("Bytes") - 13).c_str());
       configLen = atoi(strTmp.c_str());
 
       MeasurmentTaskPause = true;
@@ -1876,30 +1871,34 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       Serial.flush();
       confAndCondStrBuffer.clear();
       MeasurmentTaskPause = false;
-      sendConfig();
+      sendUiConfig();
     }
-    else if (command.startsWith("GiveMeConfigFile"))
+    else if (command.startsWith("GiveMeUiConfigFile"))
     {
-      sendConfig();
+      sendUiConfig();
+    }
+    else if (command.startsWith("GiveMeConditionsFile"))
+    {
+      sendConditions();
     }
     else if (command.startsWith("TakeConditions="))
     {
       Serial.println("START----->");
       confAndCondStrBuffer.clear();
-      // while (true)
-      // {
-      //   // BLE//String str = bleDirectRead(); // Example placeholder for BLE read function
-      //   // confAndCondStrBuffer += str;
-      //   // if (str.find(";") != String::npos)
-      //   // {
-      //   //   Serial.println("-------ConditionFinished");
-      //   //   jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
-      //   //   myBle.sendString("Condition Received Successfully");
-      //   //   ESP.restart();
-      //   //   break;
-      //   // }
-      //   // vTaskDelay(pdTICKS_TO_MS(1));
-      // }
+      while (true)
+      {
+        String str = bleDirectRead(); // Example placeholder for BLE read function
+        confAndCondStrBuffer += str;
+        if (str.indexOf(";") != -1)
+        {
+          Serial.println("-------ConditionFinished");
+          jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
+          myBle.sendString("Condition Received Successfully");
+          ESP.restart();
+          break;
+        }
+        vTaskDelay(pdTICKS_TO_MS(1));
+      }
     }
     else
     {
@@ -1968,8 +1967,6 @@ void setup()
   GyroLicense = new lisence("Gyro", "G9933");   // Key for Gyro
   VoiceLicense = new lisence("Voice", "V5612"); // Key For Voice
   // Serial.println("General Lisence:" + GeneralLisence);
-  // SerialBT.begin("LabobinxSmart"); // Bluetooth device name
-  // BLE//setupBLE();
   // giveMeMacAdress();
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);

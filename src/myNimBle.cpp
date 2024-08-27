@@ -149,6 +149,39 @@ void MyBle::sendString(String str)
     }
 }
 
+bool MyBle::isSendQueueBusy()
+{
+    bool isBusy = false;
+    if (xSemaphoreTake(sendQueueMutex, portMAX_DELAY) == pdTRUE)
+    {
+        isBusy = !sendQueue.empty();
+        xSemaphoreGive(sendQueueMutex);
+    }
+    return isBusy;
+}
+
+void MyBle::sendLongString(String str)
+{
+    const int CHUNKSIZE = 256; // Define the chunk size
+    while (str.length() > 0)
+    {
+        // Take a chunk from the string
+        String strChunk = str.substring(0, CHUNKSIZE);
+
+        // Remove the chunk from the original string
+        str = str.substring(CHUNKSIZE);
+
+        // Wait until the queue is not busy
+        while (isSendQueueBusy())
+        {
+            vTaskDelay(pdMS_TO_TICKS(2));
+        }
+
+        // Send the chunk
+        sendString(strChunk);
+    }
+}
+
 void MyBle::justSend(String str)
 {
     pServerCharacteristic->setValue(str);

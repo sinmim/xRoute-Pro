@@ -47,6 +47,8 @@ public:
   bool isNewConnection();
   void justSend(String str);
   void setPass(u_int32_t _password);
+  bool isSendQueueBusy();
+  void sendLongString(String str);
 
   // MyClientCallback class
   class MyClientCallback : public NimBLEClientCallbacks
