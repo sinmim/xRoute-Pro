@@ -692,7 +692,6 @@ void ConditionsTask(void *parameters)
     vTaskDelay(500);
   }
 }
-
 void loadStateFromFile()
 {
   // Serial.println("Loading Last States");
@@ -1207,7 +1206,6 @@ void takeUiConfigFileTask(void *pvParameters)
   }
   vTaskDelete(NULL);
 }
-
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
   static String accumulatedData; // Holds data across multiple BLE packets
@@ -2167,11 +2165,14 @@ void dimmerShortCircuitIntrupt()
     sum = 0;
   }
 }
+/*  new problems
+1- ~condition dosent work properly . may be the problem is vector . if i uncomment it conditionCount--; it will unwantedly --
+
+*/
 // 2411
 // sendCmdToExecute needs wait for already incomming tasks
-//   END----------------------------------------------FUNCTIONS
 //+++++++++++++++++++++++TO DO
-//   ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham
+//   *ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham => hal shod too version jadid 
 //   dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
 //   voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
 //   amper ke eshtebah kalibre beshe eshtebahi mire too ye protection
