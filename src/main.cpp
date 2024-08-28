@@ -92,7 +92,6 @@ Freenove_ESP32_WS2812 strip = Freenove_ESP32_WS2812(LEDS_COUNT, LEDS_PIN, CHANNE
 #define COLOR_ORANG 0xffa000
 #define COLOR_OFF 0x000000
 #define COLOR_WHITE 0xffffff
-
 int LED_COLOR = COLOR_OFF;
 void ws2812Blink(int color);
 //------------------------------------e2prom
@@ -117,8 +116,6 @@ float digitalTemp = 0;
 float digitalHum = 0;
 float digitalPress = 0;
 float digitalAlt = 0;
-// END---------------------------------HUMIDITY SENSORS
-//------------------------------------VOLTAGES
 //------------------------POWER
 float negv = 0, v = 0, a0 = 0, a1 = 0, a2 = 0, w = 0, b = 0, cwPrcnt = 0, dwPrcnt = 0, gwPrcnt = 0, pt100mv = 0, gsmAnten = 0, battHourLeft = 0;
 float VcalCo = 0, volt = 0;
@@ -326,15 +323,6 @@ public:
 };
 lisence *GyroLicense;  // Key for Gyro
 lisence *VoiceLicense; // Key For Voice
-//----------------------Barometer
-TaskHandle_t ramMonitorTaskHandle;
-//----------------------Low Voltage And Critical Voltage
-float BatteryLowPrcnt = 11.0;
-uint16_t BatteryLowPrcntRelays = 0b000000000000000;
-uint8_t BattLowPrcntDimers = 0b0000000;
-float BattCriticalPrcnt = 10.0;
-uint16_t BattCriticalPrcntRelays = 0b0000000000000000;
-uint8_t BattCriticalPrcntDimers = 0b0000000;
 //----------------------Gyro
 String GyroOriantation = "XY00";
 LIS3DH myIMU; // Default constructor is I2C, addr 0x19.
@@ -791,13 +779,17 @@ void MeasurmentTask(void *parameters)
     gwPrcnt = constrain(gwPrcnt, 0, 1820);
 
     pt100mv = pt100 * PT_mvCal;
-    sprintf(str, "VOL1=%d\n", (int)v);
+    // sprintf(str, "SOLVOL1=%d\n", (int)v);
+    // myBle.sendString(str);
+    // sprintf(str, "CARVOL1=%d\n", (int)v);
+    // myBle.sendString(str);
+    sprintf(str, "BATVOL1=%d\n", (int)v);
     myBle.sendString(str);
-    sprintf(str, "AMP0=%d\n", (int)a0);
+    sprintf(str, "AMP1=%d\n", (int)a0);
     myBle.sendString(str);
-    sprintf(str, "AMP1=%d\n", (int)a1);
+    sprintf(str, "AMP2=%d\n", (int)a1);
     myBle.sendString(str);
-    sprintf(str, "AMP2=%d\n", (int)a2);
+    sprintf(str, "AMP3=%d\n", (int)a2);
     myBle.sendString(str);
     sprintf(str, "WAT1=%d\n", (int)w);
     myBle.sendString(str);
@@ -809,11 +801,11 @@ void MeasurmentTask(void *parameters)
     myBle.sendString(str);
     sprintf(str, "FLT3=%d\n", ((int)gwPrcnt) / 10 * 10);
     myBle.sendString(str);
-    sprintf(str, "TMP1=%d\n", (int)(10 * ReadPT100_Temp(pt100mv, 510))); // PT100
+    sprintf(str, "TMPA1=%d\n", (int)(10 * ReadPT100_Temp(pt100mv, 510))); // PT100
     myBle.sendString(str);
-    sprintf(str, "TMP2=%d\n", ((int)(digitalTemp * 100)) / 10);
+    sprintf(str, "TMPD1=%d\n", ((int)(digitalTemp * 100)) / 10);
     myBle.sendString(str);
-    sprintf(str, "HUM1=%d\n", (int)digitalHum);
+    sprintf(str, "HUMD1=%d\n", (int)digitalHum);
     myBle.sendString(str);
     sprintf(str, "ALT1=%d\n", (int)digitalAlt);
     myBle.sendString(str);
@@ -1263,12 +1255,17 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     else if (command.startsWith("DIMER"))
     { // DIMER4=25
       int dimNumber = command.substring(5, command.indexOf("=")).toInt() - 1;
-      float val = command.substring(command.indexOf("=") + 1).toFloat() / 255;
-      dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
-      DimValChanged = true;
-      char str[128];
-      sprintf(str, "DIMER%d=%d\n", dimNumber + 1, (int)val);
-      myBle.sendString(str);
+      if (dimNumber > 1 || dimNumber < 6) // handling unwanted value from app
+      {
+        String valStr = command.substring(command.indexOf("=") + 1);
+        float val = valStr.toFloat() / 255;
+
+        dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
+        DimValChanged = true;
+        char str[128];
+        sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
+        myBle.sendString(str);
+      }
     }
     else if (command.startsWith("DefaultAllCalibrations"))
     {
@@ -2037,12 +2034,6 @@ void loop()
 }
 void loadSavedValue()
 {
-  BatteryLowPrcnt = EEPROM.readFloat(E2ADD.lowVoltageSave);
-  BatteryLowPrcntRelays = EEPROM.readInt(E2ADD.lowVoltageRelaysSave);
-  BattLowPrcntDimers = EEPROM.readInt(E2ADD.lowVoltageDimersSave);
-  BattCriticalPrcnt = EEPROM.readFloat(E2ADD.criticalVoltageSave);
-  BattCriticalPrcntRelays = EEPROM.readInt(E2ADD.criticalVoltageRelaysSave);
-  BattCriticalPrcntDimers = EEPROM.readInt(E2ADD.criticalVoltageDimersSave);
   if (EEPROM.readUInt(E2ADD.E2promFirsTime) == E2PROM_NOT_FIRST_TIME_RUN_VAL)
   {
   }
@@ -2167,12 +2158,14 @@ void dimmerShortCircuitIntrupt()
 }
 /*  new problems
 1- ~condition dosent work properly . may be the problem is vector . if i uncomment it conditionCount--; it will unwantedly --
-
+2- ble multi
+3-initialize sending
+4- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data 
 */
 // 2411
 // sendCmdToExecute needs wait for already incomming tasks
 //+++++++++++++++++++++++TO DO
-//   *ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham => hal shod too version jadid 
+//   *ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham => hal shod too version jadid
 //   dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
 //   voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
 //   amper ke eshtebah kalibre beshe eshtebahi mire too ye protection
