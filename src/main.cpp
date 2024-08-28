@@ -783,34 +783,37 @@ void MeasurmentTask(void *parameters)
     // myBle.sendString(str);
     // sprintf(str, "CARVOL1=%d\n", (int)v);
     // myBle.sendString(str);
+    String data = "";
     sprintf(str, "BATVOL1=%d\n", (int)v);
+    data += str;
     myBle.sendString(str);
+    sprintf(str, "BATPR1=%d\n", (int)b);
+    data += str;
     sprintf(str, "AMP1=%d\n", (int)a0);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "AMP2=%d\n", (int)a1);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "AMP3=%d\n", (int)a2);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "WAT1=%d\n", (int)w);
-    myBle.sendString(str);
-    sprintf(str, "BAT=%d\n", (int)b);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "FLT1=%d\n", ((int)cwPrcnt) / 10 * 10);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "FLT2=%d\n", ((int)dwPrcnt) / 10 * 10);
-    myBle.sendString(str);
-    sprintf(str, "FLT3=%d\n", ((int)gwPrcnt) / 10 * 10);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "TMPA1=%d\n", (int)(10 * ReadPT100_Temp(pt100mv, 510))); // PT100
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "TMPD1=%d\n", ((int)(digitalTemp * 100)) / 10);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "HUMD1=%d\n", (int)digitalHum);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "ALT1=%d\n", (int)digitalAlt);
-    myBle.sendString(str);
+    data += str;
     sprintf(str, "BATHUR=%d\n", (int)battHourLeft / 10);
-    myBle.sendString(str);
+    data += str;
+    // sprintf(str, "GAZ1=%d\n", (int)a1);
+    // myBle.sendString(str);
+    myBle.sendString(data);
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
@@ -1963,13 +1966,13 @@ void setup()
       NULL,     // task argument
       1,        // task priority
       NULL);
-  // xTaskCreate(
-  //     MeasurmentTask,
-  //     "MeasurmentTask",
-  //     4 * 1024, // stack size
-  //     NULL,     // task argument
-  //     2,        // task priority
-  //     NULL);
+  xTaskCreate(
+      MeasurmentTask,
+      "MeasurmentTask",
+      4 * 1024, // stack size
+      NULL,     // task argument
+      2,        // task priority
+      NULL);
   xTaskCreate(
       DimerTask,
       "DimerTask",
@@ -2160,7 +2163,9 @@ void dimmerShortCircuitIntrupt()
 1- ~condition dosent work properly . may be the problem is vector . if i uncomment it conditionCount--; it will unwantedly --
 2- ble multi
 3-initialize sending
-4- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data 
+4- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data
+5- zamani ke mesurment run mishhe datahaye dg mesle klid bazi vaghta nemiyad moshkel ba yektike kardane dataha hal shod
+6-initialize ferestadan
 */
 // 2411
 // sendCmdToExecute needs wait for already incomming tasks
