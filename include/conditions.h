@@ -24,9 +24,11 @@ private:
   //--Output value
   int outputValue;
   float setpoint;
+  static bool continueRunning;
 
 public:
   static int ConditionCount;
+  
   static int getCount()
   {
     return ConditionCount;
@@ -37,67 +39,18 @@ public:
   void setRel(bool state);
   void setOut();
   void doWork();
+  static void stopRunning()
+  {
+    continueRunning=false;
+  }
+  static void startRunning()
+  {
+    continueRunning=false;
+  }
+  static bool isRunning()
+  {
+    return continueRunning;
+  }
 };
 
 #endif
-
-/*
-{
-  "conditions": [
-    {
-      "inputPort": 1,
-      "inputType": "TEMP_IN",
-      "operator": ">",
-      "outputPort": 2,
-      "outputType": "FAN",
-      "outputValue": 100,
-      "setpoint": 75
-    },
-    {
-      "inputPort": 2,
-      "inputType": "HUMIDITY",
-      "operator": "<",
-      "outputPort": 3,
-      "outputType": "DEHUMIDIFIER",
-      "outputValue": 50,
-      "setpoint": 40
-    },
-    {
-      "inputPort": 3,
-      "inputType": "VOLTAGE",
-      "operator": "=",
-      "outputPort": 4,
-      "outputType": "BATTERY",
-      "outputValue": 12,
-      "setpoint": 12
-    },
-    {
-      "inputPort": 4,
-      "inputType": "GAS",
-      "operator": ">=",
-      "outputPort": 5,
-      "outputType": "ALARM",
-      "outputValue": 1,
-      "setpoint": 1
-    },
-    {
-      "inputPort": 5,
-      "inputType": "CURRENT",
-      "operator": "<=",
-      "outputPort": 6,
-      "outputType": "CHARGER",
-      "outputValue": 10,
-      "setpoint": 10
-    },
-    {
-      "inputPort": 6,
-      "inputType": "SOLAR",
-      "operator": "~",
-      "outputPort": 7,
-      "outputType": "POWER",
-      "outputValue": 150,
-      "setpoint": 100
-    }
-  ]
-}
-*/

@@ -1,5 +1,7 @@
 #include <conditions.h>
 int Conditions::ConditionCount = 0;
+bool Conditions::continueRunning = true;
+
 //=========
 float *_v, *_a0, *_a1, *_w, *_b, *_cwPrcnt, *_dwPrcnt, *_gwPrcnt, *_digitalTemp, *_digitalHum, *_digitalAlt, *_pt100mv, *_a2, *_battHourLeft;
 // (10 * ReadPT100_Temp(pt100mv, 510))); // PT100
@@ -134,7 +136,7 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
 
 Conditions::~Conditions()
 {
-    // ConditionCount--;
+    //ConditionCount--;
 }
 
 void Conditions::setDim(int val)
@@ -143,7 +145,7 @@ void Conditions::setDim(int val)
     if (getDim(outputPort - 1) != val)
     {
         char str[50];
-        sprintf(str, "APDIM%d.val=%d\n", outputPort, val);
+        sprintf(str, "DIMER%d=%d\n", outputPort, val);
         sendCmd(str);
         Serial.println("Condition[" + String(index) + "]: " + inputType + String(inputPort) + oprt + String(setpoint) + "-->" + outputType + String(outputPort) + "=" + String(outputValue));
     }

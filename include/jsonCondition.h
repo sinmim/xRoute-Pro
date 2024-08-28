@@ -7,11 +7,13 @@ void setcondCreatorFunction(void (*func)(String _inputType, int _inputPort, Stri
 class ConditionsReader
 {
 public:
+
     ConditionsReader();
-    void readJsonConditionsFromFile(String filename);
+    bool readJsonConditionsFromFile(String filename);
     void saveDefaultConditions(String filename);
     void saveConditionsFileFromString(String filename,String str);
     static int conditionCount;
+    bool isJsonFileOk(String filename);
 
 private:
     StaticJsonDocument<4096> doc;

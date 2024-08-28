@@ -660,7 +660,6 @@ void I2C_SENSORS_TASK(void *parameters)
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
-void sendAllcalibrations();
 void sendCmdToExecute(char *str);
 void dimmerShortCircuitIntrupt();
 void defaultCalibrations();
@@ -677,13 +676,23 @@ void ConditionsTask(void *parameters)
   Serial.println("Conditions Task Started");
   for (;;)
   {
-    for (int i = 0; i < Conditions::getCount(); i++)
+    int vectorSize = cndtions.size();
+    for (int i = 0; i < vectorSize; i++)
     {
-      cndtions[i].doWork();
+      if (i < cndtions.size())
+      {
+        cndtions[i].doWork();
+      }
+      else
+      {
+        Serial.println("ConditionsTask: Vector modified, skipping invalid index.");
+      }
     }
+    // Delay before the next iteration
     vTaskDelay(500);
   }
 }
+
 void loadStateFromFile()
 {
   // Serial.println("Loading Last States");
@@ -830,7 +839,6 @@ void sendConditions()
   myBle.sendLongString(str);
   MeasurmentTaskPause = false;
 }
-
 void BLE_TASK(void *parameters)
 {
   for (;;)
@@ -1146,6 +1154,60 @@ void createCondition(String _inputType, int _inputPort, String _oprt, float _set
 }
 //--------------------EVENTS
 // Callback function to handle data received from the client
+TaskHandle_t takeConditionFileTaskHandle;
+void takeConditionFileTask(void *pvParameters)
+{
+  while (true)
+  {
+    String str = myBle.directRead(); // Example placeholder for BLE read function
+    confAndCondStrBuffer += str;
+    if (str.indexOf(";") != -1)
+    {
+      MeasurmentTaskPause = false; // change to mutex in the future
+                                   // destroy all other taskes and generate it again in the near future in this function you must do that if the json is ok
+      myBle.stopDirectRead();
+      jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
+      Serial.println("Condition Received Successfully");
+      Serial.println("Checking file....");
+      if (jsonCon.isJsonFileOk(CondFile))
+      {
+        Serial.println("Condition File is ok");
+        Serial.println("deleting old conditions vector");
+        cndtions.clear(); // it will automatically call all the destroyers
+        // there was a problem with destructor and vector that it executes destructor unwanted time and i got negative numbers so i comment destructer --
+        Conditions::ConditionCount = 0;
+        Serial.println("jsonCon.readJsonConditionsFromFile(CondFile)");
+        jsonCon.readJsonConditionsFromFile(CondFile);
+        break;
+      }
+      break;
+    }
+    vTaskDelay(pdTICKS_TO_MS(1));
+  }
+  vTaskDelete(NULL);
+}
+TaskHandle_t takeUiConfigFileTaskHandle;
+void takeUiConfigFileTask(void *pvParameters)
+{
+  while (true)
+  {
+    String str = myBle.directRead(); // Example placeholder for BLE read function
+    confAndCondStrBuffer += str;
+    if (str.indexOf(";") != -1)
+    {
+      MeasurmentTaskPause = false; // change to mutex in the future
+      SaveStringToFile(confAndCondStrBuffer, ConfigFile);
+      myBle.sendString("UI Config File Received Successfully");
+      confAndCondStrBuffer.clear();
+      // send it to lcd in the future
+      myBle.stopDirectRead();
+      break;
+    }
+    vTaskDelay(pdTICKS_TO_MS(1));
+  }
+  vTaskDelete(NULL);
+}
+
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
   static String accumulatedData; // Holds data across multiple BLE packets
@@ -1159,32 +1221,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     String command = accumulatedData.substring(0, endPos); // Extract command
     accumulatedData.remove(0, endPos + 1);                 // Remove the processed command
     // Command processing
-    /*
-        if (command.rfind("sw"))
-    { // Matches "sw" at the start
-      if (lowVoltageFlg)
-      {
-        myBle.sendString("XrouteAlarm=Voltage is low ! Please check the battery voltage or measurement ports!\n");
-      }
-      int relayNum = atoi(command.c_str() + 2);
-      char str[128];
-
-      if ((RELAYS.relPos & (1UL << RELAYS.cnfgLookup[relayNum - 1])) == 0)
-      { // -1 due to lookup table being zero-based
-        sprintf(str, "sw%d=1\n", relayNum);
-        myBle.sendString(str);
-        RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[relayNum - 1]);
-      }
-      else
-      {
-        sprintf(str, "sw%d=0\n", relayNum);
-        myBle.sendString(str);
-        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[relayNum - 1]);
-      }
-      setRelay(RELAYS.relPos, v / 10);
-      saveStatesToFile();
-    }
-    */
     if (command.startsWith("sw"))
     {
       int index = atoi(command.substring(2, command.indexOf('=')).c_str());
@@ -1227,30 +1263,18 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       myBle.sendString("Motor1=Down\n");
     }
     else if (command.startsWith("DIMER"))
-    { // DIMER1.val=X
-      float val = static_cast<float>(command[11]) / 255;
-      int dimNumber = command[5] - '0' - 1;
+    { // DIMER4=25
+      int dimNumber = command.substring(5, command.indexOf("=")).toInt() - 1;
+      float val = command.substring(command.indexOf("=") + 1).toFloat() / 255;
       dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
       DimValChanged = true;
       char str[128];
-      sprintf(str, "APDIM%c.val=%d\n", command[5], command[11]);
-      myBle.sendString(str);
-    }
-    else if (command.startsWith("APDIM"))
-    { // APDIM1.val=123
-      int val = atoi(command.c_str() + 11);
-      if (val > 255 || val < 0)
-        return;
-      DimValChanged = true;
-      dimTmp[command[5] - '0' - 1] = 32768 * val / 255 * dimLimit[command[5] - '0' - 1];
-      char str[128];
-      sprintf(str, "DIMER%c.val=%d\n", command[5], val);
+      sprintf(str, "DIMER%d=%d\n", dimNumber + 1, (int)val);
       myBle.sendString(str);
     }
     else if (command.startsWith("DefaultAllCalibrations"))
     {
       defaultCalibrations();
-      sendAllcalibrations();
     }
     else if (command.startsWith("VCalTo="))
     {
@@ -1838,40 +1862,12 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("TakeUiConfig="))
     {
-      int configLen;
-      String configReceivedMsg = "Config File Size: " + String(configLen) + " Bytes\n";
-      Serial.println(configReceivedMsg.c_str());
-
-      String strTmp = String(command.substring(13, command.indexOf("Bytes") - 13).c_str());
-      configLen = atoi(strTmp.c_str());
-
-      MeasurmentTaskPause = true;
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-      int chunkCntr = configLen / CHUNK_SIZE;
-      int byteCntr = configLen % CHUNK_SIZE;
-
-      confAndCondStrBuffer.clear();
-      for (int i = 0; i < chunkCntr; i++)
-      {
-        // Data handling for chunks
-        for (int j = 0; j < CHUNK_SIZE; j++)
-        {
-          confAndCondStrBuffer += static_cast<char>(dataBuff[j]);
-        }
-      }
-
-      for (int i = 0; i < byteCntr; i++)
-      {
-        confAndCondStrBuffer += static_cast<char>(dataBuff[i]);
-      }
-
-      // BLE// confAndCondStrBuffer.resize(configLen);
-      SaveStringToFile(confAndCondStrBuffer, ConfigFile);
-      Serial.flush();
-      confAndCondStrBuffer.clear();
-      MeasurmentTaskPause = false;
-      sendUiConfig();
+      confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
+      MeasurmentTaskPause = true;                                                     // change to mutex in the future
+      myBle.startDirectRead();
+      if (eTaskGetState(&takeUiConfigFileTaskHandle) != eRunning)
+        xTaskCreate(takeUiConfigFileTask, "takeUiConfigFileTask", 4 * 1024, NULL, 1, &takeUiConfigFileTaskHandle);
+      break; // breake for preventing forthure processing the accumulated string
     }
     else if (command.startsWith("GiveMeUiConfigFile"))
     {
@@ -1883,22 +1879,12 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("TakeConditions="))
     {
-      Serial.println("START----->");
-      confAndCondStrBuffer.clear();
-      while (true)
-      {
-        String str = bleDirectRead(); // Example placeholder for BLE read function
-        confAndCondStrBuffer += str;
-        if (str.indexOf(";") != -1)
-        {
-          Serial.println("-------ConditionFinished");
-          jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
-          myBle.sendString("Condition Received Successfully");
-          ESP.restart();
-          break;
-        }
-        vTaskDelay(pdTICKS_TO_MS(1));
-      }
+      confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
+      MeasurmentTaskPause = true;                                                     // change to mutex in the future
+      myBle.startDirectRead();
+      if (eTaskGetState(&takeConditionFileTaskHandle) != eRunning)
+        xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
+      break; // breake for preventing forthure processing the accumulated string
     }
     else
     {
@@ -2149,30 +2135,6 @@ void initMPU()
   mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
-}
-void sendAllcalibrations()
-{
-  char str[64];
-  sprintf(str, "Vcal.val=%d\n", DFLT_V_CAL);
-  sendToAll(str);
-  sprintf(str, "Vcal.val=%d\n", DFLT_V_CAL);
-  sendToAll(str);
-  sprintf(str, "Acal.val=%d\n", DFLT_A_CAL);
-  sendToAll(str);
-  sprintf(str, "A0cal.val=%d\n", DFLT_A0_CAL);
-  sendToAll(str);
-  sprintf(str, "A2cal.val=%d\n", DFLT_A2_CAL);
-  sendToAll(str);
-  sprintf(str, "BattCap.val=%d\n", DFLT_BATT_CAP);
-  sendToAll(str);
-  sprintf(str, "Pt_mvCal.val=%d\n", DFLT_PT_MV_CAL);
-  sendToAll(str);
-  sprintf(str, "BattFullVolt.val=%d\n", DFLT_BATT_FULL_VOLT);
-  sendToAll(str);
-  sprintf(str, "BattEmptyVolt.val=%d\n", DFLT_BATT_EMPTY_VOLT);
-  sendToAll(str);
-  sprintf(str, "BattCapTxt.val=%d\n", (int)batteryCap);
-  sendToAll(str);
 }
 void dimmerShortCircuitIntrupt()
 {

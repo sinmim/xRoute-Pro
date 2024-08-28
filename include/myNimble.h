@@ -25,6 +25,9 @@ private:
   std::queue<String> sendQueue;
   SemaphoreHandle_t sendQueueMutex;
   static void sendTask(void *parameter);
+  String strBLE;
+  bool directReadingFlg = false;
+  bool dataReady = false;
 
 protected:
   void onResult(NimBLEAdvertisedDevice *advertisedDevice); // Ensure this is declared
@@ -49,6 +52,23 @@ public:
   void setPass(u_int32_t _password);
   bool isSendQueueBusy();
   void sendLongString(String str);
+  void startDirectRead()
+  {
+    directReadingFlg = true;
+  }
+  void stopDirectRead()
+  {
+    directReadingFlg = false;
+  }
+  String directRead()
+  {
+    while (!dataReady)
+    {
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    dataReady = false;
+    return strBLE;
+  }
 
   // MyClientCallback class
   class MyClientCallback : public NimBLEClientCallbacks
@@ -90,6 +110,13 @@ public:
     void onWrite(NimBLECharacteristic *pCharacteristic) override
     {
       std::string value = pCharacteristic->getValue();
+      if (parent.directReadingFlg)
+      {
+        parent.strBLE = value.c_str();
+        parent.dataReady = true;
+        return;
+      }
+
       if (parent.serverCallBack)
       {
         parent.serverCallBack(pCharacteristic, (uint8_t *)value.data(), value.length());

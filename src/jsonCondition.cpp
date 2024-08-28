@@ -20,24 +20,24 @@ void ConditionsReader::saveDefaultConditions(String filename)
   File file = SPIFFS.open(filename.c_str(), FILE_WRITE);
   if (!file)
   {
-    Serial.println("Failed to open file for writing");
+    Serial.println("saveDefaultConditions: Failed to open file for writing");
     return;
   }
 
   int bytesWritten = file.print(defaultCondition);
-  Serial.printf("Written %d bytes to file: %s\n", bytesWritten, filename.c_str());
+  Serial.printf("saveDefaultConditions: Written %d bytes to file:  %s\n", bytesWritten, filename.c_str());
   file.close();
 
   // Reopen the file for reading to verify contents
   file = SPIFFS.open(filename.c_str(), FILE_READ);
   if (!file)
   {
-    Serial.println("Failed to open file for reading");
+    Serial.println("saveDefaultConditions: Failed to open file for reading");
     return;
   }
 
   String fileContent = file.readString();
-  Serial.println("File content:");
+  Serial.println("saveDefaultConditions: File content: ");
   Serial.println(fileContent);
   file.close();
 }
@@ -47,54 +47,84 @@ void ConditionsReader::saveConditionsFileFromString(String filename, String str)
   File file = SPIFFS.open(filename.c_str(), FILE_WRITE);
   if (!file)
   {
-    Serial.println("Failed to open file for writing");
+    Serial.println("saveConditionsFileFromString: Failed to open file for writing");
     return;
   }
-  Serial.println("Str to save:" + str);
+  // Serial.println("saveConditionsFileFromString: Str to save: " + str);
 
   int bytesWritten = file.print(str);
-  Serial.printf("Written %d bytes to file: %s\n", bytesWritten, filename.c_str());
+  Serial.printf("Written %d bytes to file:  %s\n", bytesWritten, filename.c_str());
   file.close();
 
   // Reopen the file for reading to verify contents
   file = SPIFFS.open(filename.c_str(), FILE_READ);
   if (!file)
   {
-    Serial.println("Failed to open file for reading");
+    Serial.println("saveConditionsFileFromString: Failed to open file for reading");
     return;
   }
 
   String fileContent = file.readString();
-  Serial.println("Saved File content:");
-  Serial.println(fileContent);
+  // Serial.println("saveConditionsFileFromString: Saved File content: ");
+  // Serial.println(fileContent);
   file.close();
 }
 
-void ConditionsReader::readJsonConditionsFromFile(String filename)
+bool ConditionsReader::isJsonFileOk(String filename)
 {
   // Check if the file exists
   if (!SPIFFS.exists(filename))
   {
-    Serial.println("File does not exist: " + filename);
-    return;
+    Serial.println("isJsonFileOk: File does not exist:  " + filename);
+    return false;
   }
 
   // Open the file
   File file = SPIFFS.open(filename.c_str(), FILE_READ);
   if (!file)
   {
-    Serial.println("Failed to open file: " + filename);
-    return;
+    Serial.println("isJsonFileOk: Failed to open file:  " + filename);
+    return false;
   }
 
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(doc, file);
   if (error)
   {
-    Serial.print(F("Failed to read file, using default configuration: "));
+    Serial.print(F("isJsonFileOk: Failed to read file, using default configuration:  "));
     Serial.println(error.c_str());
     file.close();
-    return;
+    return false;
+  }
+  file.close();
+  return true;
+}
+
+bool ConditionsReader::readJsonConditionsFromFile(String filename)
+{
+  // Check if the file exists
+  if (!SPIFFS.exists(filename))
+  {
+    Serial.println("readJsonConditionsFromFile: File does not exist:  " + filename);
+    return false;
+  }
+
+  // Open the file
+  File file = SPIFFS.open(filename.c_str(), FILE_READ);
+  if (!file)
+  {
+    Serial.println("readJsonConditionsFromFile: Failed to open file:  " + filename);
+    return false;
+  }
+
+  // Deserialize the JSON document
+  DeserializationError error = deserializeJson(doc, file);
+  if (error)
+  {
+    Serial.print(F("readJsonConditionsFromFile: Failed to read file, using default configuration:  "));
+    Serial.println(error.c_str());
+    file.close();
+    return false;
   }
   file.close();
   // Parse buttons
@@ -117,5 +147,6 @@ void ConditionsReader::readJsonConditionsFromFile(String filename)
     condCreator(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue);
   }
 
-  Serial.println("Conditions loaded successfully from file: " + filename);
+  Serial.println("readJsonConditionsFromFile: Conditions loaded successfully from file:  " + filename);
+  return true;
 }
