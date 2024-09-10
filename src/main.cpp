@@ -191,6 +191,8 @@ const String CondFile = "/CondFile.txt";
 std::vector<Conditions> cndtions;
 #include <jsonCondition.h>
 ConditionsReader jsonCon;
+//====motors
+int motorWay = MOTOR_STOP;
 //===========================CLASSES
 uint64_t chipid;
 String GeneralLisence;
@@ -677,7 +679,7 @@ void ConditionsTask(void *parameters)
       }
     }
     // Delay before the next iteration
-    vTaskDelay(500);
+    vTaskDelay(100);
   }
 }
 void loadStateFromFile()
@@ -1146,6 +1148,10 @@ void createCondition(String _inputType, int _inputPort, String _oprt, float _set
 {
   cndtions.push_back(Conditions(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue)); // 0
 }
+void createTimerCondition(String _outputType, int _motorPort, int _upTimeMs, int downTimeMs)
+{
+  cndtions.push_back(Conditions(_outputType, _motorPort, _upTimeMs, downTimeMs)); // 0
+}
 //--------------------EVENTS
 // Callback function to handle data received from the client
 TaskHandle_t takeConditionFileTaskHandle;
@@ -1221,21 +1227,39 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       {
         RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
         setRelay(RELAYS.relPos, v / 10);
-        myBle.sendString("sw" + String(index) + "=ON");
+        myBle.sendString("sw" + String(index) + "=ON\n");
       }
       else if (command.lastIndexOf("OFF") > 0)
       {
         RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
         setRelay(RELAYS.relPos, v / 10);
-        myBle.sendString("sw" + String(index) + "=OFF");
+        myBle.sendString("sw" + String(index) + "=OFF\n");
       }
     }
-    else if (command.startsWith("InitNextion"))
+    else if (command.startsWith("GiveMeInit"))
     {
-      SetNextion(RELAYS.relPos, dimTmp, dimLimit);
+      String str = "";
+      for (int index = 1; index <= 8; index++)
+      {
+        if (relState_0_15(index - 1) == true)
+        {
+          str += "sw" + String(index) + "=ON\n";
+        }
+        else
+        {
+          str += "sw" + String(index) + "=OFF\n";
+        }
+      }
+      for (int i = 1; i <= 5; i++)
+      {
+        float val = (dimTmp[i] / (32768 * dimLimit[i])) * 255;
+        str += "DIMER" + String(i) + "=" + String((int)val) + "\n";
+      }
+      myBle.sendString(str);
     }
     else if (command.startsWith("Motor1=Up"))
     {
+      motorWay = MOTOR_UP;
       RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
       RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
       setRelay(RELAYS.relPos, v / 10);
@@ -1243,6 +1267,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("Motor1=Down"))
     {
+      motorWay = MOTOR_DOWN;
       RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
       RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
       setRelay(RELAYS.relPos, v / 10);
@@ -1250,8 +1275,9 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("Motor1=Stop"))
     {
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[13 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[14 - 1]);
+      motorWay = MOTOR_STOP;
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
       setRelay(RELAYS.relPos, v / 10);
       myBle.sendString("Motor1=Down\n");
     }
@@ -1939,11 +1965,14 @@ void setup()
   }
 
   // Config the Conditions
-  conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt, &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2, &battHourLeft);
+  conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt,
+                        &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2,
+                        &battHourLeft, &motorWay);
   setCmdFunction(&sendCmdToExecute);
   getRelayStateFunction(&relState_0_15);
   getDimValueFunction(&getDimVal);
-  setcondCreatorFunction(&createCondition);
+  setCondCreatorFunction(&createCondition);
+  setTimerCondCreatorFunction(&createTimerCondition);
   jsonCon.readJsonConditionsFromFile(CondFile);
 
   initADC();
@@ -2162,10 +2191,13 @@ void dimmerShortCircuitIntrupt()
 /*  new problems
 1- ~condition dosent work properly . may be the problem is vector . if i uncomment it conditionCount--; it will unwantedly --
 2- ble multi
-3-initialize sending
+3- *initialize sending
 4- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data
 5- zamani ke mesurment run mishhe datahaye dg mesle klid bazi vaghta nemiyad moshkel ba yektike kardane dataha hal shod
-6-initialize ferestadan
+6- *initialize ferestadan
+7- neveshtane timer baraye condition
+8- neveshtane scadual condition
+9- baraye ghashangtar shodane code
 */
 // 2411
 // sendCmdToExecute needs wait for already incomming tasks

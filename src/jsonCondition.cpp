@@ -10,9 +10,15 @@ ConditionsReader::ConditionsReader()
 }
 
 void (*condCreator)(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue);
-void setcondCreatorFunction(void (*func)(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue))
+void (*timerCondCreator)(String _outputType,int _motorPort, int _upTimeMs, int _downTimeMs);
+
+void setCondCreatorFunction(void (*func)(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue))
 {
   condCreator = func;
+}
+void setTimerCondCreatorFunction(void (*func)(String _outputType,int _motorPort, int _upTimeMs, int downTimeMs))
+{
+  timerCondCreator = func;
 }
 
 void ConditionsReader::saveDefaultConditions(String filename)
@@ -129,9 +135,10 @@ bool ConditionsReader::readJsonConditionsFromFile(String filename)
   file.close();
   // Parse buttons
   JsonArray conditionArray = doc["conditions"];
-  ConditionsReader::conditionCount = conditionArray.size();
+  int cnt = conditionArray.size();
+  ConditionsReader::conditionCount = cnt;
 
-  for (size_t i = 0; i < conditionCount; i++)
+  for (size_t i = 0; i < cnt; i++)
   {
     JsonObject condition = conditionArray[i];
     // strlcpy(buttons[i].name, condition["name"] | "", sizeof(buttons[i].name));
@@ -145,6 +152,21 @@ bool ConditionsReader::readJsonConditionsFromFile(String filename)
     int _outputPort = condition["outPort"];
     int _outputValue = condition["outVal"];
     condCreator(_inputType, _inputPort, _oprt, _setpoint, _outputType, _outputPort, _outputValue);
+  }
+
+  // Parse motor timer conditions
+  JsonArray timerConditionArray = doc["timerConditions"];
+  cnt = timerConditionArray.size();
+  ConditionsReader::conditionCount += cnt;
+
+  for (size_t i = 0; i < cnt; i++)
+  {
+    JsonObject timerCondition = timerConditionArray[i];
+    String _outputType = timerCondition["type"];
+    int _motorPort = timerCondition["port"];
+    int _upTime = timerCondition["uTime"];
+    int _downTime = timerCondition["dTime"];
+    timerCondCreator(_outputType,_motorPort, _upTime, _downTime);
   }
 
   Serial.println("readJsonConditionsFromFile: Conditions loaded successfully from file:  " + filename);
