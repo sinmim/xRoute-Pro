@@ -822,7 +822,7 @@ void MeasurmentTask(void *parameters)
 void sendUiConfig()
 {
   MeasurmentTaskPause = true; // preventing sending other string
-  String str = "ConfigFile=" + readStringFromFile(ConfigFile) + "END";
+  String str = "ConfigFile=" + readStringFromFile(ConfigFile);
   Serial.println("inside:" + str);
   myBle.sendLongString(str);
   MeasurmentTaskPause = false;
@@ -830,7 +830,7 @@ void sendUiConfig()
 void sendConditions()
 {
   MeasurmentTaskPause = true; // preventing sending other string
-  String str = "ConditionsFile=" + readStringFromFile(CondFile) + "END";
+  String str = "ConditionsFile=" + readStringFromFile(CondFile);
   Serial.println("inside:" + str);
   myBle.sendLongString(str);
   MeasurmentTaskPause = false;
