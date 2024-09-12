@@ -1279,7 +1279,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
       RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
       setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("Motor1=Down\n");
+      myBle.sendString("Motor1=Stop\n");
     }
     else if (command.startsWith("DIMER"))
     { // DIMER4=25

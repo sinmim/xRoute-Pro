@@ -154,7 +154,7 @@ Conditions::Conditions(String _outputType, int _Port, int _upTimeMs, int _downTi
     {
         Serial.println("Condition[" + String(index) + "]: MotorUpTimer[" + String(timerUpTimeMs) + "ms]MotorDownTimer[" + String(timerDownTimeMs) + "ms]");
     }
-    else if (outputType == "KEY")
+    else if (outputType == "REL")
     {
         Serial.println("Condition[" + String(index) + "]: " + conditionType + "(" + outputType + outputPort + ")" + "-->OnTime[" + String(timerUpTimeMs) + "ms]");
     }
@@ -330,7 +330,7 @@ void Conditions::doWork()
                 }
             }
         }
-        else if (outputType == "KEY")
+        else if (outputType == "REL")
         {
             if (getRel(timerPort - 1) == true && timerPortLastState == 0)
             {

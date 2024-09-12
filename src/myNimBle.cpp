@@ -85,6 +85,8 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
         pAdvertising->setMinPreferred(0x06); // functions that help with iPhone connections issue
         pAdvertising->setMaxPreferred(0x12);
         pAdvertising->start();
+        // changing buffer size
+        NimBLEDevice::setMTU(512);
         Serial.println("BLE Server is advertising...");
     }
 }
@@ -162,7 +164,9 @@ bool MyBle::isSendQueueBusy()
 
 void MyBle::sendLongString(String str)
 {
-    const int CHUNKSIZE = 256; // Define the chunk size
+#define HeaderSize 4 // bytes
+
+    const int CHUNKSIZE = NimBLEDevice::getMTU() - HeaderSize; // Define the chunk size
     while (str.length() > 0)
     {
         // Take a chunk from the string
@@ -181,6 +185,52 @@ void MyBle::sendLongString(String str)
         sendString(strChunk);
     }
 }
+
+/**
+ * @brief In NimBLE for ESP32, the default Maximum Transmission Unit (MTU) size
+ *        for the BLE buffer is 23 bytes. This means the payload size, or the
+ *        amount of data that can be sent in a single packet, is 20 bytes
+ *        because the other 3 bytes are used for the BLE protocol overhead.
+ *
+ *        However, the MTU can be negotiated and increased up to 255 bytes,
+ *        allowing for larger payloads to be sent in a single packet. Keep in
+ *        mind that increasing the MTU size doesn't automatically increase the
+ *        data rate, as the BLE standard limits the data rate, but it allows
+ *        sending more data per packet.
+ *
+ *        To change the MTU size in NimBLE, you can use:
+ *
+ *        @code
+ *        NimBLEDevice::setMTU(your_desired_mtu_size);
+ *        @endcode
+ *
+ *        For example, to set the MTU to 255 bytes:
+ *
+ *        @code
+ *        NimBLEDevice::setMTU(255);
+ *        @endcode
+ *
+ *        This will allow for a maximum payload of 251 bytes per packet after
+ *        accounting for the 4-byte BLE header.
+ */
+
+// void MyBle::sendLongString(String str)
+// {
+//     while (sendQueue.size() > 0)
+//     {
+//         vTaskDelay(pdMS_TO_TICKS(5));
+//     }
+
+//     const int CHUNKSIZE = 256-4; // Define the chunk size
+//     while (str.length() > 0)
+//     {
+//         String strChunk = str.substring(0, CHUNKSIZE);
+//         str = str.substring(CHUNKSIZE);
+//         justSend(strChunk);
+
+//         vTaskDelay(pdMS_TO_TICKS(200));
+//     }
+// }
 
 void MyBle::justSend(String str)
 {
