@@ -1884,6 +1884,119 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
         myBle.sendString(failStr);
       }
     }
+    // else if (!strncmp(mainRxStr, "StartUpdate=", 12))
+    // {
+    //   // Get flash chip size in bytes
+    //   uint32_t flashSize = ESP.getFlashChipSize();
+    //   // Convert flash size from bytes to megabytes
+    //   float flashSizeMB = (float)flashSize / (1024.0 * 1024.0);
+    //   Serial.println("-----Flash info-----"); // for padding problem i altered the file size . change it if the update goes to 100% and not finish
+    //   Serial.print("FlashSize:");
+    //   Serial.print(flashSizeMB);
+    //   Serial.println("MB");
+    //   if (flashSizeMB > 15)
+    //   {
+    //     char str[16];
+    //     uint8_t aknoledge[] = {'U', 'P', 'D', 0xff, 0xff, 0xff};
+    //     UpdatingFlg = true;
+    //     vTaskDelay(1000 / portTICK_PERIOD_MS);
+    //     unsigned long time;
+    //     unsigned long timeout;
+
+    //     SerialBT.setTimeout(1000);
+    //     String strTmp = mainRxStr;
+    //     strTmp = strTmp.substring(12, strTmp.indexOf("Bytes"));
+    //     updateLen = atoi(strTmp.c_str());
+    //     SerialBT.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
+    //     Serial.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
+    //     Update.begin(updateLen);
+
+    //     long progress = 0;
+    //     int chunkCntr = updateLen / CHUNK_SIZE;
+    //     int byteCntr = updateLen % CHUNK_SIZE;
+    //     int prgrs = 0;
+    //     int lastPrgrs = 0;
+    //     time = millis();
+    //     for (int i = 0; i < chunkCntr; i++)
+    //     {
+    //       timeout = millis();
+    //       SerialBT.write(aknoledge, 6);
+    //       SerialBT.flush();
+
+    //       SerialBT.readBytes(dataBuff, CHUNK_SIZE);
+    //       if ((millis() - timeout) > 900)
+    //       {
+    //         SerialBT.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
+    //         Serial.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
+    //         SerialBT.flush();
+    //         Serial.flush();
+    //         ESP.restart();
+    //       }
+    //       aes.decrypt(dataBuff, CHUNK_SIZE, dataBuff, key, sizeof(key), iv);
+    //       Update.write(dataBuff, CHUNK_SIZE);
+    //       if (((i * CHUNK_SIZE) % 4096) == 0)
+    //       {
+    //         prgrs = Update.progress() * 100 / updateLen;
+    //         if (prgrs > lastPrgrs)
+    //         {
+    //           sprintf(str, "PRGU=%d\xFF\xFF\xFF", prgrs);
+    //           SerialBT.println(str);
+    //           Serial.println(str);
+    //         }
+    //         lastPrgrs = prgrs;
+    //       }
+    //     }
+    //     SerialBT.write(aknoledge, 6);
+    //     SerialBT.flush();
+
+    //     SerialBT.readBytes(dataBuff, byteCntr);
+    //     // Decrypt the remaining bytes
+    //     aes.decrypt(dataBuff, byteCntr, dataBuff, key, sizeof(key), iv);
+    //     Update.write(dataBuff, byteCntr);
+    //     SerialBT.println(Update.progress());
+    //     if (Update.end() == true)
+    //     {
+    //       time = millis() - time;
+    //       sprintf(str, "PRGU=100\xFF\xFF\xFF");
+    //       SerialBT.println(str);
+    //       Serial.println(str);
+    //       SerialBT.flush();
+    //       Serial.flush();
+    //       SerialBT.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
+    //       Serial.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
+    //       SerialBT.flush();
+    //       Serial.flush();
+    //       SerialBT.println("Restarting in \xFF\xFF\xFF");
+    //       Serial.println("Restarting in \xFF\xFF\xFF");
+    //       SerialBT.flush();
+    //       Serial.flush();
+    //       for (int i = 5; i > 0; i--)
+    //       {
+    //         SerialBT.println(i);
+    //         Serial.println(i);
+    //         vTaskDelay(1000 / portTICK_PERIOD_MS);
+    //         SerialBT.flush();
+    //         Serial.flush();
+    //       }
+    //       ESP.restart();
+    //     }
+    //     else
+    //     {
+    //       SerialBT.print("\nFailed !\xFF\xFF\xFF");
+    //       SerialBT.println(Update.errorString());
+    //     }
+    //   }
+    //   else
+    //   {
+    //     sprintf(str, "PRGU=100\xFF\xFF\xFF");
+    //     SerialBT.println(str);
+    //     sprintf(str, "XrouteAlarm= Your Device Memory is %dMB and Dose Not Support Update !", flashSizeMB);
+    //     SendToAll(str);
+    //     SerialBT.print("\nFailed !\xFF\xFF\xFF");
+    //     SerialBT.println(Update.errorString());
+    //   }
+    // }
+
     else if (command.startsWith("TakeUiConfig="))
     {
       confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
