@@ -69,6 +69,18 @@ public:
     dataReady = false;
     return strBLE;
   }
+  uint8_t *buffer;
+  bool readBytesFlag = false;
+  bool readBytes(uint8_t *_buffer, int size, int timeout)
+  {
+    buffer = _buffer;
+    readBytesFlag = true;
+    for (int i = 0; i < size; i++)
+    {
+      buffer[i] = 0;
+    }
+
+  }
 
   // MyClientCallback class
   class MyClientCallback : public NimBLEClientCallbacks
@@ -110,6 +122,23 @@ public:
     void onWrite(NimBLECharacteristic *pCharacteristic) override
     {
       std::string value = pCharacteristic->getValue();
+      // if (parent.readBytesFlag)
+      // {
+      //   for (int i = 0; i < value.length(); i++)
+      //   {
+      //     Serial.print(value[i], HEX);
+      //     parent.buffer[i] = value[i];
+      //   }
+      // }
+
+      // Serial.print("RAW:");
+      // for (int i = 0; i < pCharacteristic->getDataLength(); i++)
+      // {
+      //   parent.buffer[i] = *(pCharacteristic->getValue().data() + i);
+      //   Serial.print(parent.buffer[i], HEX);
+      // }
+      // Serial.println("-------------");
+
       if (parent.directReadingFlg)
       {
         parent.strBLE = value.c_str();

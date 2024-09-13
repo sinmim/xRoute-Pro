@@ -1207,8 +1207,77 @@ void takeUiConfigFileTask(void *pvParameters)
   }
   vTaskDelete(NULL);
 }
+
+class bleUpdate
+{
+private:
+  NimBLECharacteristic *pCharacteristic;
+  uint32_t updateSize;
+  uint32_t writenBytes;
+  uint32_t updateProg = 0;
+  uint32_t lastUpdateProg = 0;
+  uint32_t startTime = 0;
+  uint32_t interval;
+
+public:
+  bleUpdate(NimBLECharacteristic *_pCharacteristic, uint32_t _size)
+  {
+    Serial.println("----------Start Update (" + String(_size) + ") Bytes---------");
+    pCharacteristic = _pCharacteristic;
+    updateSize = _size;
+    Update.begin(_size);
+    writenBytes = 0;
+    startTime = millis();
+  }
+  int continueUpdate()
+  {
+    std::string dataStr = pCharacteristic->getValue();
+    uint8_t *data = (uint8_t *)dataStr.c_str();
+    uint32_t len = dataStr.length();
+    Update.write(data, len);
+    writenBytes += len;
+
+    updateProg = Update.progress();
+    if (lastUpdateProg != updateProg)
+    {
+      static uint32_t last = millis();
+      static uint32_t now = last;
+      now = millis();
+      interval = now - last;
+      last = now;
+      Serial.println("Byte:" + String(updateProg) + ":" + String(interval) + "ms");
+      lastUpdateProg = updateProg;
+    }
+
+    if (writenBytes == updateSize)
+    {
+      bool status = Update.end();
+      if (status)
+      {
+        Serial.println("Successfully updated in: " + String(millis() - startTime) + "ms");
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        ESP.restart();
+      }
+      else
+      {
+        Serial.println("Updtae Error");
+      }
+    }
+
+    return len;
+  }
+};
+bleUpdate *myUpdate;
+
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
+
+  if (myUpdate != nullptr)
+  {
+    myUpdate->continueUpdate();
+    return;
+  }
+
   static String accumulatedData; // Holds data across multiple BLE packets
   // Convert received data to String
   String receivedData(reinterpret_cast<char *>(pData), length);
@@ -1809,193 +1878,10 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("StartUpdate="))
     {
-      // Get flash chip size in bytes
-      uint32_t flashSize = ESP.getFlashChipSize();
-      // Convert flash size from bytes to megabytes
-      float flashSizeMB = static_cast<float>(flashSize) / (1024.0 * 1024.0);
-      Serial.println("-----Flash info-----");
-      Serial.print("FlashSize:");
-      Serial.print(flashSizeMB);
-      Serial.println("MB");
-
-      if (flashSizeMB > 15)
-      {
-        String updateReceivedMsg = "Update Received : " + String(updateLen) + " Bytes\n";
-        Serial.println(updateReceivedMsg.c_str());
-
-        Update.begin(updateLen);
-
-        long progress = 0;
-        int chunkCntr = updateLen / CHUNK_SIZE;
-        int byteCntr = updateLen % CHUNK_SIZE;
-        int prgrs = 0;
-        int lastPrgrs = 0;
-        unsigned long time = millis();
-
-        for (int i = 0; i < chunkCntr; i++)
-        {
-          unsigned long timeout = millis();
-
-          if ((millis() - timeout) > 900)
-          {
-            Serial.println("TimeOut happened! UpdateFailed. Restarting...\n");
-            Serial.flush();
-            ESP.restart();
-          }
-
-          Update.write(dataBuff, CHUNK_SIZE);
-          if (((i * CHUNK_SIZE) % 4096) == 0)
-          {
-            prgrs = Update.progress() * 100 / updateLen;
-            if (prgrs > lastPrgrs)
-            {
-              String progressStr = "PRGU=" + String(prgrs) + "\n";
-              Serial.println(progressStr.c_str());
-            }
-            lastPrgrs = prgrs;
-          }
-        }
-
-        Update.write(dataBuff, byteCntr);
-
-        if (Update.end())
-        {
-          time = millis() - time;
-          String successStr = "PRGU=100\n";
-          Serial.println(successStr.c_str());
-          Serial.println("Update Successful in : (" + String(time / 1000) + ") Sec\n");
-          Serial.println("Restarting in \n");
-
-          for (int i = 5; i > 0; i--)
-          {
-            Serial.println(i);
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-          }
-          ESP.restart();
-        }
-        else
-        {
-          // Handle failure
-        }
-      }
-      else
-      {
-        String failStr = "XrouteAlarm= Your Device Memory is " + String(static_cast<int>(flashSizeMB)) + "MB and Does Not Support Update !";
-        myBle.sendString(failStr);
-      }
+      MeasurmentTaskPause = true;
+      uint32_t binSize = command.substring(command.indexOf("=") + 1, command.indexOf("Bytes")).toInt();
+      myUpdate = new bleUpdate(pCharacteristic, binSize);
     }
-    // else if (!strncmp(mainRxStr, "StartUpdate=", 12))
-    // {
-    //   // Get flash chip size in bytes
-    //   uint32_t flashSize = ESP.getFlashChipSize();
-    //   // Convert flash size from bytes to megabytes
-    //   float flashSizeMB = (float)flashSize / (1024.0 * 1024.0);
-    //   Serial.println("-----Flash info-----"); // for padding problem i altered the file size . change it if the update goes to 100% and not finish
-    //   Serial.print("FlashSize:");
-    //   Serial.print(flashSizeMB);
-    //   Serial.println("MB");
-    //   if (flashSizeMB > 15)
-    //   {
-    //     char str[16];
-    //     uint8_t aknoledge[] = {'U', 'P', 'D', 0xff, 0xff, 0xff};
-    //     UpdatingFlg = true;
-    //     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    //     unsigned long time;
-    //     unsigned long timeout;
-
-    //     SerialBT.setTimeout(1000);
-    //     String strTmp = mainRxStr;
-    //     strTmp = strTmp.substring(12, strTmp.indexOf("Bytes"));
-    //     updateLen = atoi(strTmp.c_str());
-    //     SerialBT.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
-    //     Serial.println("Update Received : " + String(updateLen) + " Bytes\xFF\xFF\xFF");
-    //     Update.begin(updateLen);
-
-    //     long progress = 0;
-    //     int chunkCntr = updateLen / CHUNK_SIZE;
-    //     int byteCntr = updateLen % CHUNK_SIZE;
-    //     int prgrs = 0;
-    //     int lastPrgrs = 0;
-    //     time = millis();
-    //     for (int i = 0; i < chunkCntr; i++)
-    //     {
-    //       timeout = millis();
-    //       SerialBT.write(aknoledge, 6);
-    //       SerialBT.flush();
-
-    //       SerialBT.readBytes(dataBuff, CHUNK_SIZE);
-    //       if ((millis() - timeout) > 900)
-    //       {
-    //         SerialBT.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
-    //         Serial.println("TimeOut happend! UpdateFailed. Restaring...\xFF\xFF\xFF");
-    //         SerialBT.flush();
-    //         Serial.flush();
-    //         ESP.restart();
-    //       }
-    //       aes.decrypt(dataBuff, CHUNK_SIZE, dataBuff, key, sizeof(key), iv);
-    //       Update.write(dataBuff, CHUNK_SIZE);
-    //       if (((i * CHUNK_SIZE) % 4096) == 0)
-    //       {
-    //         prgrs = Update.progress() * 100 / updateLen;
-    //         if (prgrs > lastPrgrs)
-    //         {
-    //           sprintf(str, "PRGU=%d\xFF\xFF\xFF", prgrs);
-    //           SerialBT.println(str);
-    //           Serial.println(str);
-    //         }
-    //         lastPrgrs = prgrs;
-    //       }
-    //     }
-    //     SerialBT.write(aknoledge, 6);
-    //     SerialBT.flush();
-
-    //     SerialBT.readBytes(dataBuff, byteCntr);
-    //     // Decrypt the remaining bytes
-    //     aes.decrypt(dataBuff, byteCntr, dataBuff, key, sizeof(key), iv);
-    //     Update.write(dataBuff, byteCntr);
-    //     SerialBT.println(Update.progress());
-    //     if (Update.end() == true)
-    //     {
-    //       time = millis() - time;
-    //       sprintf(str, "PRGU=100\xFF\xFF\xFF");
-    //       SerialBT.println(str);
-    //       Serial.println(str);
-    //       SerialBT.flush();
-    //       Serial.flush();
-    //       SerialBT.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
-    //       Serial.println("Update Successful in : (" + String(time / 1000) + ") Sec\xFF\xFF\xFF");
-    //       SerialBT.flush();
-    //       Serial.flush();
-    //       SerialBT.println("Restarting in \xFF\xFF\xFF");
-    //       Serial.println("Restarting in \xFF\xFF\xFF");
-    //       SerialBT.flush();
-    //       Serial.flush();
-    //       for (int i = 5; i > 0; i--)
-    //       {
-    //         SerialBT.println(i);
-    //         Serial.println(i);
-    //         vTaskDelay(1000 / portTICK_PERIOD_MS);
-    //         SerialBT.flush();
-    //         Serial.flush();
-    //       }
-    //       ESP.restart();
-    //     }
-    //     else
-    //     {
-    //       SerialBT.print("\nFailed !\xFF\xFF\xFF");
-    //       SerialBT.println(Update.errorString());
-    //     }
-    //   }
-    //   else
-    //   {
-    //     sprintf(str, "PRGU=100\xFF\xFF\xFF");
-    //     SerialBT.println(str);
-    //     sprintf(str, "XrouteAlarm= Your Device Memory is %dMB and Dose Not Support Update !", flashSizeMB);
-    //     SendToAll(str);
-    //     SerialBT.print("\nFailed !\xFF\xFF\xFF");
-    //     SerialBT.println(Update.errorString());
-    //   }
-    // }
 
     else if (command.startsWith("TakeUiConfig="))
     {
