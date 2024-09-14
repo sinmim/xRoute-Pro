@@ -46,7 +46,7 @@
 // 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
 // String Version = "4.0.7"; 24V version
 // 2.0.8 adding save to file for state recovery after crashes
-String Version = "0.0.0";
+String Version = "0.1.1";
 //========Update
 #include "Update.h"
 //_#include "AESLib.h"
