@@ -67,15 +67,6 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
     {
         inputPtr = _b;
     }
-    else if (inputType == "CAR_BATTERY")
-    {
-    }
-    else if (inputType == "CAR_BATTERY")
-    {
-    }
-    else if (inputType == "SOLAR")
-    {
-    }
     else if (inputType == "CURRENT")
     {
         if (inputPort == 1)
@@ -102,7 +93,7 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
             inputPtr = _dwPrcnt;
         }
     }
-    else if (inputType == "TEMP_INT")
+    else if (inputType == "TEMP_IN")
     {
         inputPtr = _digitalTemp;
     }
@@ -116,25 +107,40 @@ Conditions::Conditions(String _inputType, int _inputPort, String _oprt, float _s
     }
     else if (inputType == "REL")
     {
-        // itll done in the do work
+        // its done in the doWork()
     }
     else if (inputType == "DIM")
     {
-        // itll done in the do work
-    }
-    else if (inputType == "ALTITUDE")
-    {
-        // itll done in the do work
+        // its done in the doWork()
     }
     else if (inputType == "GAS")
     {
         inputPtr = _a2;
     }
-    else if (inputType == "GYRO")
+    // else if (inputType == "CAR_BATTERY")
+    // {
+    // }
+    // else if (inputType == "CAR_BATTERY")
+    // {
+    // }
+    // else if (inputType == "SOLAR")
+    // {
+    // }
+    // else if (inputType == "ALTITUDE")
+    // {
+    //     // itll done in the do work
+    // }
+    // else if (inputType == "GYRO")
+    // {
+    // }
+    // else if (inputType == "POWER")
+    // {
+    // }
+    else
     {
-    }
-    else if (inputType == "POWER")
-    {
+        conditionType = "saedfwef"; // Setting nonsens here to prevent do work from processing
+        Serial.println("--------------->ERROR CONDITION : inputType needs to be written in condition initializer !!!! ");
+        return;
     }
 
     Serial.println("Condition[" + String(index) + "]: IF(" + inputType + String(inputPort) + String(oprt) + String(setpoint) + ")-->" + outputType + String(outputPort) + "=" + String(outputValue));

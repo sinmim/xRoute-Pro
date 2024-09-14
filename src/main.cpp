@@ -46,7 +46,7 @@
 // 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
 // String Version = "4.0.7"; 24V version
 // 2.0.8 adding save to file for state recovery after crashes
-String Version = "2.1.0";
+String Version = "0.1.0";
 //========Update
 #include "Update.h"
 //_#include "AESLib.h"
@@ -1211,13 +1211,38 @@ void takeUiConfigFileTask(void *pvParameters)
 class bleUpdate
 {
 private:
+  bool WdFlg = false;
+  bool timeoutFlg = false;
+  bool isUpdating = false;
   NimBLECharacteristic *pCharacteristic;
-  uint32_t updateSize;
-  uint32_t writenBytes;
+  uint32_t updateSize = 0;
+  uint32_t writenBytes = 0;
   uint32_t updateProg = 0;
   uint32_t lastUpdateProg = 0;
   uint32_t startTime = 0;
-  uint32_t interval;
+  uint32_t interval = 0;
+  TaskHandle_t taskHandle = NULL; // Handle for the task to be deleted
+
+  void watchDog()
+  {
+    while (1)
+    {
+      WdFlg = true;
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      if (WdFlg)
+      {
+        timeoutFlg = true;
+        Update.end();
+        vTaskDelete(taskHandle);
+      }
+    }
+  }
+
+  static void supervisorTask(void *parameters)
+  {
+    bleUpdate *updateObj = static_cast<bleUpdate *>(parameters);
+    updateObj->watchDog();
+  }
 
 public:
   bleUpdate(NimBLECharacteristic *_pCharacteristic, uint32_t _size)
@@ -1228,9 +1253,12 @@ public:
     Update.begin(_size);
     writenBytes = 0;
     startTime = millis();
+    xTaskCreate(supervisorTask, "Update supervisor", 3 * 1024, this, 1, &taskHandle);
   }
+
   int continueUpdate()
   {
+    WdFlg = false;
     std::string dataStr = pCharacteristic->getValue();
     uint8_t *data = (uint8_t *)dataStr.c_str();
     uint32_t len = dataStr.length();
@@ -1245,7 +1273,9 @@ public:
       now = millis();
       interval = now - last;
       last = now;
-      Serial.println("Byte:" + String(updateProg) + ":" + String(interval) + "ms");
+      String msg = "UpdatePrc=" + String(updateProg * 100 / updateSize);
+      Serial.println(msg);
+      myBle.justSend(msg);
       lastUpdateProg = updateProg;
     }
 
@@ -1254,28 +1284,37 @@ public:
       bool status = Update.end();
       if (status)
       {
-        Serial.println("Successfully updated in: " + String(millis() - startTime) + "ms");
+        String msg = "UpdateMsg=Updated Successfully";
+        Serial.println(msg);
+        myBle.justSend(msg);
         vTaskDelay(pdMS_TO_TICKS(2000));
         ESP.restart();
       }
       else
       {
-        Serial.println("Updtae Error");
+        String msg = "UpMsg=Updated Error!";
+        Serial.println(msg);
+        myBle.justSend(msg);
       }
     }
-
     return len;
+  }
+  bool isTimeOut()
+  {
+    return timeoutFlg;
   }
 };
 bleUpdate *myUpdate;
-
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
 
   if (myUpdate != nullptr)
   {
-    myUpdate->continueUpdate();
-    return;
+    if (!myUpdate->isTimeOut())
+    {
+      myUpdate->continueUpdate();
+      return;
+    }
   }
 
   static String accumulatedData; // Holds data across multiple BLE packets
@@ -1708,10 +1747,23 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       String response = "XrouteAlarm=accXValueOffset=" + String(accXValueOffset) + ",accYValueOffset=" + String(accYValueOffset) + "\n";
       myBle.sendString(response.c_str());
     }
-    else if (command.startsWith("GiveMeSysInfo"))
+    else if (command.startsWith("GiveMeSysInfo")) // its going to be deprecated
     {
       uint64_t chipid = ESP.getEfuseMac();
       String response = "MacAddress:" + String(chipid) + "," + GeneralLisence + ",Version:" + Version + "\n";
+      Serial.println(response.c_str());
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("GiveMeVersion"))
+    {
+      String response = "Version=" + Version + "\n";
+      Serial.println(response.c_str());
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("GiveMeChipId"))
+    {
+      uint64_t chipid = ESP.getEfuseMac();
+      String response = "ChipId=" + String(chipid) + "\n";
       Serial.println(response.c_str());
       myBle.sendString(response.c_str());
     }
@@ -1879,10 +1931,9 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     else if (command.startsWith("StartUpdate="))
     {
       MeasurmentTaskPause = true;
-      uint32_t binSize = command.substring(command.indexOf("=") + 1, command.indexOf("Bytes")).toInt();
+      uint32_t binSize = command.substring(command.indexOf("=") + 1, command.indexOf(",")).toInt();
       myUpdate = new bleUpdate(pCharacteristic, binSize);
     }
-
     else if (command.startsWith("TakeUiConfig="))
     {
       confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
@@ -2188,15 +2239,14 @@ void dimmerShortCircuitIntrupt()
   }
 }
 /*  new problems
-1- ~condition dosent work properly . may be the problem is vector . if i uncomment it conditionCount--; it will unwantedly --
-2- ble multi
-3- *initialize sending
-4- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data
-5- zamani ke mesurment run mishhe datahaye dg mesle klid bazi vaghta nemiyad moshkel ba yektike kardane dataha hal shod
-6- *initialize ferestadan
-7- neveshtane timer baraye condition
-8- neveshtane scadual condition
-9- baraye ghashangtar shodane code
+1- ble multi
+2- *initialize sending
+3- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data
+4- neveshtane scadual condition
+5- timeout vase update
+6- dimere rate ziyad drop beshe
+7- sharte larzeshe gyro baraye jologiri az dozdi
+
 */
 // 2411
 // sendCmdToExecute needs wait for already incomming tasks
