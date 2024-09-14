@@ -46,7 +46,7 @@
 // 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
 // String Version = "4.0.7"; 24V version
 // 2.0.8 adding save to file for state recovery after crashes
-String Version = "0.1.0";
+String Version = "0.0.0";
 //========Update
 #include "Update.h"
 //_#include "AESLib.h"
@@ -1207,7 +1207,6 @@ void takeUiConfigFileTask(void *pvParameters)
   }
   vTaskDelete(NULL);
 }
-
 class bleUpdate
 {
 private:
@@ -1233,6 +1232,7 @@ private:
       {
         timeoutFlg = true;
         Update.end();
+        MeasurmentTaskPause = false;
         vTaskDelete(taskHandle);
       }
     }
@@ -1307,7 +1307,6 @@ public:
 bleUpdate *myUpdate;
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
-
   if (myUpdate != nullptr)
   {
     if (!myUpdate->isTimeOut())
@@ -1316,13 +1315,12 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       return;
     }
   }
-
   static String accumulatedData; // Holds data across multiple BLE packets
   // Convert received data to String
   String receivedData(reinterpret_cast<char *>(pData), length);
   accumulatedData += receivedData;
-
   int endPos;
+
   while ((endPos = accumulatedData.indexOf('\n')) != -1)
   {
     String command = accumulatedData.substring(0, endPos); // Extract command
