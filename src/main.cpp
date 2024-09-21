@@ -46,7 +46,7 @@
 // 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
 // String Version = "4.0.7"; 24V version
 // 2.0.8 adding save to file for state recovery after crashes
-String Version = "0.1.1";
+String Version = "0.1.2";
 //========Update
 #include "Update.h"
 //_#include "AESLib.h"
@@ -1341,6 +1341,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
         setRelay(RELAYS.relPos, v / 10);
         myBle.sendString("sw" + String(index) + "=OFF\n");
       }
+      saveStatesToFile();
     }
     else if (command.startsWith("GiveMeInit"))
     {
@@ -2244,6 +2245,8 @@ void dimmerShortCircuitIntrupt()
 5- timeout vase update
 6- dimere rate ziyad drop beshe
 7- sharte larzeshe gyro baraye jologiri az dozdi
+8- ba release dimmer ali behem dastore saveStatesToFile(); ro bedahad / ali mige rooye on crash age betooni bezari aliye
+
 
 */
 // 2411
