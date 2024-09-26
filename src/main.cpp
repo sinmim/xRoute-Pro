@@ -2245,8 +2245,8 @@ void dimmerShortCircuitIntrupt()
 5- timeout vase update
 6- dimere rate ziyad drop beshe
 7- sharte larzeshe gyro baraye jologiri az dozdi
-8- ba release dimmer ali behem dastore saveStatesToFile(); ro bedahad / ali mige rooye on crash age betooni bezari aliye
-
+8- ba release dimmer ali behem dastore saveStatesToFile(); ro bedahad / ali mige rooye on crash age betooni bezari aliye / behatresh ine ke ba timer befahmi ke dimer dige change nemishe va oon moghe savestate koni
+9- 
 
 */
 // 2411
