@@ -297,3 +297,9 @@ void MyBle::onResult(NimBLEAdvertisedDevice *advertisedDevice)
         NimBLEDevice::getScan()->stop();
     }
 }
+void MyBle::deletAllBoundedDevices()
+{
+    Serial.println("Number of Bounded devices :" + String(NimBLEDevice::getNumBonds()));
+    NimBLEDevice::deleteAllBonds();
+    Serial.println("Number of Bounded devices :" + String(NimBLEDevice::getNumBonds()));
+}

@@ -872,7 +872,6 @@ void DimerTask(void *parameters)
           DimValChanged = false;
           if (!firstRun)
           {
-            Serial.println("Dimmer:saveStatesToFile");
             saveStatesToFile();
           }
           else
@@ -1982,6 +1981,11 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
         xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
       break; // breake for preventing forthure processing the accumulated string
     }
+    else if (command.startsWith("DeletAllBoundedBleDevices"))
+    {
+      myBle.deletAllBoundedDevices();
+    }
+
     else
     {
       String errorMessage = "Errorparsing:" + String(command.c_str());
@@ -2262,6 +2266,7 @@ void dimmerShortCircuitIntrupt()
 }
 /*  new problems
 1- ble multi
+1b- ble password changable
 2- *initialize sending
 3- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data
 4- neveshtane scadual condition

@@ -1,5 +1,7 @@
 #ifndef MY_NIM_BLE_H
 #define MY_NIM_BLE_H
+// for nimble config
+// https://h2zero.github.io/esp-nimble-cpp/nimconfig_8h.html
 
 #include <Arduino.h>
 #include <NimBLEDevice.h>
@@ -38,6 +40,8 @@ public:
   ~MyBle();
   void begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb);
   void beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> cb);
+  void deletAllBoundedDevices();
+  
   bool connectToServer(NimBLEAddress pAddress);
   bool connectToMac(String macAddress);
   void sendString(String str);
@@ -79,7 +83,6 @@ public:
     {
       buffer[i] = 0;
     }
-
   }
 
   // MyClientCallback class
@@ -99,14 +102,34 @@ public:
   // MyServerCallbacks class
   class MyServerCallbacks : public NimBLEServerCallbacks
   {
+    int connectionCount = 0;
+
     void onConnect(NimBLEServer *pServer) override
     {
-      connectedFlg = true;
+      connectionCount++;
+      if (connectionCount > 0)
+      {
+        connectedFlg = true;
+      }
+      Serial.println("onConnect :" + String(connectionCount));
+      if (connectionCount < 4)
+      {
+        BLEDevice::startAdvertising();
+      }
+      else
+      {
+        Serial.println("Advertising Stopped!");
+      }
     }
 
     void onDisconnect(NimBLEServer *pServer) override
     {
-      connectedFlg = false;
+      connectionCount--;
+      if (connectionCount == 0)
+      {
+        connectedFlg = false;
+      }
+      Serial.println("onDisconnect :" + String(connectionCount));
     }
   };
 
