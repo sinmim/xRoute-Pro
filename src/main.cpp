@@ -848,6 +848,7 @@ void BLE_TASK(void *parameters)
 }
 void DimerTask(void *parameters)
 {
+  bool firstRun = true;
   vTaskDelay(1000);
   for (;;)
   {
@@ -865,7 +866,21 @@ void DimerTask(void *parameters)
           sameVal++;
       }
       if (sameVal == 7)
-        DimValChanged = false;
+      {
+        if (DimValChanged)
+        {
+          DimValChanged = false;
+          if (!firstRun)
+          {
+            Serial.println("Dimmer:saveStatesToFile");
+            saveStatesToFile();
+          }
+          else
+          {
+            firstRun = false;
+          }
+        }
+      }
 
       vTaskDelay(10 / portTICK_RATE_MS);
     }
@@ -1196,8 +1211,16 @@ void takeUiConfigFileTask(void *pvParameters)
     if (str.indexOf(";") != -1)
     {
       MeasurmentTaskPause = false; // change to mutex in the future
-      SaveStringToFile(confAndCondStrBuffer, ConfigFile);
-      myBle.sendString("UI Config File Received Successfully");
+      bool status = SaveStringToFile(confAndCondStrBuffer, ConfigFile);
+      if (status == true)
+      {
+        myBle.sendString("UiSevadSuccessful");
+      }
+      else
+      {
+        myBle.sendString("UiSevadError");
+      }
+
       confAndCondStrBuffer.clear();
       // send it to lcd in the future
       myBle.stopDirectRead();
@@ -2246,7 +2269,7 @@ void dimmerShortCircuitIntrupt()
 6- dimere rate ziyad drop beshe
 7- sharte larzeshe gyro baraye jologiri az dozdi
 8- ba release dimmer ali behem dastore saveStatesToFile(); ro bedahad / ali mige rooye on crash age betooni bezari aliye / behatresh ine ke ba timer befahmi ke dimer dige change nemishe va oon moghe savestate koni
-9- 
+9-
 
 */
 // 2411
