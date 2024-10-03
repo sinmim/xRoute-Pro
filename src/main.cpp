@@ -46,7 +46,7 @@
 // 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
 // String Version = "4.0.7"; 24V version
 // 2.0.8 adding save to file for state recovery after crashes
-String Version = "0.1.2";
+String Version = "0.1.3";
 //========Update
 #include "Update.h"
 //_#include "AESLib.h"
@@ -791,11 +791,11 @@ void MeasurmentTask(void *parameters)
     myBle.sendString(str);
     sprintf(str, "BATPR1=%d\n", (int)b);
     data += str;
-    sprintf(str, "AMP1=%d\n", (int)a0);
+    sprintf(str, "AMPINT1=%d\n", (int)a0);
     data += str;
-    sprintf(str, "AMP2=%d\n", (int)a1);
+    sprintf(str, "AMPEXT1=%d\n", (int)a1);
     data += str;
-    sprintf(str, "AMP3=%d\n", (int)a2);
+    sprintf(str, "AMPEXT2=%d\n", (int)a2);
     data += str;
     sprintf(str, "WAT1=%d\n", (int)w);
     data += str;

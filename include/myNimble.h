@@ -9,7 +9,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
-
 class MyBle
 {
 private:
@@ -40,8 +39,12 @@ public:
   ~MyBle();
   void begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb);
   void beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)> cb);
-  void deletAllBoundedDevices();
-  
+  void deletAllBoundedDevices()
+  {
+    Serial.println("Number of Bounded devices :" + String(NimBLEDevice::getNumBonds()));
+    NimBLEDevice::deleteAllBonds();
+    Serial.println("Number of Bounded devices :" + String(NimBLEDevice::getNumBonds()));
+  }
   bool connectToServer(NimBLEAddress pAddress);
   bool connectToMac(String macAddress);
   void sendString(String str);
@@ -103,7 +106,6 @@ public:
   class MyServerCallbacks : public NimBLEServerCallbacks
   {
     int connectionCount = 0;
-
     void onConnect(NimBLEServer *pServer) override
     {
       connectionCount++;
@@ -120,6 +122,36 @@ public:
       {
         Serial.println("Advertising Stopped!");
       }
+      //-------managing devices
+      // //---
+      // int numBonds = NimBLEDevice::getNumBonds();
+      // Serial.printf("============LIST============");
+      // Serial.printf("Number of bonded devices: %d\n", numBonds);
+      // for (int i = 0; i < numBonds; i++)
+      // {
+      //   NimBLEAddress bondedDevice = NimBLEDevice::getBondedAddress(i);
+      //   Serial.printf("Bonded Device %d: %s\n", i + 1, bondedDevice.toString().c_str());
+      // }
+      // Serial.println("============LIST============");
+      // //---
+      int numBonds = NimBLEDevice::getNumBonds();
+      int maxBonds = 5; // Maximum number of bonded devices allowed + 1 : 5=>4 devices
+      if (numBonds >= maxBonds)
+      {
+        NimBLEAddress oldestBond = NimBLEDevice::getBondedAddress(0);
+        NimBLEDevice::deleteBond(oldestBond);
+        Serial.printf("Deleted bond for the oldest device: %s\n", oldestBond.toString().c_str());
+      }
+      // //---
+      // numBonds = NimBLEDevice::getNumBonds();
+      // Serial.println("============LIST============");
+      // Serial.printf("Number of bonded devices: %d\n", numBonds);
+      // for (int i = 0; i < numBonds; i++)
+      // {
+      //   NimBLEAddress bondedDevice = NimBLEDevice::getBondedAddress(i);
+      //   Serial.printf("Bonded Device %d: %s\n", i + 1, bondedDevice.toString().c_str());
+      // }
+      // Serial.println("============LIST============");
     }
 
     void onDisconnect(NimBLEServer *pServer) override
