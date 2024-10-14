@@ -1981,11 +1981,6 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
         xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
       break; // breake for preventing forthure processing the accumulated string
     }
-    else if (command.startsWith("DeletAllBoundedBleDevices"))
-    {
-      myBle.deletAllBoundedDevices();
-    }
-
     else
     {
       String errorMessage = "Errorparsing:" + String(command.c_str());
