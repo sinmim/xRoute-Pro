@@ -1381,7 +1381,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
       }
       for (int i = 1; i <= 5; i++)
       {
-        float val = (dimTmp[i] / (32768 * dimLimit[i])) * 255;
+        float val = (dimTmp[i - 1] / (32768 * dimLimit[i - 1])) * 255;
         str += "DIMER" + String(i) + "=" + String((int)val) + "\n";
       }
       myBle.sendString(str);
@@ -2265,7 +2265,7 @@ void dimmerShortCircuitIntrupt()
   }
 }
 /*  new problems
-1- ble multi
+1- *ble multi
 1b- ble password changable
 2- *initialize sending
 3- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data
