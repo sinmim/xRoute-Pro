@@ -657,7 +657,7 @@ int dimShortFlg = false;
 int dimShortNum = 0;
 //=======================TEST
 #include <myNimBle.h>
-MyBle myBle(false); // false indicates server mode
+MyBle myBle(false); // i need to use this object in other files
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
 void ConditionsTask(void *parameters)
@@ -678,6 +678,7 @@ void ConditionsTask(void *parameters)
         Serial.println("ConditionsTask: Vector modified, skipping invalid index.");
       }
     }
+    //Serial.printf("Stack high watermark: %u bytes\n", uxTaskGetStackHighWaterMark(NULL));
     // Delay before the next iteration
     vTaskDelay(100);
   }
@@ -974,9 +975,9 @@ void OVR_CRNT_PRTCT_TASK(void *parameters)
     if (dimShortFlg)
     {
       ledcWrite(channelTable[dimShortNum], 0);
-      sprintf(str, "DIMER%d.val=%d\xFF\xFF\xFF", dimShortNum + 1, 0);
+      sprintf(str, "DIMER%d=0\n", dimShortNum + 1);
       sendToAll(str);
-      sprintf(str, "XrouteAlarm= PROTECTION! Over current at DIMMER : %d\xFF\xFF\xFF", dimShortNum + 1);
+      sprintf(str, "XrouteAlarm= PROTECTION! Over current at DIMMER : %d\n", dimShortNum + 1);
       sendToAll(str);
       vTaskDelay(1000);
       dimShortFlg = false;
@@ -1397,8 +1398,8 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     else if (command.startsWith("Motor1=Down"))
     {
       motorWay = MOTOR_DOWN;
-      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[8 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
       setRelay(RELAYS.relPos, v / 10);
       myBle.sendString("Motor1=Down\n");
     }
@@ -2118,7 +2119,7 @@ void setup()
   xTaskCreate(
       ConditionsTask,
       "ConditionsTask",
-      3 * 1024,
+      5 * 1024,
       NULL,
       3,
       NULL);

@@ -4,14 +4,14 @@
 #include <SHA256.h>
 #include "otherFunctions.h"
 #include "relay.h"
-//BLE//#include "BLESerial.h"
+// BLE//#include "BLESerial.h"
 #include "BluetoothSerial.h"
 #include "main.h"
 #include "stdio.h"
 #include <SPIFFS.h>
 #include <FS.h>
 
-//extern BluetoothSerial SerialBT;
+// extern BluetoothSerial SerialBT;
 extern relConfig RELAYS;
 extern float dimTmp[];
 extern float dimLimit[];
@@ -69,11 +69,12 @@ void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit)
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
+#include "myNimBle.h"
+extern MyBle myBle;
+
 void sendToAll(char *str)
 {
-  //BLE//BLEsend(str);
-  //if (SerialBT.connected())
-  //  SerialBT.println(str);
+  myBle.sendString(str);
 }
 void sendToAll(const char *str)
 {
@@ -169,7 +170,7 @@ bool SaveStringToFile(String str, String path)
 }
 String readStringFromFile(String path)
 {
-  //Serial.println("readStringFromFile:" + path);
+  // Serial.println("readStringFromFile:" + path);
   File file = SPIFFS.open(path, FILE_READ);
   if (!file)
   {
