@@ -660,6 +660,7 @@ int dimShortNum = 0;
 MyBle myBle(false); // i need to use this object in other files
 void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
+TaskHandle_t MeasurmentTaskHandle;
 void ConditionsTask(void *parameters)
 {
   vTaskDelay(pdMS_TO_TICKS(6000));
@@ -678,8 +679,8 @@ void ConditionsTask(void *parameters)
         Serial.println("ConditionsTask: Vector modified, skipping invalid index.");
       }
     }
-    //Serial.printf("Stack high watermark: %u bytes\n", uxTaskGetStackHighWaterMark(NULL));
-    // Delay before the next iteration
+    // Serial.printf("Stack high watermark: %u bytes\n", uxTaskGetStackHighWaterMark(NULL));
+    //  Delay before the next iteration
     vTaskDelay(100);
   }
 }
@@ -776,20 +777,17 @@ void MeasurmentTask(void *parameters)
     cwPrcnt = (clnWtr - clnWtrMin) / (clnWtrMax - clnWtrMin) * 1000;
     dwPrcnt = (drtWtr - drtWtrMin) / (drtWtrMax - drtWtrMin) * 1000;
     gwPrcnt = (gryWtr - gryWtrMin) / (gryWtrMax - gryWtrMin) * 1000;
-
     cwPrcnt = constrain(cwPrcnt, 0, 1820);
     dwPrcnt = constrain(dwPrcnt, 0, 1820);
     gwPrcnt = constrain(gwPrcnt, 0, 1820);
-
     pt100mv = pt100 * PT_mvCal;
     // sprintf(str, "SOLVOL1=%d\n", (int)v);
-    // myBle.sendString(str);
+    // data += str;
     // sprintf(str, "CARVOL1=%d\n", (int)v);
-    // myBle.sendString(str);
+    // data += str;
     String data = "";
     sprintf(str, "BATVOL1=%d\n", (int)v);
     data += str;
-    myBle.sendString(str);
     sprintf(str, "BATPR1=%d\n", (int)b);
     data += str;
     sprintf(str, "AMPINT1=%d\n", (int)a0);
@@ -814,38 +812,30 @@ void MeasurmentTask(void *parameters)
     data += str;
     sprintf(str, "BATHUR=%d\n", (int)battHourLeft / 10);
     data += str;
-    // sprintf(str, "GAZ1=%d\n", (int)a1);
-    // myBle.sendString(str);
+    sprintf(str, "GAZ1=%d\n", (int)a1);
+    data += str;
     myBle.sendString(data);
+    // myBle.justSend(data);
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
-void sendUiConfig()
+TaskHandle_t sendUiConfigTaskHandle;
+void sendUiConfigTask(void *parameters)
 {
-  MeasurmentTaskPause = true; // preventing sending other string
-  String str = "ConfigFile=" + readStringFromFile(ConfigFile);
-  Serial.println("inside:" + str);
+  String str = "ConfigFile=\n" + readStringFromFile(ConfigFile) + "\nEND\n";
+  vTaskSuspend(MeasurmentTaskHandle);
   myBle.sendLongString(str);
-  MeasurmentTaskPause = false;
+  vTaskResume(MeasurmentTaskHandle);
+  vTaskDelete(NULL);
 }
-void sendConditions()
+TaskHandle_t sendConditionsTaskHandle;
+void sendConditionsTask(void *parameters)
 {
-  MeasurmentTaskPause = true; // preventing sending other string
-  String str = "ConditionsFile=" + readStringFromFile(CondFile);
-  Serial.println("inside:" + str);
+  vTaskSuspend(MeasurmentTaskHandle);
+  String str = "ConditionsFile=\n" + readStringFromFile(CondFile) + "\nEND\n";
   myBle.sendLongString(str);
-  MeasurmentTaskPause = false;
-}
-void BLE_TASK(void *parameters)
-{
-  for (;;)
-  {
-    if (UpdatingFlg)
-      vTaskDelete(NULL);
-
-    // BLE//BLEloop();
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-  }
+  vTaskResume(MeasurmentTaskHandle);
+  vTaskDelete(NULL);
 }
 void DimerTask(void *parameters)
 {
@@ -1967,11 +1957,17 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     }
     else if (command.startsWith("GiveMeUiConfigFile"))
     {
-      sendUiConfig();
+      if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
+      {
+        xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 4, NULL, 2, &sendUiConfigTaskHandle);
+      }
     }
     else if (command.startsWith("GiveMeConditionsFile"))
     {
-      sendConditions();
+      if (eTaskGetState(&sendConditionsTaskHandle) != eRunning)
+      {
+        xTaskCreate(sendConditionsTask, "sendConditionsTask", 1024 * 4, NULL, 2, &sendConditionsTaskHandle);
+      }
     }
     else if (command.startsWith("TakeConditions="))
     {
@@ -2055,25 +2051,17 @@ void setup()
   // giveMeMacAdress();
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
-
   myBle.beginServer(onDataReceived);
 
 #define TasksEnabled
 #ifdef TasksEnabled
-  xTaskCreate(
-      BLE_TASK,
-      "BLE_TASK",
-      3 * 1024, // stack size
-      NULL,     // task argument
-      1,        // task priority
-      NULL);
   xTaskCreate(
       MeasurmentTask,
       "MeasurmentTask",
       4 * 1024, // stack size
       NULL,     // task argument
       2,        // task priority
-      NULL);
+      &MeasurmentTaskHandle);
   xTaskCreate(
       DimerTask,
       "DimerTask",

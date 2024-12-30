@@ -164,27 +164,50 @@ bool MyBle::isSendQueueBusy()
 
 void MyBle::sendLongString(String str)
 {
-#define HeaderSize 4 // bytes
-
-    const int CHUNKSIZE = NimBLEDevice::getMTU() - HeaderSize; // Define the chunk size
+    // #define HeaderSize 4 // bytes
+    //   const int CHUNKSIZE = NimBLEDevice::getMTU() - HeaderSize; // Define the chunk size
+    const int CHUNKSIZE = 250; // Define the chunk size
+    while (sendQueue.size() > 0)
+    {
+        vTaskDelay(pdTICKS_TO_MS(2));        
+    }
     while (str.length() > 0)
     {
-        // Take a chunk from the string
         String strChunk = str.substring(0, CHUNKSIZE);
-
-        // Remove the chunk from the original string
         str = str.substring(CHUNKSIZE);
-
-        // Wait until the queue is not busy
-        while (isSendQueueBusy())
-        {
-            vTaskDelay(pdMS_TO_TICKS(2));
-        }
-
-        // Send the chunk
-        sendString(strChunk);
+        Serial.println(strChunk);
+        justSend(strChunk);
+        // justSend(strChunk);
+        // vTaskDelay(pdMS_TO_TICKS(100));
+        // Serial.println("A:"+strChunk);
+        // Saman : i checked for this and it actually do the process til the end
     }
 }
+
+// void MyBle::sendLongString(String str)
+// {
+// #define HeaderSize 4 // bytes
+
+//     const int CHUNKSIZE = NimBLEDevice::getMTU() - HeaderSize; // Define the chunk size
+
+//     while (str.length() > 0)
+//     {
+//         // Take a chunk from the string
+//         String strChunk = str.substring(0, CHUNKSIZE);
+
+//         // Remove the chunk from the original string
+//         str = str.substring(CHUNKSIZE);
+
+//         // Wait until the queue is not busy
+//         while (isSendQueueBusy())
+//         {
+//             vTaskDelay(pdMS_TO_TICKS(2));
+//         }
+
+//         // Send the chunk
+//         sendString(strChunk);
+//     }
+// }
 
 /**
  * @brief In NimBLE for ESP32, the default Maximum Transmission Unit (MTU) size
