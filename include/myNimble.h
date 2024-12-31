@@ -79,7 +79,6 @@ public:
     {
       buffer[i] = 0;
     }
-
   }
 
   // MyClientCallback class
@@ -99,14 +98,40 @@ public:
   // MyServerCallbacks class
   class MyServerCallbacks : public NimBLEServerCallbacks
   {
+    int count = 0;
+
     void onConnect(NimBLEServer *pServer) override
     {
-      connectedFlg = true;
+      count = std::min(std::max(count + 1, 0), CONFIG_BT_NIMBLE_MAX_CONNECTIONS);
+
+      // Start advertising if more connections are allowed
+      if (count < CONFIG_BT_NIMBLE_MAX_CONNECTIONS)
+      {
+        NimBLEDevice::startAdvertising();
+      }
+
+      // Update connection flag
+      connectedFlg = (count > 0);
+
+      // Print debug info
+      Serial.printf("Connected devices: %d\n", count);
     }
 
     void onDisconnect(NimBLEServer *pServer) override
     {
-      connectedFlg = false;
+      count = std::min(std::max(count - 1, 0), CONFIG_BT_NIMBLE_MAX_CONNECTIONS);
+
+      // Update connection flag
+      connectedFlg = (count > 0);
+
+      // Restart advertising if less than max connections
+      if (count < CONFIG_BT_NIMBLE_MAX_CONNECTIONS)
+      {
+        NimBLEDevice::startAdvertising();
+      }
+
+      // Print debug info
+      Serial.printf("Connected devices: %d\n", count);
     }
   };
 
