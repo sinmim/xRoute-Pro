@@ -1,3 +1,6 @@
+//
+#define SEN_DEBUG
+#define DIM_DEBUG
 //====================================================libraries
 #define __________________________________________INCLUDES
 #ifdef __________________________________________INCLUDES
@@ -46,7 +49,7 @@
 // 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
 // String Version = "4.0.7"; 24V version
 // 2.0.8 adding save to file for state recovery after crashes
-String Version = "0.1.3";
+String Version = "0.1.4";
 //========Update
 #include "Update.h"
 //_#include "AESLib.h"
@@ -781,11 +784,56 @@ void MeasurmentTask(void *parameters)
     dwPrcnt = constrain(dwPrcnt, 0, 1820);
     gwPrcnt = constrain(gwPrcnt, 0, 1820);
     pt100mv = pt100 * PT_mvCal;
+    String data = "";
+
+#ifdef SEN_DEBUG
+    static int dummyVal = 0;
+    if (dummyVal++ > 100)
+    {
+      dummyVal = 0;
+    }
+
+    sprintf(str, "BATVOL1=%d\n", (int)dummyVal);
+    data += str;
+    sprintf(str, "BATPR1=%d\n", (int)dummyVal);
+    data += str;
+    sprintf(str, "AMPINT1=%d\n", (int)dummyVal);
+    data += str;
+    sprintf(str, "AMPEXT1=%d\n", (int)dummyVal);
+    data += str;
+    sprintf(str, "AMPEXT2=%d\n", (int)dummyVal);
+    data += str;
+    sprintf(str, "WAT1=%d\n", (int)dummyVal);
+    data += str;
+    sprintf(str, "FLT1=%d\n", ((int)dummyVal) / 10 * 10);
+    data += str;
+    sprintf(str, "FLT2=%d\n", ((int)dummyVal) / 10 * 10);
+    data += str;
+    sprintf(str, "TMPA1=%d\n", (int)(dummyVal)); // PT100
+    data += str;
+    sprintf(str, "TMPD1=%d\n", ((int)(dummyVal)) / 10);
+    data += str;
+    sprintf(str, "HUMD1=%d\n", (int)dummyVal);
+    data += str;
+    sprintf(str, "ALT1=%d\n", (int)dummyVal);
+    data += str;
+    sprintf(str, "BATHUR=%d\n", (int)dummyVal / 10);
+    data += str;
+    sprintf(str, "GAZ1=%d\n", (int)dummyVal);
+    data += str;
+
+#ifdef DIM_DEBUG
+    char str[16];
+    sprintf(str, "DIM4=%d\n", (int)dummyVal);
+    sendCmdToExecute(str);
+#endif
+
+#else
+
     // sprintf(str, "SOLVOL1=%d\n", (int)v);
     // data += str;
     // sprintf(str, "CARVOL1=%d\n", (int)v);
     // data += str;
-    String data = "";
     sprintf(str, "BATVOL1=%d\n", (int)v);
     data += str;
     sprintf(str, "BATPR1=%d\n", (int)b);
@@ -814,6 +862,7 @@ void MeasurmentTask(void *parameters)
     data += str;
     sprintf(str, "GAZ1=%d\n", (int)a1);
     data += str;
+#endif
     myBle.sendString(data);
     // myBle.justSend(data);
     vTaskDelay(200 / portTICK_PERIOD_MS);
