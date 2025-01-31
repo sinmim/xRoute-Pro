@@ -49,7 +49,7 @@
 // 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
 // String Version = "4.0.7"; 24V version
 // 2.0.8 adding save to file for state recovery after crashes
-String Version = "0.1.4";
+String Version = "0.1.5";
 //========Update
 #include "Update.h"
 //_#include "AESLib.h"
@@ -824,7 +824,7 @@ void MeasurmentTask(void *parameters)
 
 #ifdef DIM_DEBUG
     char str[16];
-    sprintf(str, "DIM4=%d\n", (int)dummyVal);
+    sprintf(str, "DIMER4=%d\n", (int)dummyVal);
     sendCmdToExecute(str);
 #endif
 
@@ -1225,6 +1225,7 @@ void takeConditionFileTask(void *pvParameters)
       Serial.println("Checking file....");
       if (jsonCon.isJsonFileOk(CondFile))
       {
+        myBle.sendString("ConditionSevadSuccessful\n");
         Serial.println("Condition File is ok");
         Serial.println("deleting old conditions vector");
         cndtions.clear(); // it will automatically call all the destroyers
@@ -1233,6 +1234,10 @@ void takeConditionFileTask(void *pvParameters)
         Serial.println("jsonCon.readJsonConditionsFromFile(CondFile)");
         jsonCon.readJsonConditionsFromFile(CondFile);
         break;
+      }
+      else
+      {
+        myBle.sendString("ConditionSevadError\n");
       }
       break;
     }
@@ -1253,11 +1258,11 @@ void takeUiConfigFileTask(void *pvParameters)
       bool status = SaveStringToFile(confAndCondStrBuffer, ConfigFile);
       if (status == true)
       {
-        myBle.sendString("UiSevadSuccessful");
+        myBle.sendString("UiSevadSuccessful\n");
       }
       else
       {
-        myBle.sendString("UiSevadError");
+        myBle.sendString("UiSevadError\n");
       }
 
       confAndCondStrBuffer.clear();
@@ -1915,7 +1920,17 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
     else if (command.startsWith("DEF="))
     {
       String defType = command.substring(4);
-      if (defType == "VOLTAGE")
+      if (defType == "UiConfig")
+      {
+        SaveStringToFile(String(defaultConfig), ConfigFile);
+      }
+      else if (defType == "Conditions")
+      {
+        SaveStringToFile(String(defaultCondition), CondFile);
+        jsonCon.readJsonConditionsFromFile(CondFile);
+      }
+
+      else if (defType == "VOLTAGE")
       {
         EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCoDeflt);
         EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffsetDeflt);
@@ -2027,6 +2042,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_
         xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
       break; // breake for preventing forthure processing the accumulated string
     }
+
     else
     {
       String errorMessage = "Errorparsing:" + String(command.c_str());
