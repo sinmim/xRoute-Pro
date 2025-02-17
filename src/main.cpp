@@ -604,12 +604,12 @@ void I2C_SENSORS_TASK(void *parameters)
 
     if (cntr % GYRO_INTERVAL == 0)
     {
-      if (mainGyro == ADD_INTERNAL_GYRO && GyroLicense->isActive() == true)
+      if (mainGyro == ADD_INTERNAL_GYRO) //&& GyroLicense->isActive() == true) must be checked i disabled it for ali for now
       {
         float tempx, tempy;
         readaxels(ADD_INTERNAL_GYRO, &tempx, &tempy);
-        accXValue = LOW_PASS_FILTER(tempx, accXValue, 0.985);
-        accYValue = LOW_PASS_FILTER(tempy, accYValue, 0.985);
+        accXValue = LOW_PASS_FILTER(tempx, accXValue, sigmoid(50 * fabs(accXValue - (mpuAcc.acceleration.x / 10.0F)), 0.9999, 10, 2));
+        accYValue = LOW_PASS_FILTER(tempy, accYValue, sigmoid(50 * fabs(accYValue - (mpuAcc.acceleration.y / 10.0F)), 0.9999, 10, 2));
 
         if (GyroOffsetingFlg)
         {
@@ -628,6 +628,7 @@ void I2C_SENSORS_TASK(void *parameters)
       {
         float tempx, tempy;
         readaxels(ADD_MPU6050, &tempx, &tempy);
+
         accXValue = LOW_PASS_FILTER(mpuAcc.acceleration.x / 10.0F, accXValue, 0.98);
         accYValue = LOW_PASS_FILTER(mpuAcc.acceleration.y / 10.0F, accYValue, 0.98);
       }
@@ -785,6 +786,28 @@ void MeasurmentTask(void *parameters)
     gwPrcnt = constrain(gwPrcnt, 0, 1820);
     pt100mv = pt100 * PT_mvCal;
     String data = "";
+
+    //=====Gyro calculation
+    if (true) //(GyroLicense->isActive()) // it must be checked later , i disabled lisence for ali cheching
+    {
+      float ofsetlesX = (accXValue - accXValueOffset) * revX;
+      float ofsetlesY = (accYValue - accYValueOffset) * revY;
+      alpha = atan(ofsetlesY / ofsetlesX);
+      if (ofsetlesX < 0 && ofsetlesY > 0)
+        alpha += PI;
+      if (ofsetlesX < 0 && ofsetlesY < 0)
+        alpha += PI;
+      if (ofsetlesX > 0 && ofsetlesY < 0)
+        alpha += (2 * PI);
+      len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY);
+      if (len > 1)
+        len = 1;
+      sprintf(str, "Gyro=%1.3f,%1.3f\n", len * cos(alpha), len * sin(alpha));
+      //Serial.println(String(">X:" + String(len * cos(alpha), 3) + ",Y:" + String(len * sin(alpha), 3)));
+      data += str;
+    }
+
+    //=====
 
 #ifdef SEN_DEBUG
     static int dummyVal = 0;
@@ -1248,8 +1271,11 @@ void takeConditionFileTask(void *pvParameters)
 TaskHandle_t takeUiConfigFileTaskHandle;
 void takeUiConfigFileTask(void *pvParameters)
 {
+  // time out should be added
+
   while (true)
   {
+
     String str = myBle.directRead(); // Example placeholder for BLE read function
     confAndCondStrBuffer += str;
     if (str.indexOf(";") != -1)
