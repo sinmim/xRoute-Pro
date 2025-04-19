@@ -280,6 +280,7 @@ void MyBle::sendString(String str)
 void MyBle::sendData(const char *data) { sendString(String(data)); }
 
 // Send Long String (Client or Server)
+/*
 void MyBle::sendLongString(String str)
 {
     int maxPayload = 20;
@@ -303,6 +304,29 @@ void MyBle::sendLongString(String str)
         if (isClientMode) vTaskDelay(pdMS_TO_TICKS(20)); // Delay between client chunks
     }
     Serial.println("Finished sending long string.");
+}
+*/
+
+void MyBle::sendLongString(String str)
+{
+    // #define HeaderSize 4 // bytes
+    //   const int CHUNKSIZE = NimBLEDevice::getMTU() - HeaderSize; // Define the chunk size
+    const int CHUNKSIZE = 250; // Define the chunk size
+    while (sendQueue.size() > 0)
+    {
+        vTaskDelay(pdTICKS_TO_MS(2));        
+    }
+    while (str.length() > 0)
+    {
+        String strChunk = str.substring(0, CHUNKSIZE);
+        str = str.substring(CHUNKSIZE);
+        Serial.println(strChunk);
+        sendString(strChunk);
+        // justSend(strChunk);
+        // vTaskDelay(pdMS_TO_TICKS(100));
+        // Serial.println("A:"+strChunk);
+        // Saman : i checked for this and it actually do the process til the end
+    }
 }
 
 // Disconnect (Client or Server)
