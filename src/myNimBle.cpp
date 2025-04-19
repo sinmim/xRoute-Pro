@@ -73,7 +73,7 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             char uniqueID[7];
             snprintf(uniqueID, sizeof(uniqueID), "%02X%02X%02X", mac[3], mac[4], mac[5]);
 
-            std::string deviceName = "xRoute";
+            std::string deviceName = "xRoutePro";
             NimBLEDevice::init(deviceName);
             Serial.printf("BLE Server Initializing with name: %s\n", deviceName.c_str());
 
@@ -121,9 +121,10 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
             if (pAdvertising) {
                 // Safe advertising intervals
-                pAdvertising->setMinInterval(0x20); // 32 * 0.625ms = 20ms
-                pAdvertising->setMaxInterval(0x40); // 64 * 0.625ms = 40ms
-
+                // pAdvertising->setMinInterval(0x20); // 32 * 0.625ms = 20ms
+                // pAdvertising->setMaxInterval(0x40); // 64 * 0.625ms = 40ms
+                pAdvertising->setMinInterval(160); // 100 ms
+                pAdvertising->setMaxInterval(320); // 200 ms
                 NimBLEAdvertisementData advData;
                 //advData.setFlags(ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT);
                 advData.setFlags((0x01 << 1)|(0x01 << 2));

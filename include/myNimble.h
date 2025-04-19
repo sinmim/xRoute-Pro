@@ -104,15 +104,15 @@ private:
                     connInfo.isAuthenticated() ? "Yes" : "No");
 
       // Block specific MAC address logic
-      static NimBLEAddress blockedAddr("d0:9c:7a:cc:51:c9", BLE_ADDR_PUBLIC);
-      if (connInfo.getAddress().equals(blockedAddr))
-      {
-        Serial.printf("Blocked device %s connected, disconnecting...\n", connInfo.getAddress().toString().c_str());
-        if (pMyBleInstance && pMyBleInstance->pServer)
-        {
-          pMyBleInstance->pServer->disconnect(connInfo.getConnHandle());
-        }
-      }
+      // static NimBLEAddress blockedAddr("d0:9c:7a:cc:51:c9", BLE_ADDR_PUBLIC);
+      // if (connInfo.getAddress().equals(blockedAddr))
+      // {
+      //   Serial.printf("Blocked device %s connected, disconnecting...\n", connInfo.getAddress().toString().c_str());
+      //   if (pMyBleInstance && pMyBleInstance->pServer)
+      //   {
+      //     pMyBleInstance->pServer->disconnect(connInfo.getConnHandle());
+      //   }
+      // }
     }
 
     uint32_t onPassKeyRequest() /*override*/

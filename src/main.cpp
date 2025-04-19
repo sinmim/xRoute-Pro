@@ -1,6 +1,3 @@
-//
-#define SEN_DEBUG
-#define DIM_DEBUG
 //====================================================libraries
 #define __________________________________________INCLUDES
 #ifdef __________________________________________INCLUDES
@@ -179,7 +176,6 @@ extern relConfig RELAYS;
 int blePass;
 // END-----------------------DATA's
 #endif
-#define DEBUG
 //===========================Files
 const String statesFile = "/LastStates.txt";
 #include <ButtonConfig.h>
@@ -709,9 +705,6 @@ void loadStateFromFile()
   RELAYS.relPos = tmp;
   setRelay(RELAYS.relPos, v / 10);
   DimValChanged = true;
-
-  // Optionally print the loaded values for debugging
-  // Serial.printf("Loaded state: RELAYS:%d,D0:%f,D1:%f,D2:%f,D3:%f,D4:%f,D5:%f,D6:%f\n",RELAYS.relPos, dimTmp[0], dimTmp[1], dimTmp[2], dimTmp[3], dimTmp[4], dimTmp[5], dimTmp[6]);
 }
 void saveStatesToFile()
 {
@@ -802,56 +795,10 @@ void MeasurmentTask(void *parameters)
       len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY);
       if (len > 1)
         len = 1;
-      sprintf(str, "Gyro=%1.3f,%1.3f\n", len * cos(alpha), len * sin(alpha));
-      // Serial.println(String(">X:" + String(len * cos(alpha), 3) + ",Y:" + String(len * sin(alpha), 3)));
-      data += str;
+
     }
 
     //=====
-
-#ifdef SEN_DEBUG
-    static int dummyVal = 0;
-    if (dummyVal++ > 100)
-    {
-      dummyVal = 0;
-    }
-
-    sprintf(str, "BATVOL1=%d\n", (int)dummyVal);
-    data += str;
-    sprintf(str, "BATPR1=%d\n", (int)dummyVal);
-    data += str;
-    sprintf(str, "AMPINT1=%d\n", (int)dummyVal);
-    data += str;
-    sprintf(str, "AMPEXT1=%d\n", (int)dummyVal);
-    data += str;
-    sprintf(str, "AMPEXT2=%d\n", (int)dummyVal);
-    data += str;
-    sprintf(str, "WAT1=%d\n", (int)dummyVal);
-    data += str;
-    sprintf(str, "FLT1=%d\n", ((int)dummyVal) / 10 * 10);
-    data += str;
-    sprintf(str, "FLT2=%d\n", ((int)dummyVal) / 10 * 10);
-    data += str;
-    sprintf(str, "TMPA1=%d\n", (int)(dummyVal)); // PT100
-    data += str;
-    sprintf(str, "TMPD1=%d\n", ((int)(dummyVal)) / 10);
-    data += str;
-    sprintf(str, "HUMD1=%d\n", (int)dummyVal);
-    data += str;
-    sprintf(str, "ALT1=%d\n", (int)dummyVal);
-    data += str;
-    sprintf(str, "BATHUR=%d\n", (int)dummyVal / 10);
-    data += str;
-    sprintf(str, "GAZ1=%d\n", (int)dummyVal);
-    data += str;
-
-#ifdef DIM_DEBUG
-    char str[16];
-    sprintf(str, "DIMER4=%d\n", (int)dummyVal);
-    sendCmdToExecute(str);
-#endif
-
-#else
 
     // sprintf(str, "SOLVOL1=%d\n", (int)v);
     // data += str;
@@ -885,9 +832,7 @@ void MeasurmentTask(void *parameters)
     data += str;
     sprintf(str, "GAZ1=%d\n", (int)a1);
     data += str;
-#endif
     myBle.sendString(data);
-    // myBle.sendString(data);
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
@@ -1390,7 +1335,6 @@ public:
   }
 };
 bleUpdate *myUpdate;
-
 // --- Step 1: The Helper Function with Core Logic ---
 // Contains the actual command processing logic.
 void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
@@ -1555,15 +1499,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     } // End while loop
     // --- End of your original onDataReceived logic ---
 }
-
-// --- Step 2: The Actual BLE Callback Function ---
-// This function is called by the NimBLE library stack. Keep its signature correct.
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
 {
-    // Optional: Log information specific to the BLE connection
-    // Serial.printf("Data received via BLE from %s (%d bytes)\n", connInfo.getAddress().toString().c_str(), length);
-
-    // Call the helper function to process the data
     processReceivedCommandData(pCharacteristic, pData, length);
 }
 
