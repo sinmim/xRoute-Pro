@@ -1,8 +1,8 @@
 #ifndef MY_NIM_BLE_H
 #define MY_NIM_BLE_H
-
-#include <Arduino.h>
+#include "myNimbleConfig.h"
 #include <NimBLEDevice.h>
+#include <Arduino.h>
 #include <queue>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -180,6 +180,8 @@ protected:
   void onResult(NimBLEAdvertisedDevice *advertisedDevice);
 
 public:
+  void justSend(String data);
+
   static String bleAddTmp; // Static for scan result? Review if needed.
 
   MyBle(bool clientMode = true);

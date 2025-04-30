@@ -61,5 +61,6 @@ void initRelay();
 void setRelPWM(float volt, float SuplyVol);
 bool relaySatat();
 bool relState_0_15(int relNum);
+String getRelsStatStr();
 
 #endif

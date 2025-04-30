@@ -658,7 +658,7 @@ int dimShortNum = 0;
 //=======================TEST
 #include <myNimBle.h>
 MyBle myBle(false); // i need to use this object in other files
-void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo& connInfo, uint8_t *pData, size_t length);
+void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
 TaskHandle_t MeasurmentTaskHandle;
 void ConditionsTask(void *parameters)
@@ -795,7 +795,6 @@ void MeasurmentTask(void *parameters)
       len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY);
       if (len > 1)
         len = 1;
-
     }
 
     //=====
@@ -832,6 +831,7 @@ void MeasurmentTask(void *parameters)
     data += str;
     sprintf(str, "GAZ1=%d\n", (int)a1);
     data += str;
+    data += "RELS=" + getRelsStatStr() + "\n";
     myBle.sendString(data);
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
@@ -1337,850 +1337,718 @@ public:
 bleUpdate *myUpdate;
 // --- Step 1: The Helper Function with Core Logic ---
 // Contains the actual command processing logic.
+
 void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
-    // Static variable to buffer data - lives within this function's scope now
-    static String accumulatedData;
-
-    // --- Start of your original onDataReceived logic ---
-    if (myUpdate != nullptr)
+  // Static variable to buffer data - lives within this function's scope now
+  static String accumulatedData;
+  // --- Start of your original onDataReceived logic ---
+  if (myUpdate != nullptr)
+  {
+    // Check if bleUpdate::continueUpdate() needs pCharacteristic.
+    // If not, this check could be simplified when called from sendCmdToExecute.
+    if (!myUpdate->isTimeOut())
     {
-        // Check if bleUpdate::continueUpdate() needs pCharacteristic.
-        // If not, this check could be simplified when called from sendCmdToExecute.
-        if (!myUpdate->isTimeOut())
-        {
-            myUpdate->continueUpdate(); // Pass pCharacteristic if needed by continueUpdate
-            return;
-        }
-         else {
-             // Handle timeout? Maybe delete myUpdate?
-             // delete myUpdate;
-             // myUpdate = nullptr;
-             // MeasurmentTaskPause = false; // Resume task if paused
-         }
+      myUpdate->continueUpdate(); // Pass pCharacteristic if needed by continueUpdate
+      return;
     }
-
-    // Convert received data to String
-    String receivedData(reinterpret_cast<char *>(pData), length);
-    accumulatedData += receivedData;
-    int endPos;
-    while ((endPos = accumulatedData.indexOf('\n')) != -1)
+    else
     {
-      String command = accumulatedData.substring(0, endPos); // Extract command
-      accumulatedData.remove(0, endPos + 1);                 // Remove the processed command
-      // Command processing
-      if (command.startsWith("sw"))
+      // Handle timeout? Maybe delete myUpdate?
+      // delete myUpdate;
+      // myUpdate = nullptr;
+      // MeasurmentTaskPause = false; // Resume task if paused
+    }
+  }
+  // Convert received data to String
+  String receivedData(reinterpret_cast<char *>(pData), length);
+  accumulatedData += receivedData;
+  int endPos;
+  while ((endPos = accumulatedData.indexOf('\n')) != -1)
+  {
+    String command = accumulatedData.substring(0, endPos); // Extract command
+    accumulatedData.remove(0, endPos + 1);                 // Remove the processed command
+    // Command processing
+    if (command.startsWith("sw"))
+    {
+
+      int index = atoi(command.substring(2, command.indexOf('=')).c_str());
+      if (command.lastIndexOf("ON") > 0)
       {
-        int index = atoi(command.substring(2, command.indexOf('=')).c_str());
-        if (command.lastIndexOf("ON") > 0)
-        {
-          RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
-          setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("sw" + String(index) + "=ON\n");
-        }
-        else if (command.lastIndexOf("OFF") > 0)
-        {
-          RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
-          setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("sw" + String(index) + "=OFF\n");
-        }
-        saveStatesToFile();
-      }
-      else if (command.startsWith("GiveMeInit"))
-      {
-        String str = "";
-        for (int index = 1; index <= 8; index++)
-        {
-          if (relState_0_15(index - 1) == true)
-          {
-            str += "sw" + String(index) + "=ON\n";
-          }
-          else
-          {
-            str += "sw" + String(index) + "=OFF\n";
-          }
-        }
-        for (int i = 1; i <= 5; i++)
-        {
-          float val = (dimTmp[i - 1] / (32768 * dimLimit[i - 1])) * 255;
-          str += "DIMER" + String(i) + "=" + String((int)val) + "\n";
-        }
-        myBle.sendString(str);
-      }
-      else if (command.startsWith("Motor1=Up"))
-      {
-        motorWay = MOTOR_UP;
-        RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
-        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
+        RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
         setRelay(RELAYS.relPos, v / 10);
-        myBle.sendString("Motor1=Up\n");
+        myBle.sendString("sw" + String(index) + "=ON\n");
+        Serial.println("sw" + String(index) + "=ON");
       }
-      else if (command.startsWith("Motor1=Down"))
+      else if (command.lastIndexOf("OFF") > 0)
       {
-        motorWay = MOTOR_DOWN;
-        RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[8 - 1]);
-        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
+        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
         setRelay(RELAYS.relPos, v / 10);
-        myBle.sendString("Motor1=Down\n");
+        myBle.sendString("sw" + String(index) + "=OFF\n");
+        Serial.println("sw" + String(index) + "=OFF");
       }
-      else if (command.startsWith("Motor1=Stop"))
+      // saveStatesToFile();to do add save again . its for preventing damage to flash for test
+    }
+    else if (command.startsWith("GiveMeInit"))
+    {
+      String str = "";
+      for (int index = 1; index <= 8; index++)
       {
-        motorWay = MOTOR_STOP;
-        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
-        RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
-        setRelay(RELAYS.relPos, v / 10);
-        myBle.sendString("Motor1=Stop\n");
-      }
-      else if (command.startsWith("DIMER"))
-      { // DIMER4=25
-        int dimNumber = command.substring(5, command.indexOf("=")).toInt() - 1;
-        if (dimNumber > 1 || dimNumber < 6) // handling unwanted value from app
+        if (relState_0_15(index - 1) == true)
         {
-          String valStr = command.substring(command.indexOf("=") + 1);
-          float val = valStr.toFloat() / 255;
-  
-          dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
-          DimValChanged = true;
-          char str[128];
-          sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
-          myBle.sendString(str);
-        }
-      }
-      else if (command.startsWith("DefaultAllCalibrations"))
-      {
-        defaultCalibrations();
-      }
-      else if (command.startsWith("VCalTo="))
-      {
-        VcalCo = static_cast<float>(atoi(command.c_str() + 7)) / volt;
-        EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCo);
-        EEPROM.commit();
-        NegVoltOffset = ADC_LPF(NEG_VOLT_MUX_IN, 5, negv, 0.99);
-        EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffset);
-        EEPROM.commit();
-        char str[128];
-        sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
-        myBle.sendString(str);
-      }
-      else if (command.startsWith("AmperOffset"))
-      {
-        if (ampSenisConnected)
-        {
-          amp1Offset = amp1;
-          EEPROM.writeFloat(E2ADD.ampOffsetSave, amp1Offset);
-          EEPROM.commit();
-          char str[128];
-          sprintf(str, "show.txt=\"amp1Offset=%f\"\n", amp1Offset);
-          myBle.sendString(str);
+          str += "sw" + String(index) + "=ON\n";
         }
         else
         {
-          myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+          str += "sw" + String(index) + "=OFF\n";
         }
       }
-      else if (command.startsWith("ACalTo="))
+      for (int i = 1; i <= 5; i++)
       {
-        if (ampSenisConnected)
-        {
-          Serial.println(command.c_str());
-          A1calCo = static_cast<float>(atoi(command.c_str() + 7)) / (amp1Offset - amp1);
-          EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
-          EEPROM.commit();
-          char str[128];
-          sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
-          myBle.sendString(str);
-        }
-        else
-        {
-          myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
-        }
+        float val = (dimTmp[i - 1] / (32768 * dimLimit[i - 1])) * 255;
+        str += "DIMER" + String(i) + "=" + String((int)val) + "\n";
       }
-      else if (command.startsWith("AmperCalibrate"))
+      myBle.sendString(str);
+    }
+    else if (command.startsWith("Motor1=Up"))
+    {
+      motorWay = MOTOR_UP;
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("Motor1=Up\n");
+    }
+    else if (command.startsWith("Motor1=Down"))
+    {
+      motorWay = MOTOR_DOWN;
+      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[8 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("Motor1=Down\n");
+    }
+    else if (command.startsWith("Motor1=Stop"))
+    {
+      motorWay = MOTOR_STOP;
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
+      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
+      setRelay(RELAYS.relPos, v / 10);
+      myBle.sendString("Motor1=Stop\n");
+    }
+    else if (command.startsWith("DIMER"))
+    { // DIMER4=25
+      int dimNumber = command.substring(5, command.indexOf("=")).toInt() - 1;
+      if (dimNumber > 1 || dimNumber < 6) // handling unwanted value from app
       {
-        if (ampSenisConnected)
-        {
-          A1calCo = static_cast<float>(DFLT_A_CAL) / (amp1Offset - amp1);
-          EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
-          EEPROM.commit();
-          char str[128];
-          sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
-          myBle.sendString(str);
-        }
-        else
-        {
-          myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
-        }
-      }
-      else if (command.startsWith("Amper0Offset"))
-      {
-        amp0Offset = amp0;
-        EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0Offset);
-        EEPROM.commit();
-        char str[128];
-        sprintf(str, "show.txt=\"amp0Offset=%f\"\n", amp0Offset);
-        myBle.sendString(str);
-      }
-      else if (command.startsWith("A0CalTo="))
-      {
-        A0calCo = static_cast<float>(atoi(command.c_str() + 8)) / (amp0Offset - amp0);
-        EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
-        EEPROM.commit();
-        char str[128];
-        sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
-        myBle.sendString(str);
-      }
-      else if (command.startsWith("Amper2Offset"))
-      {
-        amp2Offset = amp2;
-        EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2Offset);
-        EEPROM.commit();
-        String str = "show.txt=\"amp2Offset=" + String(amp2Offset) + "\"\n";
-        myBle.sendString(str);
-      }
-      else if (command.startsWith("A2CalTo="))
-      { // original A2calCo = static_cast<float>(command.substring(8).toInt()) / (amp2Offset - amp2);
-        A2calCo = static_cast<float>(command.substring(8).toFloat()) / (amp2Offset - amp2);
-        EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
-        EEPROM.commit();
-        String str = "show.txt=\"A2calCo=" + String(A2calCo) + "\"\n";
-        myBle.sendString(str);
-      }
-      else if (command.startsWith("BattCapCalTo="))
-      {
-        float battCap = command.substring(13).toFloat();
-        DFLT_BATT_CAP = battCap;
-        EEPROM.writeFloat(E2ADD.batteryCapSave, DFLT_BATT_CAP);
-        EEPROM.commit();
-        batteryCap = DFLT_BATT_CAP;
-        myBle.sendString("BattCapTxt.val=" + String(static_cast<int>(batteryCap)) + "\n");
-      }
-      else if (command.startsWith("PTCalTo="))
-      {
-        // float aimTemp = command.substring(8).toInt() / 10.0;
-        float aimTemp = command.substring(8).toFloat() / 10.0;
-  
-        float temp = ReadPT100_Temp(pt100mv, 510);
-        while (temp < aimTemp && fabs(temp - aimTemp) > 0.1)
-        {
-          PT_mvCal = ++DFLT_PT_MV_CAL / pt100;
-          vTaskDelay(200);
-          temp = ReadPT100_Temp(pt100mv, 510);
-        }
-        vTaskDelay(1000);
-        while (temp > aimTemp && fabs(temp - aimTemp) > 0.1)
-        {
-          PT_mvCal = --DFLT_PT_MV_CAL / pt100;
-          vTaskDelay(200);
-          temp = ReadPT100_Temp(pt100mv, 510);
-        }
-  
-        EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
-        EEPROM.commit();
-        myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
-      }
-      else if (command.startsWith("BattFull+"))
-      {
-        DFLT_BATT_FULL_VOLT++;
-        DFLT_BATT_FULL_VOLT = constrain(DFLT_BATT_FULL_VOLT, DFLT_BATT_EMPTY_VOLT, 280);
-        if (DFLT_BATT_FULL_VOLT > 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_12V)
-        {
-          myBattery.setBatteryArrangment(BATTERY_CONFIG_24V);
-          myBle.sendString("XrouteAlarm=You are using 2 Battery in Series = 24v config !\n");
-        }
-        battFullVoltage = DFLT_BATT_FULL_VOLT;
-        myBle.sendString("BattFullVolt.val=" + String(DFLT_BATT_FULL_VOLT) + "\n");
-        myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
-        if (myBattery.batteryType != BATTERY_TYPE_NON)
-        {
-          DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
-          myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
-        }
-      }
-      else if (command.startsWith("BattFull-"))
-      {
-        DFLT_BATT_FULL_VOLT--;
-        DFLT_BATT_FULL_VOLT = constrain(DFLT_BATT_FULL_VOLT, DFLT_BATT_EMPTY_VOLT + 10, 280);
-        if (DFLT_BATT_FULL_VOLT < 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_24V)
-        {
-          myBattery.setBatteryArrangment(BATTERY_CONFIG_12V);
-          myBle.sendString("XrouteAlarm=You are using 1 Battery = 12v config !\n");
-        }
-        battFullVoltage = DFLT_BATT_FULL_VOLT;
-        myBle.sendString("BattFullVolt.val=" + String(DFLT_BATT_FULL_VOLT) + "\n");
-        myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
-        if (myBattery.batteryType != BATTERY_TYPE_NON)
-        {
-          DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
-          myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
-        }
-      }
-      else if (command.startsWith("BattfullVoltageCalibrate"))
-      {
-        EEPROM.writeFloat(E2ADD.battFullVoltageSave, DFLT_BATT_FULL_VOLT);
-        EEPROM.commit();
-        battFullVoltage = EEPROM.readFloat(E2ADD.battFullVoltageSave);
-      }
-      else if (command.startsWith("BattEmpty-"))
-      {
-        DFLT_BATT_EMPTY_VOLT--;
-        DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
-        battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
-        myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
-      }
-      else if (command.startsWith("BattEmpty+"))
-      {
-        DFLT_BATT_EMPTY_VOLT++;
-        DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
-        battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
-        myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
-      }
-      else if (command.startsWith("BattEmptyVoltageCalibrate"))
-      {
-        EEPROM.writeFloat(E2ADD.battEmptyVoltageSave, DFLT_BATT_EMPTY_VOLT);
-        EEPROM.commit();
-        battEmptyVoltage = EEPROM.readFloat(E2ADD.battEmptyVoltageSave);
-      }
-      else if (command.startsWith("BatteryType="))
-      {
-        char batteryType = command[12];
-        switch (batteryType)
-        {
-        case '1':
-          myBattery.setBatType(BATTERY_TYPE_AGM);
-          myBle.sendString("XrouteAlarm= AGM BATTERY \n");
-          break;
-        case '2':
-          myBattery.setBatType(BATTERY_TYPE_GEL);
-          myBle.sendString("XrouteAlarm= GEL BATTERY \n");
-          break;
-        case '3':
-          myBattery.setBatType(BATTERY_TYPE_ACID);
-          myBle.sendString("XrouteAlarm= ACID BATTERY \n");
-          break;
-        case '4':
-          myBattery.setBatType(BATTERY_TYPE_LITIUM);
-          myBle.sendString("XrouteAlarm= LITHIUM BATTERY \n");
-          break;
-        case '5':
-          myBattery.setBatType(BATTERY_TYPE_LIFEPO4);
-          myBle.sendString("XrouteAlarm= LIFEPO4 BATTERY \n");
-          break;
-        default:
-          // Handle unknown battery type if necessary
-          break;
-        }
-        battFullVoltage = floor(myBattery.getBatteryFullVoltage() * 10);
-        EEPROM.writeFloat(E2ADD.battFullVoltageSave, battFullVoltage);
-        EEPROM.commit();
-        Serial.println("battFullVoltage(X10) =" + String(battFullVoltage));
-      }
-      else if (command.startsWith("CleanWaterMin"))
-      {
-        clnWtrMin = clnWtr;
-  
-        EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMin);
-        EEPROM.commit();
-        String response = "show.txt=\"clnWtrMin=" + String(clnWtrMin) + "\"\n";
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("CleanWaterMax"))
-      {
-        clnWtrMax = clnWtr;
-  
-        EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMax);
-        EEPROM.commit();
-        String response = "show.txt=\"clnWtrMax=" + String(clnWtrMax) + "\"\n";
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("DirtyWaterMin"))
-      {
-        drtWtrMin = drtWtr;
-  
-        EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMin);
-        EEPROM.commit();
-      }
-      else if (command.startsWith("DirtyWaterMax"))
-      {
-        drtWtrMax = drtWtr;
-  
-        EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMax);
-        EEPROM.commit();
-      }
-      else if (command.startsWith("GrayWaterMin"))
-      {
-        gryWtrMin = gryWtr;
-  
-        EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMin);
-        EEPROM.commit();
-      }
-      else if (command.startsWith("GrayWaterMax"))
-      {
-        gryWtrMax = gryWtr;
-  
-        EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMax);
-        EEPROM.commit();
-      }
-      else if (command.startsWith("LimitDim"))
-      {
-        unsigned int dimNum = command[8] - '1';
-        float val = command[10] * 2;
-        dimLimit[dimNum] = val / 255;
-        dimTmp[dimNum] = static_cast<double>(32767) * dimLimit[dimNum];
+        String valStr = command.substring(command.indexOf("=") + 1);
+        float val = valStr.toFloat() / 255;
+
+        dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
         DimValChanged = true;
-        String response = "show.txt=\"Dim" + String(dimNum + 1) + " MaxLimit=" + String(static_cast<int>(32768 * dimLimit[dimNum])) + "\"\n";
-        myBle.sendString(response.c_str());
+        char str[128];
+        sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
+        myBle.sendString(str);
+        Serial.printf("in:%s | out:%s\n", command, str);
       }
-      else if (command.startsWith("LoadDimLimits"))
+    }
+    else if (command.startsWith("DefaultAllCalibrations"))
+    {
+      defaultCalibrations();
+    }
+    else if (command.startsWith("VCalTo="))
+    {
+      VcalCo = static_cast<float>(atoi(command.c_str() + 7)) / volt;
+      EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCo);
+      EEPROM.commit();
+      NegVoltOffset = ADC_LPF(NEG_VOLT_MUX_IN, 5, negv, 0.99);
+      EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffset);
+      EEPROM.commit();
+      char str[128];
+      sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
+      myBle.sendString(str);
+    }
+    else if (command.startsWith("AmperOffset"))
+    {
+      if (ampSenisConnected)
       {
-        for (int i = 0; i < 7; i++)
-        {
-          float val = dimLimit[i] * 128;
-          String response = "dimMax" + String(i + 1) + ".val=" + String(static_cast<int>(val)) + "\n";
-          myBle.sendString(response.c_str());
-          vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
-      }
-      else if (command.startsWith("SaveDimerLimits"))
-      {
-        for (int i = 0; i < 7; i++)
-        {
-          EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimit[i]);
-          EEPROM.commit();
-        }
-        String response = "XrouteAlarm=Limit Saved OK! \n";
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("GiveMeBalance="))
-      {
-        float ofsetlesX = (accXValue - accXValueOffset) * revX;
-        float ofsetlesY = (accYValue - accYValueOffset) * revY;
-  
-        alpha = atan(ofsetlesY / ofsetlesX);
-  
-        if (ofsetlesX < 0 && ofsetlesY > 0)
-          alpha += PI;
-        if (ofsetlesX < 0 && ofsetlesY < 0)
-          alpha += PI;
-        if (ofsetlesX > 0 && ofsetlesY < 0)
-          alpha += (2 * PI);
-        len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY) * accSensitivity;
-  
-        if (len > 1)
-          len = 1;
-        accSensitivity = command[14] - '0'; // to prevent \n i add '0' to slider
-        accSensitivity *= 2;
-  
-        String response = "Accx.val=" + String(static_cast<int>(roundf(len * cos(alpha) * 100))) + "\n";
-        myBle.sendString(response.c_str());
-        response = "Accy.val=" + String(static_cast<int>(roundf(len * sin(alpha) * 100))) + "\n";
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("AccelZeroOffset"))
-      {
-        GyroOffsetingFlg = true;
-        while (GyroOffsetingFlg)
-          vTaskDelay(10 / portTICK_PERIOD_MS);
-        EEPROM.writeFloat(E2ADD.accXValueOffsetSave, accXValue);
-        EEPROM.writeFloat(E2ADD.accYValueOffsetSave, accYValue);
+        amp1Offset = amp1;
+        EEPROM.writeFloat(E2ADD.ampOffsetSave, amp1Offset);
         EEPROM.commit();
-        accXValueOffset = EEPROM.readFloat(E2ADD.accXValueOffsetSave);
-        accYValueOffset = EEPROM.readFloat(E2ADD.accYValueOffsetSave);
-  
-        String response = "XrouteAlarm=accXValueOffset=" + String(accXValueOffset) + ",accYValueOffset=" + String(accYValueOffset) + "\n";
-        myBle.sendString(response.c_str());
+        char str[128];
+        sprintf(str, "show.txt=\"amp1Offset=%f\"\n", amp1Offset);
+        myBle.sendString(str);
       }
-      else if (command.startsWith("GiveMeSysInfo")) // its going to be deprecated
-      {
-        uint64_t chipid = ESP.getEfuseMac();
-        String response = "MacAddress:" + String(chipid) + "," + GeneralLisence + ",Version:" + Version + "\n";
-        Serial.println(response.c_str());
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("GiveMeVersion"))
-      {
-        String response = "Version=" + Version + "\n";
-        Serial.println(response.c_str());
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("GiveMeChipId"))
-      {
-        uint64_t chipid = ESP.getEfuseMac();
-        String response = "ChipId=" + String(chipid) + "\n";
-        Serial.println(response.c_str());
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("GyroPass:deactive"))
-      {
-        GyroLicense->deactivate();
-      }
-      else if (command.startsWith("GyroPass:"))
-      {
-  
-        String tmp = String(command.substring(9, 16).c_str());
-        String response = "ReceivedPass:" + tmp;
-        Serial.println(response.c_str());
-        response = "InternalPass:" + String(GyroLicense->realSerial);
-        Serial.println(response.c_str());
-  
-        if (String(GyroLicense->realSerial) == tmp)
-        {
-          GyroLicense->activate();
-        }
-      }
-      else if (command.startsWith("GyroOrientation="))
-      {
-        GyroOriantation = String(command.substring(16, 5).c_str());
-        EEPROM.writeString(E2ADD.GyroOriantationSave, GyroOriantation);
-        EEPROM.commit();
-        String strTmp = EEPROM.readString(E2ADD.GyroOriantationSave);
-        GyroOriantation = strTmp;
-      }
-      else if (command.startsWith("GiveMeOrientation"))
-      {
-        String response = "Orientation=" + GyroOriantation + "\n";
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("PreCalTo="))
-      {
-        float aimAlt = command.substring(9).toInt(); // altitude in meters
-        float tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffset);
-        float error = 1; // to get into the loop
-        float pressurCalOffsetTemp = pressurCalOffset;
-        String response = "show.txt=\"Calibrating=\"\n";
-        myBle.sendString(response.c_str());
-  
-        while (fabs(error) > 0.1)
-        {
-          if (isnan(pressurCalOffsetTemp)) // for sometimes crashes
-          {
-            pressurCalOffsetTemp = 0;
-            Serial.println("ERROR");
-          }
-          error = aimAlt - tempAlt;
-          pressurCalOffsetTemp += (error / 5000);
-          tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffsetTemp);
-          Serial.println("PrOffset=" + String(pressurCalOffsetTemp));
-          response = "M.Pre.val=" + String(static_cast<int>(tempAlt)) + "\n";
-          myBle.sendString(response.c_str());
-          vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
-  
-        if (!isnan(pressurCalOffsetTemp)) // for sometimes crashes
-        {
-          pressurCalOffset = pressurCalOffsetTemp;
-          EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffset);
-          EEPROM.commit();
-        }
-        response = "show.txt=\"pressurCalOffset=" + String(pressurCalOffset) + "\"\n";
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("BLEPASSWORD="))
-      {
-        String passStr = String(command.substring(12, 6).c_str());
-        int pass = atoi(passStr.c_str());
-        blePass = pass;
-        Serial.print("Password=");
-        Serial.println(blePass);
-        EEPROM.writeUInt(E2ADD.blePassSave, blePass);
-        EEPROM.commit();
-        // BLE//bleSetPass(blePass);
-        // BLE//remove_all_bonded_devices();
-        //       ESP.restart();
-      }
-      else if (command.startsWith("GETBLEPASSWORD"))
-      {
-        String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
-        myBle.sendString(response.c_str());
-        Serial.println(response.c_str());
-      }
-      else if (command.startsWith("DEF="))
-      {
-        String defType = command.substring(4);
-        if (defType == "UiConfig")
-        {
-          SaveStringToFile(String(defaultConfig), ConfigFile);
-        }
-        else if (defType == "Conditions")
-        {
-          SaveStringToFile(String(defaultCondition), CondFile);
-          jsonCon.readJsonConditionsFromFile(CondFile);
-        }
-  
-        else if (defType == "VOLTAGE")
-        {
-          EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCoDeflt);
-          EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffsetDeflt);
-        }
-        else if (defType == "A0")
-        {
-          EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0OffsetDeflt);
-          EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCoDeflt);
-        }
-        else if (defType == "A")
-        {
-          EEPROM.writeFloat(E2ADD.ampOffsetSave, ampOffsetDeflt);
-          EEPROM.writeFloat(E2ADD.AcalCoSave, AcalCoDeflt);
-        }
-        else if (defType == "A2")
-        {
-          EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCoDeflt);
-          EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2OffsetDeflt);
-        }
-        else if (defType == "PT")
-        {
-          EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal_Deflt);
-        }
-        else if (defType == "CW_MIN")
-        {
-          EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMinDeflt);
-          EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMaxDeflt);
-        }
-        else if (defType == "CW_MAX")
-        {
-          EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMinDeflt);
-          EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMaxDeflt);
-        }
-        else if (defType == "DW_MIN")
-        {
-          EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMinDeflt);
-          EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
-        }
-        else if (defType == "DW_MAX")
-        {
-          EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMinDeflt);
-          EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
-        }
-        else if (defType == "GW_MIN")
-        {
-          EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
-          EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
-        }
-        else if (defType == "GW_MAX")
-        {
-          EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
-          EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
-        }
-        else if (defType == "DIMMER")
-        {
-          for (int i = 0; i < 7; i++) // save dimmer defaults
-          {
-            EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimitDeflt); // limit dimmers to %60
-          }
-        }
-        else if (defType == "ALTITUDE")
-        {
-          EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffsetDeflt);
-        }
-        else if (defType == "GAS_MIN" || defType == "GAS_MAX")
-        {
-          // Placeholder for future implementation
-        }
-        EEPROM.commit();
-        loadSavedValue();
-        String response = "XrouteAlarm=Default OK\n";
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("StartUpdate="))
-      {
-        MeasurmentTaskPause = true;
-        uint32_t binSize = command.substring(command.indexOf("=") + 1, command.indexOf(",")).toInt();
-        myUpdate = new bleUpdate(pCharacteristic, binSize);
-      }
-      else if (command.startsWith("TakeUiConfig="))
-      {
-        confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
-        MeasurmentTaskPause = true;                                                     // change to mutex in the future
-        myBle.startDirectRead();
-        if (eTaskGetState(&takeUiConfigFileTaskHandle) != eRunning)
-          xTaskCreate(takeUiConfigFileTask, "takeUiConfigFileTask", 4 * 1024, NULL, 1, &takeUiConfigFileTaskHandle);
-        break; // breake for preventing forthure processing the accumulated string
-      }
-      else if (command.startsWith("GiveMeUiConfigFile"))
-      {
-        if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
-        {
-          xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 4, NULL, 2, &sendUiConfigTaskHandle);
-        }
-      }
-      else if (command.startsWith("GiveMeConditionsFile"))
-      {
-        if (eTaskGetState(&sendConditionsTaskHandle) != eRunning)
-        {
-          xTaskCreate(sendConditionsTask, "sendConditionsTask", 1024 * 4, NULL, 2, &sendConditionsTaskHandle);
-        }
-      }
-      else if (command.startsWith("TakeConditions="))
-      {
-        confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
-        MeasurmentTaskPause = true;                                                     // change to mutex in the future
-        myBle.startDirectRead();
-        if (eTaskGetState(&takeConditionFileTaskHandle) != eRunning)
-          xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
-        break; // breake for preventing forthure processing the accumulated string
-      }
-  
       else
       {
-        String errorMessage = "Errorparsing:" + String(command.c_str());
-        Serial.println(errorMessage);
-        myBle.sendString(errorMessage);
+        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
       }
     }
-  
-    // while ((endPos = accumulatedData.indexOf('\n')) != -1)
-    // {
-    //     String command = accumulatedData.substring(0, endPos); // Extract command
-    //     accumulatedData.remove(0, endPos + 1);                 // Remove the processed command
+    else if (command.startsWith("ACalTo="))
+    {
+      if (ampSenisConnected)
+      {
+        Serial.println(command.c_str());
+        A1calCo = static_cast<float>(atoi(command.c_str() + 7)) / (amp1Offset - amp1);
+        EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
+        EEPROM.commit();
+        char str[128];
+        sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
+        myBle.sendString(str);
+      }
+      else
+      {
+        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+      }
+    }
+    else if (command.startsWith("AmperCalibrate"))
+    {
+      if (ampSenisConnected)
+      {
+        A1calCo = static_cast<float>(DFLT_A_CAL) / (amp1Offset - amp1);
+        EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
+        EEPROM.commit();
+        char str[128];
+        sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
+        myBle.sendString(str);
+      }
+      else
+      {
+        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+      }
+    }
+    else if (command.startsWith("Amper0Offset"))
+    {
+      amp0Offset = amp0;
+      EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0Offset);
+      EEPROM.commit();
+      char str[128];
+      sprintf(str, "show.txt=\"amp0Offset=%f\"\n", amp0Offset);
+      myBle.sendString(str);
+    }
+    else if (command.startsWith("A0CalTo="))
+    {
+      A0calCo = static_cast<float>(atoi(command.c_str() + 8)) / (amp0Offset - amp0);
+      EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
+      EEPROM.commit();
+      char str[128];
+      sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
+      myBle.sendString(str);
+    }
+    else if (command.startsWith("Amper2Offset"))
+    {
+      amp2Offset = amp2;
+      EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2Offset);
+      EEPROM.commit();
+      String str = "show.txt=\"amp2Offset=" + String(amp2Offset) + "\"\n";
+      myBle.sendString(str);
+    }
+    else if (command.startsWith("A2CalTo="))
+    { // original A2calCo = static_cast<float>(command.substring(8).toInt()) / (amp2Offset - amp2);
+      A2calCo = static_cast<float>(command.substring(8).toFloat()) / (amp2Offset - amp2);
+      EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
+      EEPROM.commit();
+      String str = "show.txt=\"A2calCo=" + String(A2calCo) + "\"\n";
+      myBle.sendString(str);
+    }
+    else if (command.startsWith("BattCapCalTo="))
+    {
+      float battCap = command.substring(13).toFloat();
+      DFLT_BATT_CAP = battCap;
+      EEPROM.writeFloat(E2ADD.batteryCapSave, DFLT_BATT_CAP);
+      EEPROM.commit();
+      batteryCap = DFLT_BATT_CAP;
+      myBle.sendString("BattCapTxt.val=" + String(static_cast<int>(batteryCap)) + "\n");
+    }
+    else if (command.startsWith("PTCalTo="))
+    {
+      // float aimTemp = command.substring(8).toInt() / 10.0;
+      float aimTemp = command.substring(8).toFloat() / 10.0;
 
-    //     // --- Start of Command processing ---
-    //     if (command.startsWith("sw"))
-    //     {
-    //         int index = atoi(command.substring(2, command.indexOf('=')).c_str());
-    //         if (command.lastIndexOf("ON") > 0)
-    //         {
-    //             RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
-    //             setRelay(RELAYS.relPos, v / 10);
-    //             myBle.sendString("sw" + String(index) + "=ON\n");
-    //         }
-    //         else if (command.lastIndexOf("OFF") > 0)
-    //         {
-    //             RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
-    //             setRelay(RELAYS.relPos, v / 10);
-    //             myBle.sendString("sw" + String(index) + "=OFF\n");
-    //         }
-    //         saveStatesToFile();
-    //     }
-    //     else if (command.startsWith("GiveMeInit"))
-    //     {
-    //         String str = "";
-    //         for (int index = 1; index <= 8; index++)
-    //         {
-    //             if (relState_0_15(index - 1) == true) { str += "sw" + String(index) + "=ON\n"; }
-    //             else { str += "sw" + String(index) + "=OFF\n"; }
-    //         }
-    //         for (int i = 1; i <= 5; i++)
-    //         {
-    //             float val = (dimTmp[i - 1] / (32768.0 * dimLimit[i - 1])) * 255.0; // Use floating point literals
-    //             str += "DIMER" + String(i) + "=" + String((int)val) + "\n";
-    //         }
-    //         myBle.sendString(str);
-    //     }
-    //     else if (command.startsWith("Motor1=Up"))
-    //     {
-    //         motorWay = MOTOR_UP;
-    //         RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
-    //         RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
-    //         setRelay(RELAYS.relPos, v / 10);
-    //         myBle.sendString("Motor1=Up\n");
-    //     }
-    //     else if (command.startsWith("Motor1=Down"))
-    //     {
-    //         motorWay = MOTOR_DOWN;
-    //         RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[8 - 1]);
-    //         RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
-    //         setRelay(RELAYS.relPos, v / 10);
-    //         myBle.sendString("Motor1=Down\n");
-    //     }
-    //     else if (command.startsWith("Motor1=Stop"))
-    //     {
-    //         motorWay = MOTOR_STOP;
-    //         RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
-    //         RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
-    //         setRelay(RELAYS.relPos, v / 10);
-    //         myBle.sendString("Motor1=Stop\n");
-    //     }
-    //     else if (command.startsWith("DIMER"))
-    //     { // DIMER4=25
-    //         int dimNumber = command.substring(5, command.indexOf("=")).toInt() - 1;
-    //         // Adjust condition: should be 0 to 4 for indices of a 5-element array?
-    //         // Original `if (dimNumber > 1 || dimNumber < 6)` seems logically flawed.
-    //         // Assuming 5 dimmers (index 0-4):
-    //         if (dimNumber >= 0 && dimNumber < 5)
-    //         {
-    //             String valStr = command.substring(command.indexOf("=") + 1);
-    //             float val = valStr.toFloat() / 255.0; // Use floating point literal
+      float temp = ReadPT100_Temp(pt100mv, 510);
+      while (temp < aimTemp && fabs(temp - aimTemp) > 0.1)
+      {
+        PT_mvCal = ++DFLT_PT_MV_CAL / pt100;
+        vTaskDelay(200);
+        temp = ReadPT100_Temp(pt100mv, 510);
+      }
+      vTaskDelay(1000);
+      while (temp > aimTemp && fabs(temp - aimTemp) > 0.1)
+      {
+        PT_mvCal = --DFLT_PT_MV_CAL / pt100;
+        vTaskDelay(200);
+        temp = ReadPT100_Temp(pt100mv, 510);
+      }
 
-    //             // Ensure dimLimit is not zero before dividing
-    //             if (dimLimit[dimNumber] != 0) {
-    //                dimTmp[dimNumber] = 32768.0 * val * dimLimit[dimNumber]; // Use floating point literal
-    //             } else {
-    //                dimTmp[dimNumber] = 0;
-    //             }
-    //             DimValChanged = true;
-    //             char str[128];
-    //             // Use valStr directly as it's already the string representation
-    //             sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr.c_str());
-    //             myBle.sendString(str);
-    //         } else {
-    //              Serial.printf("Invalid DIMER number received: %d\n", dimNumber + 1);
-    //         }
-    //     }
-    //     // --- Add ALL other 'else if' blocks here ---
-    //     else if (command.startsWith("DefaultAllCalibrations")) { defaultCalibrations(); }
-    //     else if (command.startsWith("VCalTo=")) { /* Your VCalTo logic */ }
-    //     else if (command.startsWith("AmperOffset")) { /* Your AmperOffset logic */ }
-    //     else if (command.startsWith("ACalTo=")) { /* Your ACalTo logic */ }
-    //     // ... include ALL commands from your original function ...
-    //      else if (command.startsWith("StartUpdate="))
-    //      {
-    //          MeasurmentTaskPause = true; // Consider using mutex/semaphore instead of flag
-    //          // Check if pCharacteristic is valid - needed for bleUpdate constructor
-    //          if (pCharacteristic != nullptr) {
-    //              uint32_t binSize = command.substring(command.indexOf("=") + 1, command.indexOf(",")).toInt();
-    //              // Manage potential memory leak if myUpdate already exists
-    //              if(myUpdate) delete myUpdate;
-    //              myUpdate = new bleUpdate(pCharacteristic, binSize);
-    //              Serial.printf("Update started, bin size: %u\n", binSize);
-    //          } else {
-    //               Serial.println("Error: StartUpdate command received but Characteristic is null (maybe internal call?)");
-    //               MeasurmentTaskPause = false; // Resume task if update cannot start
-    //          }
-    //      }
-    //     // ... include ALL commands ...
-    //     else if (command.startsWith("TakeConditions="))
-    //     {
-    //         confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{"));
-    //         MeasurmentTaskPause = true;
-    //         myBle.startDirectRead();
-    //         if (eTaskGetState(&takeConditionFileTaskHandle) != eRunning) {
-    //             xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
-    //         }
-    //         // NOTE: The 'break' here was in your original code.
-    //         // If you break here, subsequent commands in the same accumulatedData buffer
-    //         // might not be processed in this loop iteration. Is that intended?
-    //         // If you want to process other commands after TakeConditions, remove the break.
-    //         break;
-    //     }
-    //     // --- End of command processing ---
-    //     else
-    //     {
-    //         String errorMessage = "ErrorParsing:" + command + "\n"; // Added newline?
-    //         Serial.println(errorMessage);
-    //         myBle.sendString(errorMessage);
-    //     }
-    // } // End while loop
-    // --- End of your original onDataReceived logic ---
+      EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
+      EEPROM.commit();
+      myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
+    }
+    else if (command.startsWith("BattFull+"))
+    {
+      DFLT_BATT_FULL_VOLT++;
+      DFLT_BATT_FULL_VOLT = constrain(DFLT_BATT_FULL_VOLT, DFLT_BATT_EMPTY_VOLT, 280);
+      if (DFLT_BATT_FULL_VOLT > 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_12V)
+      {
+        myBattery.setBatteryArrangment(BATTERY_CONFIG_24V);
+        myBle.sendString("XrouteAlarm=You are using 2 Battery in Series = 24v config !\n");
+      }
+      battFullVoltage = DFLT_BATT_FULL_VOLT;
+      myBle.sendString("BattFullVolt.val=" + String(DFLT_BATT_FULL_VOLT) + "\n");
+      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
+      if (myBattery.batteryType != BATTERY_TYPE_NON)
+      {
+        DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
+        myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
+      }
+    }
+    else if (command.startsWith("BattFull-"))
+    {
+      DFLT_BATT_FULL_VOLT--;
+      DFLT_BATT_FULL_VOLT = constrain(DFLT_BATT_FULL_VOLT, DFLT_BATT_EMPTY_VOLT + 10, 280);
+      if (DFLT_BATT_FULL_VOLT < 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_24V)
+      {
+        myBattery.setBatteryArrangment(BATTERY_CONFIG_12V);
+        myBle.sendString("XrouteAlarm=You are using 1 Battery = 12v config !\n");
+      }
+      battFullVoltage = DFLT_BATT_FULL_VOLT;
+      myBle.sendString("BattFullVolt.val=" + String(DFLT_BATT_FULL_VOLT) + "\n");
+      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
+      if (myBattery.batteryType != BATTERY_TYPE_NON)
+      {
+        DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
+        myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
+      }
+    }
+    else if (command.startsWith("BattfullVoltageCalibrate"))
+    {
+      EEPROM.writeFloat(E2ADD.battFullVoltageSave, DFLT_BATT_FULL_VOLT);
+      EEPROM.commit();
+      battFullVoltage = EEPROM.readFloat(E2ADD.battFullVoltageSave);
+    }
+    else if (command.startsWith("BattEmpty-"))
+    {
+      DFLT_BATT_EMPTY_VOLT--;
+      DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
+      battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
+      myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
+    }
+    else if (command.startsWith("BattEmpty+"))
+    {
+      DFLT_BATT_EMPTY_VOLT++;
+      DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
+      battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
+      myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
+    }
+    else if (command.startsWith("BattEmptyVoltageCalibrate"))
+    {
+      EEPROM.writeFloat(E2ADD.battEmptyVoltageSave, DFLT_BATT_EMPTY_VOLT);
+      EEPROM.commit();
+      battEmptyVoltage = EEPROM.readFloat(E2ADD.battEmptyVoltageSave);
+    }
+    else if (command.startsWith("BatteryType="))
+    {
+      char batteryType = command[12];
+      switch (batteryType)
+      {
+      case '1':
+        myBattery.setBatType(BATTERY_TYPE_AGM);
+        myBle.sendString("XrouteAlarm= AGM BATTERY \n");
+        break;
+      case '2':
+        myBattery.setBatType(BATTERY_TYPE_GEL);
+        myBle.sendString("XrouteAlarm= GEL BATTERY \n");
+        break;
+      case '3':
+        myBattery.setBatType(BATTERY_TYPE_ACID);
+        myBle.sendString("XrouteAlarm= ACID BATTERY \n");
+        break;
+      case '4':
+        myBattery.setBatType(BATTERY_TYPE_LITIUM);
+        myBle.sendString("XrouteAlarm= LITHIUM BATTERY \n");
+        break;
+      case '5':
+        myBattery.setBatType(BATTERY_TYPE_LIFEPO4);
+        myBle.sendString("XrouteAlarm= LIFEPO4 BATTERY \n");
+        break;
+      default:
+        // Handle unknown battery type if necessary
+        break;
+      }
+      battFullVoltage = floor(myBattery.getBatteryFullVoltage() * 10);
+      EEPROM.writeFloat(E2ADD.battFullVoltageSave, battFullVoltage);
+      EEPROM.commit();
+      Serial.println("battFullVoltage(X10) =" + String(battFullVoltage));
+    }
+    else if (command.startsWith("CleanWaterMin"))
+    {
+      clnWtrMin = clnWtr;
+
+      EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMin);
+      EEPROM.commit();
+      String response = "show.txt=\"clnWtrMin=" + String(clnWtrMin) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("CleanWaterMax"))
+    {
+      clnWtrMax = clnWtr;
+
+      EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMax);
+      EEPROM.commit();
+      String response = "show.txt=\"clnWtrMax=" + String(clnWtrMax) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("DirtyWaterMin"))
+    {
+      drtWtrMin = drtWtr;
+
+      EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMin);
+      EEPROM.commit();
+    }
+    else if (command.startsWith("DirtyWaterMax"))
+    {
+      drtWtrMax = drtWtr;
+
+      EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMax);
+      EEPROM.commit();
+    }
+    else if (command.startsWith("GrayWaterMin"))
+    {
+      gryWtrMin = gryWtr;
+
+      EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMin);
+      EEPROM.commit();
+    }
+    else if (command.startsWith("GrayWaterMax"))
+    {
+      gryWtrMax = gryWtr;
+
+      EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMax);
+      EEPROM.commit();
+    }
+    else if (command.startsWith("LimitDim"))
+    {
+      unsigned int dimNum = command[8] - '1';
+      float val = command[10] * 2;
+      dimLimit[dimNum] = val / 255;
+      dimTmp[dimNum] = static_cast<double>(32767) * dimLimit[dimNum];
+      DimValChanged = true;
+      String response = "show.txt=\"Dim" + String(dimNum + 1) + " MaxLimit=" + String(static_cast<int>(32768 * dimLimit[dimNum])) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("LoadDimLimits"))
+    {
+      for (int i = 0; i < 7; i++)
+      {
+        float val = dimLimit[i] * 128;
+        String response = "dimMax" + String(i + 1) + ".val=" + String(static_cast<int>(val)) + "\n";
+        myBle.sendString(response.c_str());
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+      }
+    }
+    else if (command.startsWith("SaveDimerLimits"))
+    {
+      for (int i = 0; i < 7; i++)
+      {
+        EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimit[i]);
+        EEPROM.commit();
+      }
+      String response = "XrouteAlarm=Limit Saved OK! \n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("GiveMeBalance="))
+    {
+      float ofsetlesX = (accXValue - accXValueOffset) * revX;
+      float ofsetlesY = (accYValue - accYValueOffset) * revY;
+
+      alpha = atan(ofsetlesY / ofsetlesX);
+
+      if (ofsetlesX < 0 && ofsetlesY > 0)
+        alpha += PI;
+      if (ofsetlesX < 0 && ofsetlesY < 0)
+        alpha += PI;
+      if (ofsetlesX > 0 && ofsetlesY < 0)
+        alpha += (2 * PI);
+      len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY) * accSensitivity;
+
+      if (len > 1)
+        len = 1;
+      accSensitivity = command[14] - '0'; // to prevent \n i add '0' to slider
+      accSensitivity *= 2;
+
+      String response = "Accx.val=" + String(static_cast<int>(roundf(len * cos(alpha) * 100))) + "\n";
+      myBle.sendString(response.c_str());
+      response = "Accy.val=" + String(static_cast<int>(roundf(len * sin(alpha) * 100))) + "\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("AccelZeroOffset"))
+    {
+      GyroOffsetingFlg = true;
+      while (GyroOffsetingFlg)
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+      EEPROM.writeFloat(E2ADD.accXValueOffsetSave, accXValue);
+      EEPROM.writeFloat(E2ADD.accYValueOffsetSave, accYValue);
+      EEPROM.commit();
+      accXValueOffset = EEPROM.readFloat(E2ADD.accXValueOffsetSave);
+      accYValueOffset = EEPROM.readFloat(E2ADD.accYValueOffsetSave);
+
+      String response = "XrouteAlarm=accXValueOffset=" + String(accXValueOffset) + ",accYValueOffset=" + String(accYValueOffset) + "\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("GiveMeSysInfo")) // its going to be deprecated
+    {
+      uint64_t chipid = ESP.getEfuseMac();
+      String response = "MacAddress:" + String(chipid) + "," + GeneralLisence + ",Version:" + Version + "\n";
+      Serial.println(response.c_str());
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("GiveMeVersion"))
+    {
+      String response = "Version=" + Version + "\n";
+      Serial.println(response.c_str());
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("GiveMeChipId"))
+    {
+      uint64_t chipid = ESP.getEfuseMac();
+      String response = "ChipId=" + String(chipid) + "\n";
+      Serial.println(response.c_str());
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("GyroPass:deactive"))
+    {
+      GyroLicense->deactivate();
+    }
+    else if (command.startsWith("GyroPass:"))
+    {
+
+      String tmp = String(command.substring(9, 16).c_str());
+      String response = "ReceivedPass:" + tmp;
+      Serial.println(response.c_str());
+      response = "InternalPass:" + String(GyroLicense->realSerial);
+      Serial.println(response.c_str());
+
+      if (String(GyroLicense->realSerial) == tmp)
+      {
+        GyroLicense->activate();
+      }
+    }
+    else if (command.startsWith("GyroOrientation="))
+    {
+      GyroOriantation = String(command.substring(16, 5).c_str());
+      EEPROM.writeString(E2ADD.GyroOriantationSave, GyroOriantation);
+      EEPROM.commit();
+      String strTmp = EEPROM.readString(E2ADD.GyroOriantationSave);
+      GyroOriantation = strTmp;
+    }
+    else if (command.startsWith("GiveMeOrientation"))
+    {
+      String response = "Orientation=" + GyroOriantation + "\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("PreCalTo="))
+    {
+      float aimAlt = command.substring(9).toInt(); // altitude in meters
+      float tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffset);
+      float error = 1; // to get into the loop
+      float pressurCalOffsetTemp = pressurCalOffset;
+      String response = "show.txt=\"Calibrating=\"\n";
+      myBle.sendString(response.c_str());
+
+      while (fabs(error) > 0.1)
+      {
+        if (isnan(pressurCalOffsetTemp)) // for sometimes crashes
+        {
+          pressurCalOffsetTemp = 0;
+          Serial.println("ERROR");
+        }
+        error = aimAlt - tempAlt;
+        pressurCalOffsetTemp += (error / 5000);
+        tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffsetTemp);
+        Serial.println("PrOffset=" + String(pressurCalOffsetTemp));
+        response = "M.Pre.val=" + String(static_cast<int>(tempAlt)) + "\n";
+        myBle.sendString(response.c_str());
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+      }
+
+      if (!isnan(pressurCalOffsetTemp)) // for sometimes crashes
+      {
+        pressurCalOffset = pressurCalOffsetTemp;
+        EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffset);
+        EEPROM.commit();
+      }
+      response = "show.txt=\"pressurCalOffset=" + String(pressurCalOffset) + "\"\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("BLEPASSWORD="))
+    {
+      String passStr = String(command.substring(12, 6).c_str());
+      int pass = atoi(passStr.c_str());
+      blePass = pass;
+      Serial.print("Password=");
+      Serial.println(blePass);
+      EEPROM.writeUInt(E2ADD.blePassSave, blePass);
+      EEPROM.commit();
+      // BLE//bleSetPass(blePass);
+      // BLE//remove_all_bonded_devices();
+      //       ESP.restart();
+    }
+    else if (command.startsWith("GETBLEPASSWORD"))
+    {
+      String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
+      myBle.sendString(response.c_str());
+      Serial.println(response.c_str());
+    }
+    else if (command.startsWith("DEF="))
+    {
+      String defType = command.substring(4);
+      if (defType == "UiConfig")
+      {
+        SaveStringToFile(String(defaultConfig), ConfigFile);
+      }
+      else if (defType == "Conditions")
+      {
+        SaveStringToFile(String(defaultCondition), CondFile);
+        jsonCon.readJsonConditionsFromFile(CondFile);
+      }
+
+      else if (defType == "VOLTAGE")
+      {
+        EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCoDeflt);
+        EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffsetDeflt);
+      }
+      else if (defType == "A0")
+      {
+        EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0OffsetDeflt);
+        EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCoDeflt);
+      }
+      else if (defType == "A")
+      {
+        EEPROM.writeFloat(E2ADD.ampOffsetSave, ampOffsetDeflt);
+        EEPROM.writeFloat(E2ADD.AcalCoSave, AcalCoDeflt);
+      }
+      else if (defType == "A2")
+      {
+        EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCoDeflt);
+        EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2OffsetDeflt);
+      }
+      else if (defType == "PT")
+      {
+        EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal_Deflt);
+      }
+      else if (defType == "CW_MIN")
+      {
+        EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMaxDeflt);
+      }
+      else if (defType == "CW_MAX")
+      {
+        EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMaxDeflt);
+      }
+      else if (defType == "DW_MIN")
+      {
+        EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
+      }
+      else if (defType == "DW_MAX")
+      {
+        EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
+      }
+      else if (defType == "GW_MIN")
+      {
+        EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
+      }
+      else if (defType == "GW_MAX")
+      {
+        EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
+        EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
+      }
+      else if (defType == "DIMMER")
+      {
+        for (int i = 0; i < 7; i++) // save dimmer defaults
+        {
+          EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimitDeflt); // limit dimmers to %60
+        }
+      }
+      else if (defType == "ALTITUDE")
+      {
+        EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffsetDeflt);
+      }
+      else if (defType == "GAS_MIN" || defType == "GAS_MAX")
+      {
+        // Placeholder for future implementation
+      }
+      EEPROM.commit();
+      loadSavedValue();
+      String response = "XrouteAlarm=Default OK\n";
+      myBle.sendString(response.c_str());
+    }
+    else if (command.startsWith("StartUpdate="))
+    {
+      MeasurmentTaskPause = true;
+      uint32_t binSize = command.substring(command.indexOf("=") + 1, command.indexOf(",")).toInt();
+      myUpdate = new bleUpdate(pCharacteristic, binSize);
+    }
+    else if (command.startsWith("TakeUiConfig="))
+    {
+      confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
+      MeasurmentTaskPause = true;                                                     // change to mutex in the future
+      myBle.startDirectRead();
+      if (eTaskGetState(&takeUiConfigFileTaskHandle) != eRunning)
+        xTaskCreate(takeUiConfigFileTask, "takeUiConfigFileTask", 4 * 1024, NULL, 1, &takeUiConfigFileTaskHandle);
+      break; // breake for preventing forthure processing the accumulated string
+    }
+    else if (command.startsWith("GiveMeUiConfigFile"))
+    {
+      if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
+      {
+        xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 4, NULL, 2, &sendUiConfigTaskHandle);
+      }
+    }
+    else if (command.startsWith("GiveMeConditionsFile"))
+    {
+      if (eTaskGetState(&sendConditionsTaskHandle) != eRunning)
+      {
+        xTaskCreate(sendConditionsTask, "sendConditionsTask", 1024 * 4, NULL, 2, &sendConditionsTaskHandle);
+      }
+    }
+    else if (command.startsWith("TakeConditions="))
+    {
+      confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
+      MeasurmentTaskPause = true;                                                     // change to mutex in the future
+      myBle.startDirectRead();
+      if (eTaskGetState(&takeConditionFileTaskHandle) != eRunning)
+        xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
+      break; // breake for preventing forthure processing the accumulated string
+    }
+    else
+    {
+      String errorMessage = "Errorparsing:" + String(command.c_str());
+      Serial.println(errorMessage);
+      myBle.sendString(errorMessage);
+    }
+  }
 }
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
 {
-    processReceivedCommandData(pCharacteristic, pData, length);
+  processReceivedCommandData(pCharacteristic, pData, length);
 }
-
 // --- Step 3: Your Internal Command Simulation Function ---
 // This function is called by your own code.
 void sendCmdToExecute(char *str)
 {
-    // Simulate BLE data reception
-    uint8_t *pData = reinterpret_cast<uint8_t *>(str); // Removed const_cast - ensure str is mutable if needed, or cast differently
-    size_t length = strlen(str);
+  // Simulate BLE data reception
+  uint8_t *pData = reinterpret_cast<uint8_t *>(str); // Removed const_cast - ensure str is mutable if needed, or cast differently
+  size_t length = strlen(str);
 
-    // Get the server characteristic pointer from the MyBle instance
-    // Assumes 'myBle' is an accessible instance of your MyBle class
-    NimBLECharacteristic* pServerChar = myBle.getServerCharacteristic();
+  // Get the server characteristic pointer from the MyBle instance
+  // Assumes 'myBle' is an accessible instance of your MyBle class
+  NimBLECharacteristic *pServerChar = myBle.getServerCharacteristic();
 
-    // Call the helper function directly, passing the characteristic
-    // This is needed if commands like "StartUpdate=" might be simulated
-    processReceivedCommandData(pServerChar, pData, length);
+  // Call the helper function directly, passing the characteristic
+  // This is needed if commands like "StartUpdate=" might be simulated
+  processReceivedCommandData(pServerChar, pData, length);
 }
 //--------------------
 void setup()
@@ -2263,7 +2131,7 @@ void setup()
       "DimerTask",
       2.5 * 1024, // stack size
       NULL,       // task argument
-      4,          // task priority
+      3,          // task priority
       NULL);
   xTaskCreate(
       adcReadingTask,
@@ -2277,35 +2145,35 @@ void setup()
       "led_indicator_task",
       3 * 1024, // stack size
       NULL,     // task argument
-      4,        // task priority
+      2,        // task priority
       NULL);
   xTaskCreate(
       OVR_CRNT_PRTCT_TASK,
       "OVR_CRNT_PRTCT_TASK",
       2.5 * 1024, // stack size
       NULL,       // task argument
-      4,          // task priority
+      2,          // task priority
       NULL);
   xTaskCreate(
       I2C_SENSORS_TASK, //-------------STACK optimized up to here
       "I2C_SENSORS_TASK",
       3 * 1024, // stack size
       NULL,     // task argument
-      4,        // task priority
+      2,        // task priority
       NULL);
   xTaskCreate(
       BatteryTask,
       "BatteryTask",
       3 * 1024,
       NULL,
-      3,
+      2,
       NULL);
   xTaskCreate(
       ConditionsTask,
       "ConditionsTask",
       5 * 1024,
       NULL,
-      3,
+      2,
       NULL);
   // xTaskCreate(
   //     ramMonitorTask,

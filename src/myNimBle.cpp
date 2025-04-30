@@ -111,14 +111,14 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             }
 
             // Create Characteristic with encryption properties
-            this->pServerCharacteristic = pService->createCharacteristic(
+            // --- characteristic creation ---
+            pServerCharacteristic = pService->createCharacteristic(
                 charUUID,
                 NIMBLE_PROPERTY::READ |
                     NIMBLE_PROPERTY::WRITE |
-                    NIMBLE_PROPERTY::NOTIFY |
+                    NIMBLE_PROPERTY::NOTIFY | // keep
                     NIMBLE_PROPERTY::READ_ENC |
-                    NIMBLE_PROPERTY::WRITE_ENC);
-
+                    NIMBLE_PROPERTY::WRITE_ENC); // <-- drop INDICATE
             if (!this->pServerCharacteristic)
             {
                 Serial.println("!!! Failed to create NimBLE characteristic !!!");
@@ -179,54 +179,43 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
     }
 }
 
-// Send Task
+
+// --- sendTask ---
 void MyBle::sendTask(void *param)
 {
-    MyBle *pMyBle = static_cast<MyBle *>(param);
-    if (!pMyBle)
-        return;
+    MyBle *self = static_cast<MyBle*>(param);
 
-    while (true)
+    for (;;)
     {
-        String dataToSend = "";
-        bool hasData = false;
-
-        // Use member pointer pServerCharacteristic
-        if (!pMyBle->isClientMode && pMyBle->pServerCharacteristic != nullptr)
-        {
-            if (xSemaphoreTake(pMyBle->sendQueueMutex, pdMS_TO_TICKS(10)) == pdTRUE)
-            {
-                if (!pMyBle->sendQueue.empty())
-                {
-                    dataToSend = pMyBle->sendQueue.front();
-                    pMyBle->sendQueue.pop();
-                    hasData = true;
-                }
-                xSemaphoreGive(pMyBle->sendQueueMutex);
+        String payload;
+        if (xSemaphoreTake(self->sendQueueMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            if (!self->sendQueue.empty()) {
+                payload = self->sendQueue.front();
+                self->sendQueue.pop();
             }
-        }
-        else if (pMyBle->isClientMode)
-        {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            continue;
+            xSemaphoreGive(self->sendQueueMutex);
         }
 
-        // Check connection and use member pointer
-        if (hasData && pMyBle->isConnected() && pMyBle->pServerCharacteristic != nullptr)
-        {
-            pMyBle->pServerCharacteristic->setValue(dataToSend);
-            pMyBle->pServerCharacteristic->notify();
-            vTaskDelay(pdMS_TO_TICKS(50)); // Flow control
+        if (payload.length() && self->isConnected() && self->pServerCharacteristic) {
+            self->pServerCharacteristic->setValue(payload);
+            self->pServerCharacteristic->notify();   // <-- notify
+            vTaskDelay(pdMS_TO_TICKS(5));             // gentle pacing
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(20));            // idle sleep
         }
-        else if (hasData && !pMyBle->isConnected())
-        {
-            // Serial.println("WARN: Data in queue but not connected: " + dataToSend);
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-        else
-        {
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
+    }
+}
+
+
+void MyBle::justSend(String data)
+{
+    int i = 0;
+    this->pServerCharacteristic->setValue(data);
+    while (this->pServerCharacteristic->indicate() == false)
+    {
+        if (i++ > 100)
+            return;
+        vTaskDelay(pdTICKS_TO_MS(1));
     }
 }
 
@@ -356,33 +345,61 @@ void MyBle::sendString(String str)
 void MyBle::sendData(const char *data) { sendString(String(data)); }
 
 // Send Long String (Client or Server)
-/*
+///*
+// Method in myNimBle.cpp
 void MyBle::sendLongString(String str)
 {
-    int maxPayload = 20;
-    // Use member pointers for checks
-    if (isClientMode && this->pClient && this->pClient->isConnected()) {
-         maxPayload = this->pClient->getMTU() - 5;
-         if (maxPayload <= 0) maxPayload = 20;
-    } else if (!isClientMode && this->pServer) {
-         maxPayload = NimBLEDevice::getMTU() > 0 ? (NimBLEDevice::getMTU() - 3) : 20;
-         if (maxPayload <= 0) maxPayload = 20;
+    int maxPayload = 20; // Default payload size
+
+    // Determine max payload based on connection MTU
+    if (isClientMode && this->pClient && this->pClient->isConnected())
+    {
+        maxPayload = this->pClient->getMTU() - 5; // Client overhead
+        if (maxPayload <= 0)
+            maxPayload = 20; // Ensure valid minimum
+        Serial.printf("[sendLongString] Client Mode: MTU=%d, Calculated Max Payload=%d\n", this->pClient->getMTU(), maxPayload);
+    }
+    else if (!isClientMode && this->pServer)
+    {
+        int currentMtu = NimBLEDevice::getMTU();
+        maxPayload = currentMtu > 0 ? (currentMtu - 3) : 20; // Server overhead (notify)
+        if (maxPayload <= 0)
+            maxPayload = 20; // Ensure valid minimum
+        Serial.printf("[sendLongString] Server Mode: MTU=%d, Calculated Max Payload=%d\n", currentMtu, maxPayload);
+    }
+    else
+    {
+        Serial.printf("[sendLongString] Warning: Could not determine MTU, using default payload: %d\n", maxPayload);
     }
 
-    Serial.printf("Sending long string (%s, %d bytes), chunk size ~%d\n", isClientMode?"Client":"Server", str.length(), maxPayload);
+    Serial.printf("[sendLongString] Sending long string (%s, %d bytes total), chunk size ~%d\n",
+                  isClientMode ? "Client" : "Server", str.length(), maxPayload);
 
     int from = 0;
-    while (from < str.length()) {
+    int totalChunks = (str.length() + maxPayload - 1) / maxPayload; // Calculate total chunks
+    int chunkNum = 1;
+
+    while (from < str.length())
+    {
         int len = std::min(maxPayload, (int)str.length() - from);
         String strChunk = str.substring(from, from + len);
-        sendString(strChunk); // Handles both modes
-        from += len;
-        if (isClientMode) vTaskDelay(pdMS_TO_TICKS(20)); // Delay between client chunks
-    }
-    Serial.println("Finished sending long string.");
-}
-*/
 
+        Serial.printf("[sendLongString] Sending chunk %d/%d (%d bytes): %s\n",
+                      chunkNum, totalChunks, len, strChunk.c_str());
+
+        sendString(strChunk); // Call the regular sendString function
+        Serial.printf("[sendLongString] Chunk %d sent. Waiting %dms...\n", chunkNum, 20);
+
+        from += len;
+        chunkNum++;
+
+        // Apply delay unconditionally after sending each chunk
+        vTaskDelay(pdMS_TO_TICKS(20)); // Adjust this delay (e.g., 20-50ms) as needed
+    }
+    Serial.println("[sendLongString] Finished sending long string.");
+}
+//*/
+/*
 void MyBle::sendLongString(String str)
 {
     // #define HeaderSize 4 // bytes
@@ -404,6 +421,7 @@ void MyBle::sendLongString(String str)
         // Saman : i checked for this and it actually do the process til the end
     }
 }
+*/
 
 // Disconnect (Client or Server)
 void MyBle::disconnect()

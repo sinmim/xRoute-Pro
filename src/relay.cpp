@@ -14,7 +14,7 @@ void setRelPWM(float volt, float SuplyVol)
     int max = pow(2, REL_PWM_RES);
     ledcWrite(REL_PWM_CHANNEL, (1 - duty) * max); // 1-duty becaus i need inverted pwm
 }
- 
+
 void initRelay()
 {
     ledcSetup(REL_PWM_CHANNEL, REL_PWM_FREQ, REL_PWM_RES);
@@ -25,7 +25,7 @@ void initRelay()
     pinMode(DATA_PRT, OUTPUT);
     pinMode(RST_PRT, OUTPUT);
     setRelay(0, SupplyVoltage);
-    //Serial.println("Relay init ok !");
+    // Serial.println("Relay init ok !");
 }
 void setRelayNum(int relNum, relConfig *relays, bool state)
 {
@@ -77,6 +77,22 @@ void setRelay(unsigned int data, float SuplyVol)
 bool relState_0_15(int relNum)
 {
     return relStates[relNum];
+}
+String getRelsStatStr()
+{
+    String str = "";
+    for (int i = 0; i < 16; i++)
+    {
+        if (relState_0_15(i))
+        {
+            str += "1";
+        }
+        else
+        {
+            str += "0";
+        }
+    }
+    return str;
 }
 bool relaySatat()
 {
