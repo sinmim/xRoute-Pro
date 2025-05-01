@@ -89,9 +89,8 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             // Proper security initialization
             NimBLEDevice::setSecurityAuth(true, true, true);
             NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);
-            NimBLEDevice::setSecurityPasskey(382501);
+            NimBLEDevice::setSecurityPasskey(123456);
             NimBLEDevice::setSecurityInitKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
-            NimBLEDevice::setSecurityRespKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
 
             // Create Server instance
             this->pServer = NimBLEDevice::createServer();
@@ -132,16 +131,6 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
             if (pAdvertising)
             {
-
-                // Safe advertising intervals
-                // pAdvertising->setMinInterval(0x20); // 32 * 0.625ms = 20ms
-                // pAdvertising->setMaxInterval(0x40); // 64 * 0.625ms = 40ms
-                // pAdvertising->setMinInterval(160); // 100 ms
-                // pAdvertising->setMaxInterval(320); // 200 ms
-                // NimBLEAdvertisementData advData;
-                // advData.setFlags(ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT);
-                // advData.setFlags((0x01 << 1)|(0x01 << 2));
-                // advData.addServiceUUID(serviceUUID);
                 pAdvertising->setName(deviceName);
                 pAdvertising->addServiceUUID(serviceUUID);
                 pAdvertising->enableScanResponse(true);
@@ -179,44 +168,42 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
     }
 }
 
-
 // --- sendTask ---
 void MyBle::sendTask(void *param)
 {
-    MyBle *self = static_cast<MyBle*>(param);
+    MyBle *self = static_cast<MyBle *>(param);
 
     for (;;)
     {
         String payload;
-        if (xSemaphoreTake(self->sendQueueMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            if (!self->sendQueue.empty()) {
+        if (xSemaphoreTake(self->sendQueueMutex, pdMS_TO_TICKS(10)) == pdTRUE)
+        {
+            if (!self->sendQueue.empty())
+            {
                 payload = self->sendQueue.front();
                 self->sendQueue.pop();
             }
             xSemaphoreGive(self->sendQueueMutex);
         }
 
-        if (payload.length() && self->isConnected() && self->pServerCharacteristic) {
+        if (payload.length() && self->isConnected() && self->pServerCharacteristic)
+        {
             self->pServerCharacteristic->setValue(payload);
-            self->pServerCharacteristic->notify();   // <-- notify
-            vTaskDelay(pdMS_TO_TICKS(5));             // gentle pacing
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(20));            // idle sleep
+            self->pServerCharacteristic->notify(); // <-- notify
+            vTaskDelay(pdMS_TO_TICKS(5));          // gentle pacing
+        }
+        else
+        {
+            vTaskDelay(pdMS_TO_TICKS(20)); // idle sleep
         }
     }
 }
-
 
 void MyBle::justSend(String data)
 {
     int i = 0;
     this->pServerCharacteristic->setValue(data);
-    while (this->pServerCharacteristic->indicate() == false)
-    {
-        if (i++ > 100)
-            return;
-        vTaskDelay(pdTICKS_TO_MS(1));
-    }
+    this->pServerCharacteristic->notify();
 }
 
 // Connect to Server (Client Mode)
@@ -492,7 +479,6 @@ bool MyBle::isNewConnection()
     }
     return false;
 }
-void MyBle::setPass(u_int32_t _password) { NimBLEDevice::setSecurityPasskey(_password); }
 
 bool MyBle::isSendQueueBusy()
 {
@@ -588,3 +574,31 @@ void MyBle::onResult(NimBLEAdvertisedDevice *advertisedDevice)
         }
     }
 }
+
+// === NEW: setPassKey ===
+void MyBle::setPassKey(uint32_t _password, bool wipe) {
+    passKey = _password;
+    NimBLEDevice::setSecurityPasskey(_password);
+    if (wipe) {
+      deleteAllBonds();
+    }
+  }
+  
+  // === NEW: getPassKey ===
+  uint32_t MyBle::getPassKey() const {
+    return passKey;
+  }
+  
+  // === NEW: getPairedDevices ===
+  std::vector<MyBle::PairedDevice> MyBle::getPairedDevices() const {
+    std::vector<PairedDevice> list;
+    int num = NimBLEDevice::getNumBonds();
+    for (int i = 0; i < num; ++i) {
+      NimBLEAddress addr = NimBLEDevice::getBondedAddress(i);
+      PairedDevice pd;
+      pd.address = String(addr.toString().c_str());
+      pd.name    = "";  // name lookup not implemented (placeholder)
+      list.push_back(pd);
+    }
+    return list;
+  }

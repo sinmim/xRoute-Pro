@@ -1880,20 +1880,21 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     }
     else if (command.startsWith("BLEPASSWORD="))
     {
-      String passStr = String(command.substring(12, 6).c_str());
-      int pass = atoi(passStr.c_str());
-      blePass = pass;
-      Serial.print("Password=");
-      Serial.println(blePass);
+      // find the single '=' and take everything after it
+      int eq = command.indexOf('=');
+      String passStr = command.substring(eq + 1);
+      uint32_t blePass = atoi(passStr.c_str());
       EEPROM.writeUInt(E2ADD.blePassSave, blePass);
       EEPROM.commit();
-      // BLE//bleSetPass(blePass);
-      // BLE//remove_all_bonded_devices();
-      //       ESP.restart();
+      // set new passkey and wipe bonds
+      myBle.setPassKey(blePass, true);
+      Serial.println("PassKey: " + String(myBle.getPassKey()));
     }
+
     else if (command.startsWith("GETBLEPASSWORD"))
     {
-      String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
+      // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
+      String response = "BLEPASSWORD=" + String(myBle.getPassKey()) + "\n";
       myBle.sendString(response.c_str());
       Serial.println(response.c_str());
     }
@@ -2116,6 +2117,8 @@ void setup()
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
   myBle.beginServer(onDataReceived);
+  myBle.setPassKey(EEPROM.readUInt(E2ADD.blePassSave), true);//to do : false this to prevent wiping 
+  Serial.printf("BLE PASS : %s\n", String(myBle.getPassKey()));
 
 #define TasksEnabled
 #ifdef TasksEnabled

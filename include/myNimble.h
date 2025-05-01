@@ -13,6 +13,8 @@
 class MyBle
 {
 private:
+  // ** NEW ** store current passkey
+  uint32_t passKey = 0;
   bool isClientMode;
   NimBLEClient *pClient = nullptr;
   NimBLEServer *pServer = nullptr;
@@ -180,13 +182,25 @@ protected:
   void onResult(NimBLEAdvertisedDevice *advertisedDevice);
 
 public:
-  void justSend(String data);
+  // --- Struct to hold paired‐device info
+  struct PairedDevice
+  {
+    String address;
+    String name; // placeholder; reporting blank until name‐lookup is implemented
+  };
 
   static String bleAddTmp; // Static for scan result? Review if needed.
 
   MyBle(bool clientMode = true);
   ~MyBle();
 
+  // ** NEW ** change passkey (and optionally wipe bonds)
+  void setPassKey(uint32_t _password, bool wipe = false);
+  // ** NEW ** retrieve last‐set passkey
+  uint32_t getPassKey() const;
+  // ** NEW ** list paired (bonded) devices
+
+  std::vector<PairedDevice> getPairedDevices() const;
   // Public methods
   void begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb);
   void beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)> cb); // User CB needs updated signature
@@ -209,10 +223,9 @@ public:
   void resume();
   bool isRunning();
   bool isNewConnection();
-  void setPass(u_int32_t _password);
   bool isSendQueueBusy();
+  void justSend(String data);
   void sendLongString(String str);
-
   void startDirectRead() { directReadingFlg = true; }
   void stopDirectRead() { directReadingFlg = false; }
   String directRead();
