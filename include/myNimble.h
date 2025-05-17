@@ -8,11 +8,37 @@
 #include <freertos/task.h>
 #include <freertos/semphr.h>
 #include <functional>
-#include <vector> // Include for std::vector
+#include <vector>
+
+struct whiteListInfo
+{
+  NimBLEAddress MacAdd;
+  NimBLEConnInfo connInfo;
+};
+struct waiteListInfo
+{
+  NimBLEAddress MacAdd;
+  NimBLEConnInfo connInfo;
+  unsigned long startMilis;
+  int passwordRetryCount;
+  int retyForRespons;
+  bool clientResponsing;
+};
 
 class MyBle
 {
 private:
+  static const int WHITE_LIST_SIZE = 10;
+  static const int WAITE_LIST_SIZE = 10;
+  static const int MAX_RETRY_ATTEMPTS = 3;
+  static const int AUT_TIME_OUT = 5000;
+  static const int WAITE_FOR_USER_ENTERING_PASSKEY = 20000;
+  
+
+  static std::vector<whiteListInfo> whiteList;
+  static std::vector<waiteListInfo> waiteList;
+  static void timeOutTask(void *parameter);
+
   // ** NEW ** store current passkey
   uint32_t passKey = 0;
   bool isClientMode;
@@ -22,6 +48,7 @@ private:
   bool runFlg = true;
   static bool connectedFlg;
   static bool newConnectionMade;
+  // lets create an array of 10 MAC adresses
 
   // --- Non-static characteristic pointers ---
   NimBLERemoteCharacteristic *pRemoteCharacteristic = nullptr; // For client mode
@@ -34,12 +61,12 @@ private:
   std::queue<String> sendQueue;
   SemaphoreHandle_t sendQueueMutex;
   static void sendTask(void *parameter);
+
   String strBLE;
   bool directReadingFlg = false;
   bool dataReady = false;
 
   // --- Inner Callback Classes ---
-
   class MyClientCallback : public NimBLEClientCallbacks
   {
     MyBle *pMyBleInstance;
@@ -74,6 +101,17 @@ private:
 
     void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) override
     {
+      const NimBLEAddress addr = connInfo.getAddress();
+
+      if (!pMyBleInstance->isInWhiteList(addr))
+      {
+        pMyBleInstance->addToWaiteList(addr, connInfo);
+        // set milis() for cliant in waitlist
+        int index = pMyBleInstance->getWaiteLisindex(addr);
+        pMyBleInstance->waiteList[index].startMilis = millis();
+        pMyBleInstance->waiteList[index].passwordRetryCount = 0;
+        pMyBleInstance->waiteList[index].retyForRespons = 0;
+      }
       int count = pServer->getConnectedCount();
       Serial.printf("Device connected: %s, Total: %d\n", connInfo.getAddress().toString().c_str(), count);
       connectedFlg = true;
@@ -82,6 +120,8 @@ private:
       {
         NimBLEDevice::startAdvertising();
       }
+      // peint the mac addres
+      Serial.println(connInfo.getAddress().toString().c_str());
     }
 
     void onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo, int reason) override
@@ -182,26 +222,11 @@ protected:
   void onResult(NimBLEAdvertisedDevice *advertisedDevice);
 
 public:
-  // --- Struct to hold paired‐device info
-  struct PairedDevice
-  {
-    String address;
-    String name; // placeholder; reporting blank until name‐lookup is implemented
-  };
-
   static String bleAddTmp; // Static for scan result? Review if needed.
 
   MyBle(bool clientMode = true);
   ~MyBle();
 
-  // ** NEW ** change passkey (and optionally wipe bonds)
-  void setPassKey(uint32_t _password, bool wipe = false);
-  // ** NEW ** retrieve last‐set passkey
-  uint32_t getPassKey() const;
-  // ** NEW ** list paired (bonded) devices
-
-  std::vector<PairedDevice> getPairedDevices() const;
-  // Public methods
   void begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)> cb);
   void beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)> cb); // User CB needs updated signature
   // Getter for the server characteristic (if in server mode)
@@ -229,8 +254,25 @@ public:
   void startDirectRead() { directReadingFlg = true; }
   void stopDirectRead() { directReadingFlg = false; }
   String directRead();
-
   void deleteAllBonds();
+  void setPassKey(uint32_t _password, bool wipe = false);
+  uint32_t getPassKey() const;
+  void addToWhiteList(const NimBLEAddress &address, const NimBLEConnInfo &connInfo);
+  void addToWaiteList(const NimBLEAddress &address, const NimBLEConnInfo &connInfo);
+  bool isInWhiteList(const NimBLEAddress &address);
+  bool isInWaiteList(const NimBLEAddress &address);
+  int getWaiteLisindex(const NimBLEAddress &address);
+  int getWhiteLisindex(const NimBLEAddress &address);
+  void authenticate(NimBLEConnInfo &connInfo, uint8_t *pData, size_t length);
+  void removeFromWaiteList(const NimBLEAddress &address);
+  void removeFromWhiteList(const NimBLEAddress &address);
+  void clearwhitelist();
+  void clearwaitelist();
+  void disconnectAllWhiteList();
+  void sendStringToMac(String str, NimBLEConnInfo &connInfo);
+  
+  void setResponsFromClient(const NimBLEAddress &address, bool userIsEnteringPass);
+  bool getResponsFromClient(const NimBLEAddress &address);
 };
 
 #endif // MY_NIM_BLE_H

@@ -1,6 +1,9 @@
 #include "myNimBle.h"
 #include <string> // Include for std::string
 
+std::vector<whiteListInfo> MyBle::whiteList;
+std::vector<waiteListInfo> MyBle::waiteList;
+
 // Define static members
 bool MyBle::connectedFlg = false;
 bool MyBle::newConnectionMade = false;
@@ -24,6 +27,7 @@ MyBle::MyBle(bool clientMode) : isClientMode(clientMode),
         Serial.println("!!! Error creating send queue mutex !!!");
     }
     xTaskCreate(sendTask, "SendTask", 4096, this, 1, NULL);
+    xTaskCreate(timeOutTask, "timeOutTask", 4096, this, 1, NULL);
 }
 
 // Destructor
@@ -69,6 +73,73 @@ void MyBle::begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCh
     }
 }
 
+void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)> cb)
+{
+    serverCallBack = cb;
+
+    if (isClientMode)
+    {
+        Serial.println("Error: Called beginServer() in Client Mode.");
+        return;
+    }
+
+    if (this->pServer)
+    {
+        Serial.println("BLE Server already exists.");
+        NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
+        if (pAdvertising && !pAdvertising->isAdvertising() &&
+            this->pServer->getConnectedCount() < CONFIG_BT_NIMBLE_MAX_CONNECTIONS)
+        {
+            pAdvertising->start();
+            Serial.println("Restarting Advertising...");
+        }
+        return;
+    }
+
+    // Initialize device name with unique ID
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    char uniqueID[7];
+    snprintf(uniqueID, sizeof(uniqueID), "-%02X%02X", mac[4], mac[5]);
+    std::string deviceName = "xRoutePro";
+    NimBLEDevice::init(deviceName);
+    deviceName += uniqueID;
+    Serial.printf("BLE Server Initializing with name: %s\n", deviceName.c_str());
+
+    // Disable security for open connections
+    NimBLEDevice::setSecurityAuth(false, false, false);
+
+    // Create server and set callbacks
+    this->pServer = NimBLEDevice::createServer();
+    this->pServer->setCallbacks(new MyServerCallbacks(this), true);
+
+    // Create service and characteristic (no encryption)
+    NimBLEService *pService = this->pServer->createService(serviceUUID);
+    pServerCharacteristic = pService->createCharacteristic(
+        charUUID,
+        NIMBLE_PROPERTY::READ |
+            NIMBLE_PROPERTY::WRITE |
+            NIMBLE_PROPERTY::NOTIFY);
+    pServerCharacteristic->setCallbacks(new MyCallbacks(*this));
+    pService->start();
+
+    // Start advertising
+    NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
+    pAdvertising->setName(deviceName);
+    pAdvertising->addServiceUUID(serviceUUID);
+    pAdvertising->enableScanResponse(true);
+
+    if (pAdvertising->start())
+    {
+        Serial.println("BLE Server Advertising started successfully!");
+    }
+    else
+    {
+        Serial.println("!!! Failed to start BLE Advertising !!!");
+    }
+}
+
+/*
 void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)> cb)
 {
     serverCallBack = cb; // User callback needs updated signature!
@@ -168,11 +239,12 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
     }
 }
 
+*/
+
 // --- sendTask ---
 void MyBle::sendTask(void *param)
 {
     MyBle *self = static_cast<MyBle *>(param);
-
     for (;;)
     {
         String payload;
@@ -188,13 +260,88 @@ void MyBle::sendTask(void *param)
 
         if (payload.length() && self->isConnected() && self->pServerCharacteristic)
         {
-            self->pServerCharacteristic->setValue(payload);
-            self->pServerCharacteristic->notify(); // <-- notify
-            vTaskDelay(pdMS_TO_TICKS(5));          // gentle pacing
+            // send to white list clients only use foreach
+            for (const auto &client : self->whiteList)
+            {
+                self->pServerCharacteristic->setValue(payload);
+                self->pServerCharacteristic->notify(client.connInfo.getConnHandle());
+            }
+            vTaskDelay(pdMS_TO_TICKS(5)); // gentle pacing
         }
         else
         {
             vTaskDelay(pdMS_TO_TICKS(20)); // idle sleep
+        }
+    }
+}
+//--- timeoutTask ---
+void MyBle::timeOutTask(void *param)
+{
+    MyBle *self = static_cast<MyBle *>(param);
+
+    for (;;)
+    {
+        for (int i = 0; i < waiteList.size(); i++)
+        {
+            // if user did not respond yet send him "GiveMePassKey\n" every 1000ms
+            if (millis() - waiteList[i].startMilis > 100 &&                                  // waite for 100ms
+                millis() - waiteList[i].startMilis > (waiteList[i].retyForRespons * 1000) && // every retry adds 1000ms
+                waiteList[i].retyForRespons < 5 &&                                           // 5 retrys
+                !waiteList[i].clientResponsing)                                              // no respons yet
+            {
+                if (self->pServer)
+                {
+                    self->sendStringToMac("GIVE_ME_PASSKEY\n", waiteList[i].connInfo);
+                    waiteList[i].retyForRespons++;
+                    Serial.printf("Sent 'GIVE_ME_PASSKEY' to %s\n", waiteList[i].MacAdd.toString().c_str());
+                }
+            }
+            // calculate timeout in a single line
+            int timeout = waiteList[i].clientResponsing ? WAITE_FOR_USER_ENTERING_PASSKEY : AUT_TIME_OUT;
+
+            if (millis() - waiteList[i].startMilis > timeout)
+            {
+                if (self->pServer)
+                {
+                    // send cleint "timeout"
+                    self->sendStringToMac("AUT_TIMEOUT\n", waiteList[i].connInfo);
+                    self->pServer->disconnect(waiteList[i].connInfo.getConnHandle());
+                    self->removeFromWaiteList(waiteList[i].MacAdd);
+                    Serial.printf("Device %s timed out and disconnected\n", waiteList[i].MacAdd.toString().c_str());
+                }
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+void MyBle::sendStringToMac(String str, NimBLEConnInfo &connInfo)
+{
+    if (!isConnected() || !pServerCharacteristic)
+    {
+        Serial.println("Not connected or characteristic not available.");
+        return;
+    }
+    pServerCharacteristic->setValue(str);
+    pServerCharacteristic->notify(connInfo.getConnHandle());
+}
+
+void MyBle::clearwhitelist()
+{
+    whiteList.clear();
+}
+void MyBle::clearwaitelist()
+{
+    waiteList.clear();
+}
+
+void MyBle::disconnectAllWhiteList()
+{
+    for (const auto &client : whiteList)
+    {
+        if (pServer)
+        {
+            pServer->disconnect(client.connInfo.getConnHandle());
         }
     }
 }
@@ -315,7 +462,6 @@ void MyBle::sendString(String str)
         }
         return;
     }
-
     // Server mode: Use the queue
     if (xSemaphoreTake(sendQueueMutex, portMAX_DELAY) == pdTRUE)
     {
@@ -576,29 +722,206 @@ void MyBle::onResult(NimBLEAdvertisedDevice *advertisedDevice)
 }
 
 // === NEW: setPassKey ===
-void MyBle::setPassKey(uint32_t _password, bool wipe) {
+void MyBle::setPassKey(uint32_t _password, bool wipe)
+{
     passKey = _password;
     NimBLEDevice::setSecurityPasskey(_password);
-    if (wipe) {
-      deleteAllBonds();
+    if (wipe)
+    {
+        deleteAllBonds();
+        disconnectAllWhiteList();
+        clearwhitelist();
+        clearwaitelist();
     }
-  }
-  
-  // === NEW: getPassKey ===
-  uint32_t MyBle::getPassKey() const {
+}
+
+// === NEW: getPassKey ===
+uint32_t MyBle::getPassKey() const
+{
     return passKey;
-  }
-  
-  // === NEW: getPairedDevices ===
-  std::vector<MyBle::PairedDevice> MyBle::getPairedDevices() const {
-    std::vector<PairedDevice> list;
-    int num = NimBLEDevice::getNumBonds();
-    for (int i = 0; i < num; ++i) {
-      NimBLEAddress addr = NimBLEDevice::getBondedAddress(i);
-      PairedDevice pd;
-      pd.address = String(addr.toString().c_str());
-      pd.name    = "";  // name lookup not implemented (placeholder)
-      list.push_back(pd);
+}
+
+// list managements
+void MyBle::addToWhiteList(const NimBLEAddress &address, const NimBLEConnInfo &connInfo)
+{
+    for (auto &client : whiteList)
+    {
+        if (client.MacAdd.equals(address))
+        {
+            client.connInfo = connInfo;
+            return;
+        }
     }
-    return list;
-  }
+
+    if (whiteList.size() < WHITE_LIST_SIZE)
+    {
+        whiteList.push_back({address, connInfo});
+    }
+    else
+    {
+        Serial.println("Whitelist is full!");
+    }
+}
+void MyBle::addToWaiteList(const NimBLEAddress &address, const NimBLEConnInfo &connInfo)
+{
+    for (auto &client : waiteList)
+    {
+        if (client.MacAdd.equals(address))
+        {
+            client.connInfo = connInfo;
+            return;
+        }
+    }
+
+    if (waiteList.size() < WAITE_LIST_SIZE)
+    {
+        waiteList.push_back({address, connInfo, millis(), 0, 0, false});
+    }
+    else
+    {
+        Serial.println("Waitelist is full!");
+    }
+}
+bool MyBle::isInWhiteList(const NimBLEAddress &address)
+{
+    for (const auto &client : whiteList)
+    {
+        if (client.MacAdd.equals(address))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+bool MyBle::isInWaiteList(const NimBLEAddress &address)
+{
+    for (const auto &client : waiteList)
+    {
+        if (client.MacAdd.equals(address))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+void MyBle::removeFromWaiteList(const NimBLEAddress &address)
+{
+    for (auto it = waiteList.begin(); it != waiteList.end(); ++it)
+    {
+        if (it->MacAdd.equals(address))
+        {
+            waiteList.erase(it);
+            return;
+        }
+    }
+}
+void MyBle::removeFromWhiteList(const NimBLEAddress &address)
+{
+    for (auto it = whiteList.begin(); it != whiteList.end(); ++it)
+    {
+        if (it->MacAdd.equals(address))
+        {
+            whiteList.erase(it);
+            return;
+        }
+    }
+}
+int MyBle::getWhiteLisindex(const NimBLEAddress &address)
+{
+    for (int i = 0; i < whiteList.size(); i++)
+    {
+        if (whiteList[i].MacAdd.equals(address))
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+int MyBle::getWaiteLisindex(const NimBLEAddress &address)
+{
+    for (int i = 0; i < waiteList.size(); i++)
+    {
+        if (waiteList[i].MacAdd.equals(address))
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+void MyBle::setResponsFromClient(const NimBLEAddress &address, bool userIsEnteringPass)
+{
+    int index = getWaiteLisindex(address);
+    if (index != -1)
+    {
+        waiteList[index].clientResponsing = true;
+    }
+}
+bool MyBle::getResponsFromClient(const NimBLEAddress &address)
+{
+    int index = getWaiteLisindex(address);
+    if (index != -1)
+    {
+        return waiteList[index].clientResponsing;
+    }
+    return false;
+}
+
+void MyBle::authenticate(NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
+{
+    static String accumulatedData;
+    // Convert received data to String
+    String receivedData(reinterpret_cast<char *>(pData), length);
+    accumulatedData += receivedData;
+    int endPos;
+    while ((endPos = accumulatedData.indexOf('\n')) != -1)
+    {
+        String command = accumulatedData.substring(0, endPos); // Extract command
+        accumulatedData.remove(0, endPos + 1);                 // Remove the processed command
+        // Command processing
+        if (command.startsWith("PASSKEY="))
+        {
+            uint32_t _passKey = command.substring(8).toInt();
+            if (_passKey == passKey)
+            {
+                // add to whitelist
+                addToWhiteList(connInfo.getAddress(), connInfo);
+                removeFromWaiteList(connInfo.getAddress());
+                Serial.printf("PASSKEY:%d is correct. %s added to whitelist\n", _passKey, connInfo.getAddress().toString().c_str());
+            }
+            else
+            {
+                Serial.printf("PASSKEY:%d is incorrect\n", _passKey);
+                // send to client "InvalidPassword\n"
+                sendStringToMac("INVALID_PASSWORD\n", connInfo);
+                // get index of waiteList
+                int index = getWaiteLisindex(connInfo.getAddress());
+                if (index != -1)
+                {
+                    waiteList[index].passwordRetryCount++;
+                    if (waiteList[index].passwordRetryCount > MAX_RETRY_ATTEMPTS)
+                    {
+                        if (pServer)
+                        {
+                            pServer->disconnect(connInfo.getConnHandle());
+                            removeFromWaiteList(connInfo.getAddress());
+                            Serial.printf("Too many retries. %s disconnected and removed from waitlist\n", connInfo.getAddress().toString().c_str());
+                        }
+                    }
+                    else
+                    {
+                        Serial.printf("PASSKEY:%d is incorrect. Retry count: %d\n", _passKey, waiteList[index].passwordRetryCount);
+                    }
+                }
+            }
+        }
+        else if (command.startsWith("WAITING_FOR_PASSKEY"))
+        {
+            setResponsFromClient(connInfo.getAddress(), true);
+            Serial.printf("WAITING_FOR_PASSKEY: %s\n", connInfo.getAddress().toString().c_str());
+        }
+        else
+        {
+            Serial.printf("Unknown command: %s\n", command.c_str());
+        }
+    }
+}

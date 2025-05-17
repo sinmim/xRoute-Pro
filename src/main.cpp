@@ -27,6 +27,7 @@
 #include "SparkFunLIS3DH.h"
 #include <SPIFFS.h>
 #include <FS.h>
+#include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
 #ifdef __________________________________________VAR_DEF
@@ -1155,7 +1156,6 @@ void defaultCalibrations()
     sendToAll(str);
   }
 }
-
 // END----------------------------------------------TASKS
 //-------------------------------------------------FUNCTIONS
 void createCondition(String _inputType, int _inputPort, String _oprt, float _setpoint, String _outputType, int _outputPort, int _outputValue)
@@ -1335,14 +1335,9 @@ public:
   }
 };
 bleUpdate *myUpdate;
-// --- Step 1: The Helper Function with Core Logic ---
-// Contains the actual command processing logic.
-
 void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
-  // Static variable to buffer data - lives within this function's scope now
   static String accumulatedData;
-  // --- Start of your original onDataReceived logic ---
   if (myUpdate != nullptr)
   {
     // Check if bleUpdate::continueUpdate() needs pCharacteristic.
@@ -1360,15 +1355,13 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       // MeasurmentTaskPause = false; // Resume task if paused
     }
   }
-  // Convert received data to String
   String receivedData(reinterpret_cast<char *>(pData), length);
   accumulatedData += receivedData;
   int endPos;
   while ((endPos = accumulatedData.indexOf('\n')) != -1)
   {
-    String command = accumulatedData.substring(0, endPos); // Extract command
-    accumulatedData.remove(0, endPos + 1);                 // Remove the processed command
-    // Command processing
+    String command = accumulatedData.substring(0, endPos);
+    accumulatedData.remove(0, endPos + 1);
     if (command.startsWith("sw"))
     {
 
@@ -1878,19 +1871,31 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       response = "show.txt=\"pressurCalOffset=" + String(pressurCalOffset) + "\"\n";
       myBle.sendString(response.c_str());
     }
-    else if (command.startsWith("BLEPASSWORD="))
+    else if (command.startsWith("BLEPASSWORD=")) // example : BLEPASSWORD=123456,654321
     {
-      // find the single '=' and take everything after it
+      // extract 6 digit oldPass from = to ,
       int eq = command.indexOf('=');
-      String passStr = command.substring(eq + 1);
-      uint32_t blePass = atoi(passStr.c_str());
-      EEPROM.writeUInt(E2ADD.blePassSave, blePass);
-      EEPROM.commit();
-      // set new passkey and wipe bonds
-      myBle.setPassKey(blePass, true);
-      Serial.println("PassKey: " + String(myBle.getPassKey()));
+      int comma = command.indexOf(',');
+      String oldPassStr = command.substring(eq + 1, comma);
+      uint32_t oldPass = atoi(oldPassStr.c_str());
+      // extract 6 digit newPass from , to end
+      String newPassStr = command.substring(comma + 1);
+      uint32_t newPass = atoi(newPassStr.c_str());
+      // check if oldPass is correct
+      if (oldPass == myBle.getPassKey())
+      {
+        EEPROM.writeUInt(E2ADD.blePassSave, newPass);
+        EEPROM.commit();
+        // set new passkey and wipe bonds
+        Serial.println("PassKey: " + String(myBle.getPassKey()));
+        myBle.justSend("BLE_PASSWORD_CHANGED_OK\n");
+        myBle.setPassKey(newPass, true);
+      }
+      else
+      {
+        myBle.sendString("BLE_PASSWORD_CHANGED_ERROR\n");
+      }
     }
-
     else if (command.startsWith("GETBLEPASSWORD"))
     {
       // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
@@ -2033,10 +2038,14 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
 }
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
 {
+  const NimBLEAddress addr = connInfo.getAddress();
+  if (!myBle.isInWhiteList(addr))
+  {
+    myBle.authenticate(connInfo, pData, length);
+    return;
+  }
   processReceivedCommandData(pCharacteristic, pData, length);
 }
-// --- Step 3: Your Internal Command Simulation Function ---
-// This function is called by your own code.
 void sendCmdToExecute(char *str)
 {
   // Simulate BLE data reception
@@ -2051,6 +2060,57 @@ void sendCmdToExecute(char *str)
   // This is needed if commands like "StartUpdate=" might be simulated
   processReceivedCommandData(pServerChar, pData, length);
 }
+//--------------------
+// wifi task
+#include <WebServer.h>
+WebServer http(80);
+#include <ESPmDNS.h>
+
+void handleStatus()
+{
+  StaticJsonDocument<200> doc;
+  doc["voltage"] = (int)v;
+  doc["dimmer"] = dimTmp[0] / 32768;
+  String out;
+  serializeJson(doc, out);
+  http.send(200, "application/json", out);
+  Serial.println(out);
+}
+
+void WifiTask(void *pvParameters)
+{
+  // connect to karavanicin.com_2.4GHz pass:1020304050
+  WiFi.begin("karavanicin.com_2.4GHz", "1020304050");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+
+  if (!MDNS.begin("xroute"))
+  {
+    Serial.println("Error: mDNS responder failed");
+  }
+  else
+  {
+    Serial.println("mDNS responder started: http://xroute.local");
+    // optional: advertise HTTP service
+    MDNS.addService("http", "tcp", 80);
+  }
+  
+  http.on("/status", HTTP_GET, handleStatus);
+  // http.on("/command", HTTP_POST, handleCommand);
+  http.begin();
+
+  for (;;)
+  {
+    http.handleClient();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
 //--------------------
 void setup()
 {
@@ -2117,7 +2177,7 @@ void setup()
   pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
   attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
   myBle.beginServer(onDataReceived);
-  myBle.setPassKey(EEPROM.readUInt(E2ADD.blePassSave), true);//to do : false this to prevent wiping 
+  myBle.setPassKey(EEPROM.readUInt(E2ADD.blePassSave), true); // to do : false this to prevent wiping
   Serial.printf("BLE PASS : %s\n", String(myBle.getPassKey()));
 
 #define TasksEnabled
@@ -2177,6 +2237,13 @@ void setup()
       5 * 1024,
       NULL,
       2,
+      NULL);
+  xTaskCreate(
+      WifiTask,
+      "WifiTask",
+      5 * 1024, // stack size
+      NULL,     // task argument
+      1,        // task priority
       NULL);
   // xTaskCreate(
   //     ramMonitorTask,
