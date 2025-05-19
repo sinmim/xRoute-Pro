@@ -1237,7 +1237,7 @@ void takeUiConfigFileTask(void *pvParameters)
   }
   vTaskDelete(NULL);
 }
-class bleUpdate
+class bleUpdate 
 {
 private:
   bool WdFlg = false;
@@ -1340,8 +1340,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
   static String accumulatedData;
   if (myUpdate != nullptr)
   {
-    // Check if bleUpdate::continueUpdate() needs pCharacteristic.
-    // If not, this check could be simplified when called from sendCmdToExecute.
     if (!myUpdate->isTimeOut())
     {
       myUpdate->continueUpdate(); // Pass pCharacteristic if needed by continueUpdate
@@ -1361,6 +1359,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
   while ((endPos = accumulatedData.indexOf('\n')) != -1)
   {
     String command = accumulatedData.substring(0, endPos);
+    // print out command
     accumulatedData.remove(0, endPos + 1);
     if (command.startsWith("sw"))
     {
@@ -1371,16 +1370,14 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
         setRelay(RELAYS.relPos, v / 10);
         myBle.sendString("sw" + String(index) + "=ON\n");
-        Serial.println("sw" + String(index) + "=ON");
       }
       else if (command.lastIndexOf("OFF") > 0)
       {
         RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
         setRelay(RELAYS.relPos, v / 10);
         myBle.sendString("sw" + String(index) + "=OFF\n");
-        Serial.println("sw" + String(index) + "=OFF");
       }
-      // saveStatesToFile();to do add save again . its for preventing damage to flash for test
+      // saveStatesToFile(); to do add save again . its for preventing damage to flash for test
     }
     else if (command.startsWith("GiveMeInit"))
     {
@@ -1440,7 +1437,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         char str[128];
         sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
         myBle.sendString(str);
-        Serial.printf("in:%s | out:%s\n", command, str);
+        //Serial.printf("in:%s | out:%s\n", command, str);
       }
     }
     else if (command.startsWith("DefaultAllCalibrations"))
@@ -2061,33 +2058,101 @@ void sendCmdToExecute(char *str)
   processReceivedCommandData(pServerChar, pData, length);
 }
 //--------------------
+/*
 // wifi task
-#include <WebServer.h>
-WebServer http(80);
-#include <ESPmDNS.h>
+// wifi + WebSocket task
+// Replace with your network credentials
+//const char *ssid = "TP-Link_20D8";
+//const char *password = "83937361";
+const char *ssid = "karavanicin.com_2.4GHz";
+const char *password = "1020304050";
 
-void handleStatus()
+#include <WiFi.h>
+#include <ESPmDNS.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <ArduinoJson.h>
+#include <indexhtml.h>
+
+// Create AsyncWebServer on port 81 and WebSocket endpoint
+AsyncWebServer server(8080);
+AsyncWebSocket ws("/");
+
+// WebSocket event handler using AsyncWebSocket
+void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
+               void *arg, uint8_t *data, size_t len)
 {
-  StaticJsonDocument<200> doc;
-  doc["voltage"] = (int)v;
-  doc["dimmer"] = dimTmp[0] / 32768;
-  String out;
-  serializeJson(doc, out);
-  http.send(200, "application/json", out);
-  Serial.println(out);
+  switch (type)
+  {
+  case WS_EVT_CONNECT:
+  {
+    uint32_t id = client->id();
+    IPAddress ip = client->remoteIP();
+    Serial.printf("WS[%u] connected from %s\n", id, ip.toString().c_str());
+
+    // Build and send initial status
+    StaticJsonDocument<1024> statusDoc;
+    statusDoc["voltage"] = v;
+    for (int i = 0; i < 5; i++)
+    {
+      char key[8];
+      snprintf(key, sizeof(key), "DIMER%d", i + 1);
+      statusDoc[key] = (uint8_t)((dimTmp[i] / (32768.0 * dimLimit[i])) * 255.0);
+    }
+    for (int i = 0; i < 8; i++)
+    {
+      char key[8];
+      snprintf(key, sizeof(key), "sw%d", i + 1);
+      statusDoc[key] = relState_0_15(i) ? "ON" : "OFF";
+    }
+    String out;
+    serializeJson(statusDoc, out);
+    client->text(out);
+    Serial.println("WS: Sent initial status -> " + out);
+    break;
+  }
+
+  case WS_EVT_DATA:
+  {
+    AwsFrameInfo *info = (AwsFrameInfo *)arg;
+    if (info->opcode == WS_TEXT)
+    {
+      // Copy payload to String
+      String msg;
+      for (size_t i = 0; i < len; i++)
+        msg += (char)data[i];
+
+      // Execute your command handler
+      char charPayload[len + 1];
+      strncpy(charPayload, (const char *)data, len);
+      charPayload[len] = '\0'; // Null-terminate the string
+
+      sendCmdToExecute(charPayload);
+      Serial.println(msg);
+    }
+    break;
+  }
+
+  case WS_EVT_DISCONNECT:
+    Serial.printf("WS[%u] disconnected\n", client->id());
+    break;
+
+  default:
+    break;
+  }
 }
 
+// Task to initialize WiFi, mDNS, and Async WebSocket server
 void WifiTask(void *pvParameters)
 {
-  // connect to karavanicin.com_2.4GHz pass:1020304050
-  WiFi.begin("karavanicin.com_2.4GHz", "1020304050");
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED)
   {
-    delay(500);
     Serial.print(".");
+    vTaskDelay(pdMS_TO_TICKS(500));
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
+  Serial.println("\nWiFi connected: " + WiFi.localIP().toString());
 
   if (!MDNS.begin("xroute"))
   {
@@ -2096,21 +2161,27 @@ void WifiTask(void *pvParameters)
   else
   {
     Serial.println("mDNS responder started: http://xroute.local");
-    // optional: advertise HTTP service
-    MDNS.addService("http", "tcp", 80);
+    MDNS.addService("ws", "tcp", 8080);
   }
-  
-  http.on("/status", HTTP_GET, handleStatus);
-  // http.on("/command", HTTP_POST, handleCommand);
-  http.begin();
 
+  // Attach WebSocket handler and start server
+  ws.onEvent(onWsEvent);
+  server.addHandler(&ws);
+  // ── NEW: HTTP routes ────────────────────────────────────────────
+  // Serve your embedded HTML landing page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send_P(200, "text/html", index_html); });
+  server.begin();
+  Serial.println("Async WebSocket and server started on port 81");
+
+  // Keep task alive
   for (;;)
   {
-    http.handleClient();
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
+*/
 //--------------------
 void setup()
 {
@@ -2238,13 +2309,13 @@ void setup()
       NULL,
       2,
       NULL);
-  xTaskCreate(
-      WifiTask,
-      "WifiTask",
-      5 * 1024, // stack size
-      NULL,     // task argument
-      1,        // task priority
-      NULL);
+  // xTaskCreate(
+  //     WifiTask,
+  //     "WifiTask",
+  //     8 * 1024, // stack size
+  //     NULL,     // task argument
+  //     1,        // task priority
+  //     NULL);
   // xTaskCreate(
   //     ramMonitorTask,
   //     "ramMonitorTask",

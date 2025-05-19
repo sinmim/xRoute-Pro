@@ -886,6 +886,8 @@ void MyBle::authenticate(NimBLEConnInfo &connInfo, uint8_t *pData, size_t length
                 // add to whitelist
                 addToWhiteList(connInfo.getAddress(), connInfo);
                 removeFromWaiteList(connInfo.getAddress());
+                //send successfull to the peer
+                sendStringToMac("PASSKEY_ACCEPTED\n", connInfo);
                 Serial.printf("PASSKEY:%d is correct. %s added to whitelist\n", _passKey, connInfo.getAddress().toString().c_str());
             }
             else

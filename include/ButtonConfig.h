@@ -1,69 +1,19 @@
 const char *defaultConfig = R"({
-        "buttons": [
-          {
-            "name": "Toilet",
-            "port": 1,
-            "image": 0
-          },
-          {
-            "name": "refrigerator",
-            "port": 1,
-            "image": 1
-          },
-          {
-            "name": "waterpump",
-            "port": 2,
-            "image": 2
-          },
-          {
-            "name": "airheater",
-            "port": 3,
-            "image": 4
-          },
-          {
-            "name": "waterheater",
-            "port": 5,
-            "image": 5
-          },
-          {
-            "name": "usb",
-            "port": 6,
-            "image": 7
-          },
-          {
-            "name": "inverter",
-            "port": 8,
-            "image": 9
-          }
-        ],
-        "dimmers": [
-          {
-            "name": "Kitchen",
-            "port": 1
-          },
-          {
-            "name": "Coridor",
-            "port": 2
-          },
-          {
-            "name": "Bed",
-            "port": 3
-          },
-          {
-            "name": "Outside",
-            "port": 4
-          },
-          {
-            "name": "Front",
-            "port": 5
-          }
-        ],
-        "rgb": {
-          "name": "RGB1",
-          "ports": {
-            "RED": 1,
-            "GREEN": 2,
-            "BLUE": 3
-          }
-        }
-    })";
+  "singleDimmerData": [
+    { "prt":3, "nam":"ozgur",        "img":"def-dimmer",   "plc":3 },
+    { "prt":4, "nam":"salam",        "img":"def-dimmer",   "plc":4 },
+    { "prt":1, "nam":"saman",        "img":"def-dimmer",   "plc":1 },
+    { "prt":2, "nam":"ali goozoo",   "img":"def-dimmer",   "plc":2 },
+    { "prt":5, "nam":"mahmut koyun", "img":"def-dimmer",   "plc":5 }
+  ],
+  "keysData": [
+    { "prt":5, "nam":"USB",           "img":"usb",           "plc":5 },
+    { "prt":3, "nam":"Boiler",        "img":"boiler",        "plc":3 },
+    { "prt":7, "nam":"Fridge",        "img":"fridge",        "plc":7 },
+    { "prt":1, "nam":"WC",            "img":"toilet",        "plc":1 },
+    { "prt":8, "nam":"Lamp",          "img":"lamp",          "plc":8 },
+    { "prt":2, "nam":"pump",          "img":"water-pump",    "plc":2 },
+    { "prt":6, "nam":"Valve",         "img":"valve",         "plc":6 },
+    { "prt":4, "nam":"Reading",  "img":"reading-lamp",  "plc":4 }
+  ]
+})";
