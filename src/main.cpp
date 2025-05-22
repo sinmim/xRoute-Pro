@@ -32,24 +32,9 @@
 #define __________________________________________VAR_DEF
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
-/* 1.0.3
- 1-external ampermeter activated
- 2-default calibration for each value added
- 3-pt100 easy calibration
- 4-loading DFLT values after defaultCalib.. function
- 5-DIFFERENT FREQUANCY PWM
- 6-DIMMER short circuit detection
- 7-low power mode active
- 8-low power mode in battery percent
- 9-battery type selection by Full voltage
- 10-gyro zeroing fast
-*/
-// 2.0.7/4.0.7 increasing tasks ram by 1KB to prevent crashing : not tested
-// String Version = "4.0.7"; 24V version
-// 2.0.8 adding save to file for state recovery after crashes
 String Version = "0.1.6";
 //========Update
-#include "Update.h"
+#include <Update.h>
 //_#include "AESLib.h"
 long int updateLen;
 #define CHUNK_SIZE 512
@@ -187,9 +172,9 @@ String confAndCondStrBuffer = "";
 const String CondFile = "/CondFile.txt";
 //===========================Conditions
 #include <vector>
-#include <conditions.h>
+#include "conditions.h"
+#include "jsonCondition.h"
 std::vector<Conditions> cndtions;
-#include <jsonCondition.h>
 ConditionsReader jsonCon;
 //====motors
 int motorWay = MOTOR_STOP;
@@ -657,7 +642,7 @@ void defaultCalibrations();
 int dimShortFlg = false;
 int dimShortNum = 0;
 //=======================TEST
-#include <myNimBle.h>
+#include "myNimBle.h"
 MyBle myBle(false); // i need to use this object in other files
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
@@ -1237,7 +1222,7 @@ void takeUiConfigFileTask(void *pvParameters)
   }
   vTaskDelete(NULL);
 }
-class bleUpdate 
+class bleUpdate
 {
 private:
   bool WdFlg = false;
@@ -1437,7 +1422,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         char str[128];
         sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
         myBle.sendString(str);
-        //Serial.printf("in:%s | out:%s\n", command, str);
+        // Serial.printf("in:%s | out:%s\n", command, str);
       }
     }
     else if (command.startsWith("DefaultAllCalibrations"))
@@ -1455,6 +1440,10 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       char str[128];
       sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
       myBle.sendString(str);
+    }
+    else if (command.startsWith("SetSolar1"))//=12.35;
+    {
+
     }
     else if (command.startsWith("AmperOffset"))
     {
@@ -1668,7 +1657,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       EEPROM.commit();
       Serial.println("battFullVoltage(X10) =" + String(battFullVoltage));
     }
-    else if (command.startsWith("CleanWaterMin"))
+    else if (command.startsWith("SetMinFloater1"))
     {
       clnWtrMin = clnWtr;
 
@@ -1677,7 +1666,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       String response = "show.txt=\"clnWtrMin=" + String(clnWtrMin) + "\"\n";
       myBle.sendString(response.c_str());
     }
-    else if (command.startsWith("CleanWaterMax"))
+    else if (command.startsWith("SetMaxFloater1"))
     {
       clnWtrMax = clnWtr;
 
@@ -1686,33 +1675,42 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       String response = "show.txt=\"clnWtrMax=" + String(clnWtrMax) + "\"\n";
       myBle.sendString(response.c_str());
     }
-    else if (command.startsWith("DirtyWaterMin"))
+    else if (command.startsWith("RevFloater1"))
+    {
+    }
+    else if (command.startsWith("SetMinFloater2"))
     {
       drtWtrMin = drtWtr;
 
       EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMin);
       EEPROM.commit();
     }
-    else if (command.startsWith("DirtyWaterMax"))
+    else if (command.startsWith("SetMaxFloater2"))
     {
       drtWtrMax = drtWtr;
 
       EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMax);
       EEPROM.commit();
     }
-    else if (command.startsWith("GrayWaterMin"))
+    else if (command.startsWith("RevFloater2"))
+    {
+    }
+    else if (command.startsWith("SetMinFloater3"))
     {
       gryWtrMin = gryWtr;
 
       EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMin);
       EEPROM.commit();
     }
-    else if (command.startsWith("GrayWaterMax"))
+    else if (command.startsWith("SetMaxFloater3"))
     {
       gryWtrMax = gryWtr;
 
       EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMax);
       EEPROM.commit();
+    }
+    else if (command.startsWith("RevFloater3"))
+    {
     }
     else if (command.startsWith("LimitDim"))
     {
@@ -1885,8 +1883,11 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         // set new passkey and wipe bonds
         Serial.println("PassKey: " + String(myBle.getPassKey()));
-        myBle.justSend("BLE_PASSWORD_CHANGED_OK\n");
+        myBle.sendString("BLE_PASSWORD_CHANGED_OK\n");
+
+        Serial.println("Changing pass\n");
         myBle.setPassKey(newPass, true);
+        Serial.println("Pass changed OK\n");
       }
       else
       {
@@ -2057,7 +2058,7 @@ void sendCmdToExecute(char *str)
   // This is needed if commands like "StartUpdate=" might be simulated
   processReceivedCommandData(pServerChar, pData, length);
 }
-//--------------------
+//-------------------- wifi sucket
 /*
 // wifi task
 // wifi + WebSocket task
@@ -2185,18 +2186,27 @@ void WifiTask(void *pvParameters)
 //--------------------
 void setup()
 {
-  Serial.begin(115200);
-  Serial.println("\n//======STARTING=====//");
-  initRelay();
-  initLED_PWM();
-  uint32_t flashSize = ESP.getFlashChipSize();
-  float flashSizeMB = (float)flashSize / (1024.0 * 1024.0); // MB
-  Serial.print("FlashSize:");
-  Serial.println(flashSizeMB);
-  Serial.println("Version:" + Version);
-  EEPROM.begin(512);
-  loadSavedValue();
+  // low levels and hardware
+  if (true)
+  {
+    pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
+    attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
+    Serial.begin(115200);
+    Serial.println("\n//======STARTING=====//");
+    initRelay();
+    initLED_PWM();
+    initADC();
+    strip.begin();
+    uint32_t flashSize = ESP.getFlashChipSize();
+    float flashSizeMB = (float)flashSize / (1024.0 * 1024.0); // MB
+    Serial.print("FlashSize:");
+    Serial.println(flashSizeMB);
+    Serial.println("Version:" + Version);
+    EEPROM.begin(512);
+    loadSavedValue();
+  }
 
+  // SPIFF
   if (SPIFFS.begin(true))
   {
     Serial.println("SPIFF OK !");
@@ -2229,105 +2239,115 @@ void setup()
   }
 
   // Config the Conditions
-  conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt,
-                        &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2,
-                        &battHourLeft, &motorWay);
-  setCmdFunction(&sendCmdToExecute);
-  getRelayStateFunction(&relState_0_15);
-  getDimValueFunction(&getDimVal);
-  setCondCreatorFunction(&createCondition);
-  setTimerCondCreatorFunction(&createTimerCondition);
-  jsonCon.readJsonConditionsFromFile(CondFile);
+  if (true)
+  {
+    conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt,
+                          &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2,
+                          &battHourLeft, &motorWay);
+    setCmdFunction(&sendCmdToExecute);
+    getRelayStateFunction(&relState_0_15);
+    getDimValueFunction(&getDimVal);
+    setCondCreatorFunction(&createCondition);
+    setTimerCondCreatorFunction(&createTimerCondition);
+    jsonCon.readJsonConditionsFromFile(CondFile);
+  }
 
-  initADC();
-  strip.begin();
-  GyroLicense = new lisence("Gyro", "G9933");   // Key for Gyro
-  VoiceLicense = new lisence("Voice", "V5612"); // Key For Voice
-  // Serial.println("General Lisence:" + GeneralLisence);
-  // giveMeMacAdress();
-  pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
-  attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
-  myBle.beginServer(onDataReceived);
-  myBle.setPassKey(EEPROM.readUInt(E2ADD.blePassSave), true); // to do : false this to prevent wiping
-  Serial.printf("BLE PASS : %s\n", String(myBle.getPassKey()));
+  // lisences
+  if (true)
+  {
+    GyroLicense = new lisence("Gyro", "G9933");   // Key for Gyro
+    VoiceLicense = new lisence("Voice", "V5612"); // Key For Voice
+    // Serial.println("General Lisence:" + GeneralLisence);
+    // giveMeMacAdress();
+  }
 
-#define TasksEnabled
-#ifdef TasksEnabled
-  xTaskCreate(
-      MeasurmentTask,
-      "MeasurmentTask",
-      4 * 1024, // stack size
-      NULL,     // task argument
-      2,        // task priority
-      &MeasurmentTaskHandle);
-  xTaskCreate(
-      DimerTask,
-      "DimerTask",
-      2.5 * 1024, // stack size
-      NULL,       // task argument
-      3,          // task priority
-      NULL);
-  xTaskCreate(
-      adcReadingTask,
-      "ADC READING TASK",
-      3 * 1024, // stack size
-      NULL,     // task argument
-      2,        // task priority
-      NULL);
-  xTaskCreate(
-      led_indicator_task,
-      "led_indicator_task",
-      3 * 1024, // stack size
-      NULL,     // task argument
-      2,        // task priority
-      NULL);
-  xTaskCreate(
-      OVR_CRNT_PRTCT_TASK,
-      "OVR_CRNT_PRTCT_TASK",
-      2.5 * 1024, // stack size
-      NULL,       // task argument
-      2,          // task priority
-      NULL);
-  xTaskCreate(
-      I2C_SENSORS_TASK, //-------------STACK optimized up to here
-      "I2C_SENSORS_TASK",
-      3 * 1024, // stack size
-      NULL,     // task argument
-      2,        // task priority
-      NULL);
-  xTaskCreate(
-      BatteryTask,
-      "BatteryTask",
-      3 * 1024,
-      NULL,
-      2,
-      NULL);
-  xTaskCreate(
-      ConditionsTask,
-      "ConditionsTask",
-      5 * 1024,
-      NULL,
-      2,
-      NULL);
-  // xTaskCreate(
-  //     WifiTask,
-  //     "WifiTask",
-  //     8 * 1024, // stack size
-  //     NULL,     // task argument
-  //     1,        // task priority
-  //     NULL);
-  // xTaskCreate(
-  //     ramMonitorTask,
-  //     "ramMonitorTask",
-  //     1024, // stack size
-  //     NULL, // task argument
-  //     1,    // task priority
-  //     NULL);
-#endif
+  // BLE
+  if (true)
+  {
+    myBle.beginServer(onDataReceived);
+    myBle.setPassKey(EEPROM.readUInt(E2ADD.blePassSave), true); // to do : false this to prevent wiping
+    Serial.printf("BLE PASS : %s\n", String(myBle.getPassKey()));
+  }
+
+  // Tasks
+  if (true)
+  {
+
+    xTaskCreate(
+        MeasurmentTask,
+        "MeasurmentTask",
+        4 * 1024, // stack size
+        NULL,     // task argument
+        2,        // task priority
+        &MeasurmentTaskHandle);
+    xTaskCreate(
+        DimerTask,
+        "DimerTask",
+        2.5 * 1024, // stack size
+        NULL,       // task argument
+        3,          // task priority
+        NULL);
+    xTaskCreate(
+        adcReadingTask,
+        "ADC READING TASK",
+        3 * 1024, // stack size
+        NULL,     // task argument
+        2,        // task priority
+        NULL);
+    xTaskCreate(
+        led_indicator_task,
+        "led_indicator_task",
+        3 * 1024, // stack size
+        NULL,     // task argument
+        2,        // task priority
+        NULL);
+    xTaskCreate(
+        OVR_CRNT_PRTCT_TASK,
+        "OVR_CRNT_PRTCT_TASK",
+        2.5 * 1024, // stack size
+        NULL,       // task argument
+        2,          // task priority
+        NULL);
+    xTaskCreate(
+        I2C_SENSORS_TASK, //-------------STACK optimized up to here
+        "I2C_SENSORS_TASK",
+        3 * 1024, // stack size
+        NULL,     // task argument
+        2,        // task priority
+        NULL);
+    xTaskCreate(
+        BatteryTask,
+        "BatteryTask",
+        3 * 1024,
+        NULL,
+        2,
+        NULL);
+    xTaskCreate(
+        ConditionsTask,
+        "ConditionsTask",
+        5 * 1024,
+        NULL,
+        2,
+        NULL);
+    // xTaskCreate(
+    //     WifiTask,
+    //     "WifiTask",
+    //     8 * 1024, // stack size
+    //     NULL,     // task argument
+    //     1,        // task priority
+    //     NULL);
+    // xTaskCreate(
+    //     ramMonitorTask,
+    //     "ramMonitorTask",
+    //     1024, // stack size
+    //     NULL, // task argument
+    //     1,    // task priority
+    //     NULL);
+  }
 }
 void loop()
 {
-  vTaskDelay(pdMS_TO_TICKS(100));
+  vTaskDelay(pdMS_TO_TICKS(1000));
 }
 void loadSavedValue()
 {
@@ -2454,22 +2474,15 @@ void dimmerShortCircuitIntrupt()
   }
 }
 /*  new problems
-1- *ble multi
-1b- ble password changable
-2- *initialize sending
-3- dimmer vaghti bahash bazi mikonim kod samte app data miffreste va yavash yavash amal mikone ta tahe data
 4- neveshtane scadual condition
 5- timeout vase update
 6- dimere rate ziyad drop beshe
 7- sharte larzeshe gyro baraye jologiri az dozdi
 8- ba release dimmer ali behem dastore saveStatesToFile(); ro bedahad / ali mige rooye on crash age betooni bezari aliye / behatresh ine ke ba timer befahmi ke dimer dige change nemishe va oon moghe savestate koni
 9-
-
 */
-// 2411
 // sendCmdToExecute needs wait for already incomming tasks
 //+++++++++++++++++++++++TO DO
-//   *ezafe kardane arayeyi az sw haye salem o sukhte too servis / dimerha ham => hal shod too version jadid
 //   dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
 //   voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
 //   amper ke eshtebah kalibre beshe eshtebahi mire too ye protection

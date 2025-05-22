@@ -724,6 +724,11 @@ void MyBle::onResult(NimBLEAdvertisedDevice *advertisedDevice)
 // === NEW: setPassKey ===
 void MyBle::setPassKey(uint32_t _password, bool wipe)
 {
+    //wait for send qeue to finish
+    while (isSendQueueBusy())
+    {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
     passKey = _password;
     NimBLEDevice::setSecurityPasskey(_password);
     if (wipe)
