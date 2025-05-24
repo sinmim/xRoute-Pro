@@ -480,9 +480,16 @@ void MyBle::sendData(const char *data) { sendString(String(data)); }
 // Send Long String (Client or Server)
 ///*
 // Method in myNimBle.cpp
-void MyBle::sendLongString(String str)
+
+/*
+void MyBle::sendLongString2(String str)
 {
-    int maxPayload = 20; // Default payload size
+    // wait for qeue to be empty
+    while (isSendQueueBusy())
+    {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    int maxPayload = 400; // Default payload size
 
     // Determine max payload based on connection MTU
     if (isClientMode && this->pClient && this->pClient->isConnected())
@@ -517,44 +524,46 @@ void MyBle::sendLongString(String str)
         int len = std::min(maxPayload, (int)str.length() - from);
         String strChunk = str.substring(from, from + len);
 
-        Serial.printf("[sendLongString] Sending chunk %d/%d (%d bytes): %s\n",
-                      chunkNum, totalChunks, len, strChunk.c_str());
+        //Serial.printf("[sendLongString] Sending chunk %d/%d (%d bytes): %s\n",
+                      //chunkNum, totalChunks, len, strChunk.c_str());
 
         sendString(strChunk); // Call the regular sendString function
-        Serial.printf("[sendLongString] Chunk %d sent. Waiting %dms...\n", chunkNum, 20);
+        //Serial.printf("[sendLongString] Chunk %d sent. Waiting %dms...\n", chunkNum, 20);
 
         from += len;
         chunkNum++;
 
         // Apply delay unconditionally after sending each chunk
-        vTaskDelay(pdMS_TO_TICKS(20)); // Adjust this delay (e.g., 20-50ms) as needed
+        vTaskDelay(pdMS_TO_TICKS(50)); // Adjust this delay (e.g., 20-50ms) as needed
+    }
+    // wait for qeue to be empty
+    while (isSendQueueBusy())
+    {
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
     Serial.println("[sendLongString] Finished sending long string.");
 }
+*/
 //*/
-/*
+
 void MyBle::sendLongString(String str)
 {
     // #define HeaderSize 4 // bytes
     //   const int CHUNKSIZE = NimBLEDevice::getMTU() - HeaderSize; // Define the chunk size
-    const int CHUNKSIZE = 250; // Define the chunk size
-    while (sendQueue.size() > 0)
-    {
-        vTaskDelay(pdTICKS_TO_MS(2));
-    }
+    const int CHUNKSIZE = 200; // Define the chunk size
+
     while (str.length() > 0)
     {
         String strChunk = str.substring(0, CHUNKSIZE);
         str = str.substring(CHUNKSIZE);
-        Serial.println(strChunk);
+        Serial.print(strChunk);
         sendString(strChunk);
         // justSend(strChunk);
-        // vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(30));
         // Serial.println("A:"+strChunk);
         // Saman : i checked for this and it actually do the process til the end
     }
 }
-*/
 
 // Disconnect (Client or Server)
 void MyBle::disconnect()
@@ -724,7 +733,7 @@ void MyBle::onResult(NimBLEAdvertisedDevice *advertisedDevice)
 // === NEW: setPassKey ===
 void MyBle::setPassKey(uint32_t _password, bool wipe)
 {
-    //wait for send qeue to finish
+    // wait for send qeue to finish
     while (isSendQueueBusy())
     {
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -891,7 +900,7 @@ void MyBle::authenticate(NimBLEConnInfo &connInfo, uint8_t *pData, size_t length
                 // add to whitelist
                 addToWhiteList(connInfo.getAddress(), connInfo);
                 removeFromWaiteList(connInfo.getAddress());
-                //send successfull to the peer
+                // send successfull to the peer
                 sendStringToMac("PASSKEY_ACCEPTED\n", connInfo);
                 Serial.printf("PASSKEY:%d is correct. %s added to whitelist\n", _passKey, connInfo.getAddress().toString().c_str());
             }
