@@ -47,8 +47,18 @@ void XrouteWebSocket::start(UBaseType_t priority, BaseType_t core)
     WiFi.softAP(_apSsid, _apPass);
   if (_staSsid)
     WiFi.begin(_staSsid, _staPass);
+  Serial.print("[XrouteWebSucket]:Trying to connect  to " + String(_staSsid));
   while (WiFi.status() != WL_CONNECTED)
-    delay(100);
+  {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  // print my ip's
+  Serial.print("[XrouteWebSucket]:AP IP address: ");
+  Serial.println(WiFi.softAPIP());
+  Serial.print("[XrouteWebSucket]:STA IP address: ");
+  Serial.println(WiFi.localIP());
 
   // Initialize mDNS
   MDNS.begin(_host);

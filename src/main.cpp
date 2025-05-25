@@ -2327,6 +2327,18 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       Serial.println("[PARSING ERROR] : " + command + " : " + String(RES));
     }
   }
+  //if there is missing '\n' print error
+  if (accumulatedData.length() > 0)
+  {
+    String errorMessage = "missing[""\n""]:" + String(accumulatedData.c_str());
+    Serial.println(errorMessage);
+    myBle.sendString(errorMessage);
+    //add a '\n' and send it tp process again
+    accumulatedData += "\n";
+    processReceivedCommandData(pCharacteristic, (uint8_t *)accumulatedData.c_str(), accumulatedData.length());
+    accumulatedData.clear();
+  }
+
 }
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
 {
@@ -2557,7 +2569,8 @@ void setup()
   {
     // Configure network
     ws.setAP("Xroute-AP", "12345678");
-    ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
+    // ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
+    ws.setSTA("TP-Link_20D8", "83937361");
     ws.setHostname("xroute");
     ws.setPort(81);
 
