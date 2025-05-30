@@ -1,6 +1,5 @@
 #ifndef othedFunctions_h
 #define othedFunctions_h
-void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit);
 void generatePass(char *result);
 bool checkPass(uint64_t uid, const char *pass);
 void SendToAll(char *str);

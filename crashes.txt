@@ -1,0 +1,34 @@
+//==================================================
+Reson :
+vaghti ke lcd ba ble behesh vasl bood bade ye modat crash kard va elatesho Gemini mige ke bekhatere bozorg shodane string haye tooye Qeue ble send hastesh :
+
+"Backtrace: 0x400842b5:0x3ffeb820 0x400945c5:0x3ffeb840 0x4009a251:0x3ffeb860 0x4018b7b7:0x3ffeb8e0 0x4018b7fe:0x3ffeb900 0x4018b75f:0x3ffeb920 0x4018bb7e:0x3ffeb940 0x400dd9d1:0x3ffeb960 0x400ddb17:0x3ffeb980 0x400d77c9:0x3ffeb9a0
+  #0  0x400842b5:0x3ffeb820 in panic_abort at /Users/ficeto/Desktop/ESP32/ESP32S2/esp-idf-public/components/esp_system/panic.c:408
+  #1  0x400945c5:0x3ffeb840 in esp_system_abort at /Users/ficeto/Desktop/ESP32/ESP32S2/esp-idf-public/components/esp_system/esp_system.c:137
+  #2  0x4009a251:0x3ffeb860 in abort at /Users/ficeto/Desktop/ESP32/ESP32S2/esp-idf-public/components/newlib/abort.c:46
+  #3  0x4018b7b7:0x3ffeb8e0 in __cxxabiv1::__terminate(void (*)()) at /builds/idf/crosstool-NG/.build/HOST-x86_64-w64-mingw32/xtensa-esp32-elf/src/gcc/libstdc++-v3/libsupc++/eh_terminate.cc:47
+  #4  0x4018b7fe:0x3ffeb900 in std::terminate() at /builds/idf/crosstool-NG/.build/HOST-x86_64-w64-mingw32/xtensa-esp32-elf/src/gcc/libstdc++-v3/libsupc++/eh_terminate.cc:57
+  #5  0x4018b75f:0x3ffeb920 in __cxa_throw at /builds/idf/crosstool-NG/.build/HOST-x86_64-w64-mingw32/xtensa-esp32-elf/src/gcc/libstdc++-v3/libsupc++/eh_throw.cc:95
+  #6  0x4018bb7e:0x3ffeb940 in operator new(unsigned int) at /builds/idf/crosstool-NG/.build/HOST-x86_64-w64-mingw32/xtensa-esp32-elf/src/gcc/libstdc++-v3/libsupc++/new_op.cc:54
+  #7  0x400dd9d1:0x3ffeb960 in __gnu_cxx::new_allocator<String>::allocate(unsigned int, void const*) at c:\users\sinmim\.platformio\packages\toolchain-xtensa-esp32\xtensa-esp32-elf\include\c++\8.4.0\ext/new_allocator.h:111
+      (inlined by) std::allocator_traits<std::allocator<String> >::allocate(std::allocator<String>&, unsigned int) at c:\users\sinmim\.platformio\packages\toolchain-xtensa-esp32\xtensa-esp32-elf\include\c++\8.4.0\bits/alloc_traits.h:436
+      (inlined by) std::_Deque_base<String, std::allocator<String> >::_M_allocate_node() at c:\users\sinmim\.platformio\packages\toolchain-xtensa-esp32\xtensa-esp32-elf\include\c++\8.4.0\bits/stl_deque.h:603
+      (inlined by) void std::deque<String, std::allocator<String> >::_M_push_back_aux<String const&>(String const&) at c:\users\sinmim\.platformio\packages\toolchain-xtensa-esp32\xtensa-esp32-elf\include\c++\8.4.0\bits/deque.tcc:488
+  #8  0x400ddb17:0x3ffeb980 in std::deque<String, std::allocator<String> >::push_back(String const&) at c:\users\sinmim\.platformio\packages\toolchain-xtensa-esp32\xtensa-esp32-elf\include\c++\8.4.0\bits/stl_deque.h:1562
+      (inlined by) std::queue<String, std::deque<String, std::allocator<String> > >::push(String const&) at c:\users\sinmim\.platformio\packages\toolchain-xtensa-esp32\xtensa-esp32-elf\include\c++\8.4.0\bits/stl_queue.h:252
+      (inlined by) MyBle::sendString(String) at src/myNimBle.cpp:474
+      (inlined by) MyBle::sendString(String) at src/myNimBle.cpp:447
+  #9  0x400d77c9:0x3ffeb9a0 in MeasurmentTask(void*) at src/main.cpp:824 (discriminator 1)
+ELF file SHA256: 9fc08b52dabd0c58
+Rebooting...
+ets Jun  8 2016 00:22:57
+rst:0xc (SW_CPU_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:1184
+load:0x40078000,len:13232
+load:0x40080400,len:3028
+entry 0x400805e4"
+
+//==================================================

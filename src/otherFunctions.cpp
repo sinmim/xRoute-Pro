@@ -37,44 +37,21 @@ bool checkPass(uint64_t uid, const char *pass)
   // Compare the registration code with the provided password
   return strcmp(pass, code) == 0;
 }
-void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit)
-{
-  char str[64];
-
-  sprintf(str, "\xFF\xFF\xFF\xFF\xFF\xFF");
-  sendToAll(str);
-
-  for (int i = 0; i < 16; i++)
-  {
-    sprintf(str, "M.sw%d.val=%d\xFF\xFF\xFF", i + 1, RELAYS.relPos & (1UL << RELAYS.cnfgLookup[i]) ? 1 : 0);
-    sendToAll(str);
-    vTaskDelay(20 / portTICK_PERIOD_MS);
-  }
-
-  for (int i = 0; i < 7; i++)
-  {
-    float val = (dimTmp[i] / (32768 * dimLimit[i])) * 255;
-    sprintf(str, "DIMER%d.val=%d\xFF\xFF\xFF", i + 1, (int)val);
-    // if (SerialBT.connected())
-    // {
-    //   SerialBT.println(str);
-    // }
-  }
-
-  for (int i = 0; i < 7; i++)
-  {
-    float val = (dimTmp[i] / (32768 * dimLimit[i])) * 255;
-    sprintf(str, "APDIM%d.val=%d\n", i + 1, (int)val);
-    sendToAll(str);
-    vTaskDelay(10 / portTICK_PERIOD_MS);
-  }
-}
 #include "myNimBle.h"
 extern MyBle myBle;
 
+#include "XrouteAsyncWebSocketServer.h"
+extern XrouteAsyncWebSocketServer ws;
+
 void sendToAll(char *str)
 {
-  myBle.sendString(str);
+  // if ble have client send string
+  if (myBle.isConnected())
+  {
+    myBle.sendString(str);
+  }
+  // if ws has client
+  ws.sendToAll(str);
 }
 void sendToAll(const char *str)
 {

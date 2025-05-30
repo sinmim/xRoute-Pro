@@ -446,6 +446,12 @@ bool MyBle::connectToMac(String macAddress)
 // Send String (Client or Server)
 void MyBle::sendString(String str)
 {
+    //return if its not connected
+    if (!isConnected())
+    {
+        //Serial.println("Not connected.");
+        return;
+    }
     if (isClientMode)
     {
         // Use member pRemoteCharacteristic
