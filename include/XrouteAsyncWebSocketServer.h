@@ -5,10 +5,16 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <functional>
+#include <atomic>
 
 class XrouteAsyncWebSocketServer
 {
 public:
+  /// How many WS clients are currently connected?
+  size_t clientCount() const { return _clientCount.load(); }
+  /// Convenience: “anyone there?”
+  bool hasClients() const { return _ws->count() > 0; }
+
   void setSTA(const char *ssid, const char *pass);
   void initSTA();
   void setAP(const char *ssid, const char *pass);
@@ -29,6 +35,7 @@ public:
   void forceSwitchToAPMode();
 
 private:
+  std::atomic<size_t> _clientCount{0};
   const char *_staSsid = nullptr;
   const char *_staPass = nullptr;
   const char *_apSsid = nullptr;
