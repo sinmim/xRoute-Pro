@@ -79,7 +79,7 @@ Freenove_ESP32_WS2812 strip = Freenove_ESP32_WS2812(LEDS_COUNT, LEDS_PIN, CHANNE
 #define COLOR_OFF 0x000000
 #define COLOR_WHITE 0xffffff
 int LED_COLOR = COLOR_OFF;
-void ws2812Blink(int color);
+void ws2812Blink(int color, int times, int interval_ms, float intensity);
 //------------------------------------e2prom
 void loadSavedValue();
 EEpromAdd E2ADD;
@@ -940,18 +940,24 @@ void led_indicator_task(void *parameters)
     }
     while (UpdatingFlg)
     {
-      ws2812Blink(COLOR_WHITE);
+      ws2812Blink(COLOR_WHITE, 1, 3, 1);
       vTaskDelay(50 / portTICK_PERIOD_MS);
     }
     if (overCrntFlg == true)
     {
-      ws2812Blink(COLOR_ORANG);
+      ws2812Blink(COLOR_ORANG, 1, 3, 1);
     }
     // BLE//
     if (myBle.isConnected() == true)
-      ws2812Blink(COLOR_BLUE);
+      ws2812Blink(COLOR_BLUE, 1, 3, 1);
     if (myBle.isConnected() == false)
-      ws2812Blink(COLOR_RED);
+      ws2812Blink(COLOR_RED, 1, 3, 1);
+
+    int clients = ws.clientCount();
+    if (clients > 0)
+    {
+      ws2812Blink(COLOR_GREEN, clients, 1, 0.5);
+    }
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
 }
@@ -2829,25 +2835,27 @@ void loadSavedValue()
     GyroOriantation = String(strTmp);
   }
 }
-void ws2812Blink(int color)
+void ws2812Blink(int color, int times, int interval_ms, float intensity)
 {
 #define MIN_LIGHT 1
-#define MAX_LIGHT 255
-#define STEP_INTERVAL_MS 3
-
-  for (int i = MIN_LIGHT; i < MAX_LIGHT; i += 2)
+  int MAX_LIGHT = 255 * intensity;
+  int STEP_INTERVAL_MS = interval_ms;
+  for (int i = 0; i < times; i++)
   {
-    strip.setLedColorData(0, color);
-    strip.setBrightness(i);
-    strip.show();
-    vTaskDelay(pdMS_TO_TICKS(STEP_INTERVAL_MS));
-  }
-  for (int i = MAX_LIGHT; i >= MIN_LIGHT; i -= 2)
-  {
-    strip.setLedColorData(0, color);
-    strip.setBrightness(i);
-    strip.show();
-    vTaskDelay(pdMS_TO_TICKS(STEP_INTERVAL_MS));
+    for (int i = MIN_LIGHT; i < MAX_LIGHT; i += 2)
+    {
+      strip.setLedColorData(0, color);
+      strip.setBrightness(i);
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(STEP_INTERVAL_MS));
+    }
+    for (int i = MAX_LIGHT; i >= MIN_LIGHT; i -= 2)
+    {
+      strip.setLedColorData(0, color);
+      strip.setBrightness(i);
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(STEP_INTERVAL_MS));
+    }
   }
 }
 void initMPU()
