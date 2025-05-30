@@ -36,7 +36,10 @@ void XrouteAsyncWebSocketServer::printWiFiDetails()
   }
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> daf7903 (Socket cliant cleanup and led indicator Added)
 bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
 {
   int timeout = 10000;
@@ -57,7 +60,11 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
   WiFi.softAPdisconnect(true);
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
+<<<<<<< HEAD
   //WiFi.setAutoConnect(false);//now deprecated 
+=======
+  // WiFi.setAutoConnect(false);//now deprecated
+>>>>>>> daf7903 (Socket cliant cleanup and led indicator Added)
   WiFi.setAutoReconnect(true);
   delay(100);
   // 1) set the mode
@@ -358,6 +365,10 @@ void XrouteAsyncWebSocketServer::apMonitorTask(void *pv)
   } // End of main task loop
 }
 
+<<<<<<< HEAD
+=======
+/*
+>>>>>>> daf7903 (Socket cliant cleanup and led indicator Added)
 void XrouteAsyncWebSocketServer::registerEvents()
 {
   _ws->onEvent([this](AsyncWebSocket *socketServer, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
@@ -365,6 +376,7 @@ void XrouteAsyncWebSocketServer::registerEvents()
                  switch (type)
                  {
                  case WS_EVT_CONNECT:
+<<<<<<< HEAD
                    Serial.printf("[WS][%u] Client CONNECTED from %s\n", client->id(), client->remoteIP().toString().c_str());
                    // You could also call a user-defined onConnect callback here if you add one
                    break;
@@ -372,6 +384,18 @@ void XrouteAsyncWebSocketServer::registerEvents()
                  case WS_EVT_DISCONNECT:
                    Serial.printf("[WS][%u] Client DISCONNECTED\n", client->id());
                    // You could also call a user-defined onDisconnect callback here
+=======
+                   _clientCount++;
+                   Serial.printf("WS[%u] connected (now %u clients)\n",
+                                 client->id(), (unsigned)_clientCount.load());
+
+                   break;
+
+                 case WS_EVT_DISCONNECT:
+                   _clientCount--;
+                   Serial.printf("WS[%u] disconnected (now %u clients)\n",
+                                 client->id(), (unsigned)_clientCount.load());
+>>>>>>> daf7903 (Socket cliant cleanup and led indicator Added)
                    break;
 
                  case WS_EVT_PONG:
@@ -389,9 +413,15 @@ void XrouteAsyncWebSocketServer::registerEvents()
                    {                                // Process complete text messages
                      String msg((char *)data, len); // Construct String with specific length
 
+<<<<<<< HEAD
                      //Serial.print("[WS_EVT_DATA] Received Full TEXT Message: '"); // For debugging
                      //Serial.print(msg);
                      //Serial.println("'");
+=======
+                     // Serial.print("[WS_EVT_DATA] Received Full TEXT Message: '"); // For debugging
+                     // Serial.print(msg);
+                     // Serial.println("'");
+>>>>>>> daf7903 (Socket cliant cleanup and led indicator Added)
                      if (msg.startsWith("{"))
                      {               // Basic check for JSON
                        _doc.clear(); // _doc is a class member StaticJsonDocument
@@ -409,7 +439,11 @@ void XrouteAsyncWebSocketServer::registerEvents()
                      }
                      else if (_cmdCb)
                      {
+<<<<<<< HEAD
                        //Serial.println("[WS_EVT_DATA] Not JSON or no JSON callback. Calling _cmdCb.");
+=======
+                       // Serial.println("[WS_EVT_DATA] Not JSON or no JSON callback. Calling _cmdCb.");
+>>>>>>> daf7903 (Socket cliant cleanup and led indicator Added)
                        _cmdCb(msg.c_str()); // Call the user's command callback
                      }
                      else
@@ -437,12 +471,94 @@ void XrouteAsyncWebSocketServer::registerEvents()
                }); // End of _ws->onEvent lambda
 }
 
+<<<<<<< HEAD
+=======
+*/
+// — in XrouteAsyncWebSocketServer.cpp:
+void XrouteAsyncWebSocketServer::registerEvents()
+{
+  _ws->onEvent([this](AsyncWebSocket *server,
+                      AsyncWebSocketClient *client,
+                      AwsEventType type,
+                      void *arg,
+                      uint8_t *data,
+                      size_t len)
+               {
+    switch (type) {
+      case WS_EVT_CONNECT: {
+        uint32_t cid = client->id();
+        _clientCount++;
+        Serial.printf("[WS][%u] CONNECTED  (total %u)\n",
+                      cid, (unsigned)_clientCount.load());
+        break;
+      }
+
+      case WS_EVT_DISCONNECT: {
+        uint32_t cid = client->id();
+        _clientCount--;
+        Serial.printf("[WS][%u] DISCONNECTED  (total %u)\n",
+                      cid, (unsigned)_clientCount.load());
+        break;
+      }
+
+      case WS_EVT_DATA: {
+        AwsFrameInfo* info = reinterpret_cast<AwsFrameInfo*>(arg);
+        if (info->opcode == WS_TEXT && data && len) {
+          String msg(reinterpret_cast<char*>(data), len);
+
+          if (msg.startsWith("{")) {
+            // JSON
+            DeserializationError err = deserializeJson(_doc, msg);
+            if (!err) {
+              if (_jsonCb) {
+                _jsonCb(_doc);
+              }
+            } else {
+              Serial.printf("JSON parse error: %s\n", err.c_str());
+            }
+          } else {
+            // plain-text command
+            if (_cmdCb) {
+              _cmdCb(msg.c_str());
+            }
+          }
+        }
+        break;
+      }
+
+      default:
+        // ignore other events
+        break;
+    } });
+}
+
+>>>>>>> daf7903 (Socket cliant cleanup and led indicator Added)
 void XrouteAsyncWebSocketServer::begin()
 {
   if (!init(WIFI_MODE_APSTA))
   {
     init(WIFI_MODE_AP);
   }
+<<<<<<< HEAD
+=======
+  xTaskCreate([](void *arg)
+              {
+  auto self = (XrouteAsyncWebSocketServer*)arg;
+  for(;;) {
+    // this forces the library to sweep out any TCP sockets
+    // that silently went away
+    self->_ws->cleanupClients();
+    // now _ws->count() reflects the real # of active clients
+    static size_t last_n=0;
+    size_t n = self->_ws->count();
+    if (n!=last_n)
+    {
+      Serial.printf("[WS] cleanup→ %u clients\n", (unsigned)n);
+    }
+    last_n = n;
+    vTaskDelay(pdMS_TO_TICKS(1000));  // every 5 seconds
+  } }, "WS_Cleanup", 2048, this, 1, nullptr);
+>>>>>>> daf7903 (Socket cliant cleanup and led indicator Added)
 }
 
 #undef ME
