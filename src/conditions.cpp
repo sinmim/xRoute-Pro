@@ -177,7 +177,7 @@ void Conditions::setDim(int val)
     if (getDim(outputPort - 1) != val)
     {
         char str[50];
-        sprintf(str, "DIMER%d=%d\n", outputPort, val);
+        sprintf(str, "SET_DIM_%d=%d\n", outputPort, val);
         sendCmd(str);
         if (conditionType == "NormalCondition")
         {
@@ -193,11 +193,11 @@ void Conditions::setRel(bool state)
     {
         if (state == true)
         {
-            sprintf(str, "sw%d=ON\n", outputPort);
+            sprintf(str, "SET_SW_%d=ON\n", outputPort);
         }
         else
         {
-            sprintf(str, "sw%d=OFF\n", outputPort);
+            sprintf(str, "SET_SW_%d=OFF\n", outputPort);
         }
         sendCmd(str);
     }
@@ -214,7 +214,7 @@ void Conditions::setRel(bool state)
 void Conditions::stopMotor(int motorNumber)
 {
     char str[16];
-    sprintf(str, "Motor%d=Stop\n", motorNumber);
+    sprintf(str, "SET_MOT_%d=Stop\n", motorNumber);
     sendCmd(str);
 }
 
