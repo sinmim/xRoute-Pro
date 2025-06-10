@@ -33,6 +33,11 @@
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
 String Version = "0.1.6";
+// userInfo
+#include "SettingsStore.h"
+#include "userInfoKeys.h"
+SettingsStore wifi_WebSocket_Settings("/wifi_WebSocket_Settings.json");
+
 //========Update
 #include <Update.h>
 //_#include "AESLib.h"
@@ -670,7 +675,7 @@ void ConditionsTask(void *parameters)
     }
     // Serial.printf("Stack high watermark: %u bytes\n", uxTaskGetStackHighWaterMark(NULL));
     //  Delay before the next iteration
-    vTaskDelay(100);
+    vTaskDelay(1000);
   }
 }
 void loadStateFromFile()
@@ -787,7 +792,6 @@ void MeasurmentTask(void *parameters)
     }
 
     //=====
-
     // sprintf(str, "SOLVOL1=%d\n", (int)v);
     // data += str;
     // sprintf(str, "CARVOL1=%d\n", (int)v);
@@ -796,7 +800,7 @@ void MeasurmentTask(void *parameters)
     data += str;
     sprintf(str, "BATPR1=%d\n", (int)b);
     data += str;
-    sprintf(str, "AMPINT1=%d\n", (int)a0);
+    sprintf(str, "AMPINT1=%.2f\n", (float)a0 / 10.0F);
     data += str;
     sprintf(str, "AMPEXT1=%d\n", (int)a1);
     data += str;
@@ -823,15 +827,100 @@ void MeasurmentTask(void *parameters)
     data += "RELS=" + getRelsStatStr() + "\n";
     myBle.sendString(data);
     ws.sendToAll(data.c_str());
+    // Serial.println(data);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
+
+// websocket OTA
+#define OTA_BUFFER_SIZE 2048
+uint8_t *UDP_buffer = nullptr;
+bool UDP_bufferBussy = true;
+bool UDP_dataReady = false;
+int UDP_buffLen;
+int UDP_len;
+TaskHandle_t updateTaskHandle;
+void updateTask(void *parameters)
+{
+  UDP_buffer = (uint8_t *)malloc(OTA_BUFFER_SIZE);
+  UDP_bufferBussy = false;
+
+  Update.begin(UDP_len);
+  float progressPercent = 0;
+  float lastProgressPercent = 0;
+  uint32_t progress;
+  uint64_t start = millis();
+  uint TIME_OUT = 5000;
+
+  for (;;)
+  {
+    while (UDP_dataReady == false)
+    {
+      if (millis() - start > TIME_OUT)
+        break;
+      vTaskDelay(pdTICKS_TO_MS(10));
+    }
+    if (millis() - start > TIME_OUT)
+    {
+      Serial.println("UPD_TIMEOUT");
+      ws.sendToThisClient("UPD_FAILED\n");
+      Serial.println("UPD_FAILED");
+      Update.end(true);
+      ws.endUpdate();
+      free(UDP_buffer);
+      UDP_bufferBussy = false;
+      MeasurmentTaskPause = false;
+      vTaskDelete(NULL);
+    }
+    UDP_dataReady = false;
+    Update.write(UDP_buffer, UDP_buffLen);
+    UDP_bufferBussy = false;
+    progress = Update.progress();
+    progressPercent = (float)progress / UDP_len * 100;
+    if ((progressPercent - lastProgressPercent) > 1)
+    {
+      lastProgressPercent = progressPercent;
+      ws.sendToThisClient(String("UPD_PRC_1=" + String(progressPercent, 1) + "\n").c_str());
+      start = millis(); // reset timer
+    }
+
+    Serial.println("UPD_PRC_1=" + String(progressPercent, 1));
+    if (progress == UDP_len)
+    {
+      bool state = Update.end();
+      if (state == true)
+      {
+        ws.sendToThisClient("UPD_COMPLETED\n");
+        Serial.println("UPD_COMPLETED\n");
+        vTaskDelay(pdTICKS_TO_MS(3000));
+        ESP.restart();
+      }
+      else
+      {
+        ws.sendToThisClient("UPD_FAILED\n");
+        Serial.println("UPD_FAILED\n");
+        ws.endUpdate();
+        free(UDP_buffer);
+        UDP_bufferBussy = false;
+        MeasurmentTaskPause = false;
+        vTaskDelete(NULL);
+      }
+    }
+  }
+}
+
 TaskHandle_t sendUiConfigTaskHandle;
 void sendUiConfigTask(void *parameters)
 {
-  String str = "ConfigFile=\n" + readStringFromFile(ConfigFile) + "\nEND\n";
+  String str = readStringFromFile(ConfigFile);
   vTaskSuspend(MeasurmentTaskHandle);
-  myBle.sendLongString(str);
+  // myBle.sendLongString("ConfigFile=\n" + str + "\nEND\n");
+  wrapJson(str.c_str(), jsonKeys::UI_CONFIG, str);
+  // ws.sendToClient(str.c_str(), ws.getCliant()); // send to recent client
+  Serial.println("SENDING UI CONFIG");
+  ws.sendToAll(str.c_str()); // send to all clients
+  Serial.println("SENDING Finished");
+
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
 }
@@ -956,7 +1045,10 @@ void led_indicator_task(void *parameters)
     int clients = ws.clientCount();
     if (clients > 0)
     {
-      ws2812Blink(COLOR_GREEN, clients, 1, 0.5);
+      if (ws.isUpdating())
+        ws2812Blink(COLOR_WHITE, clients, 1, 0.5);
+      else
+        ws2812Blink(COLOR_GREEN, clients, 1, 0.5);
     }
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
@@ -1334,6 +1426,8 @@ bleUpdate *myUpdate;
 void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
   char str[128];
+  static RGB_VALS RGB1;
+
   static String accumulatedData;
   if (myUpdate != nullptr)
   {
@@ -1356,6 +1450,11 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
   while ((endPos = accumulatedData.indexOf('\n')) != -1)
   {
     String command = accumulatedData.substring(0, endPos);
+    // remove \r if exist at the end beqause in postman it sends \n\r
+    if (command.endsWith("\r"))
+    {
+      command.remove(command.length() - 1);
+    }
     accumulatedData.remove(0, endPos + 1);
     /*
     else if (command.startsWith("Motor1=Up"))
@@ -2020,9 +2119,48 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           float val = valStr.toFloat() / 255;
           dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
           DimValChanged = true;
+          sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
+
+          myBle.sendString(str);
+          //  ws.sendToAll(str);
+          ws.SendToAllExcludeClient(str, ws.getCliant()); // send to all cliants except the one who is ben this command received from
+          // Serial.printf("in:%s | out:%s\n", command, str);
+        }
+        else
+        {
+          RES = 1;
+        }
+      }
+      else if (command.startsWith("RGB_")) // SET_RGB_1=128,125,23,255; => RED,GREEN,BLUE,BRIGHTNESS;
+      {
+        int index = atoi(command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).c_str());
+        // extract and store in RGB1
+        int start = command.indexOf("=") + 1;
+        int comma1 = command.indexOf(",", start);
+        int comma2 = command.indexOf(",", comma1 + 1);
+        int comma3 = command.indexOf(",", comma2 + 1);
+        if (index == 1)
+        {
+          RGB1.red = command.substring(start, comma1).toInt();
+          RGB1.green = command.substring(comma1 + 1, comma2).toInt();
+          RGB1.blue = command.substring(comma2 + 1, comma3).toInt();
+          RGB1.brightness = command.substring(comma3 + 1).toInt();
+        }
+      }
+      else if (command.startsWith("MAX_DIM_")) // MAX_DIM_
+      {
+        int dimNumber = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt() - 1;
+        if (dimNumber > 1 || dimNumber < 6) // handling unwanted value from app
+        {
+          String valStr = command.substring(command.indexOf("=") + 1);
+          float val = valStr.toFloat() / 255;
+          dimTmp[dimNumber] = 32768 * val * 1; // dimLimit[dimNumber];
+          DimValChanged = true;
           char str[128];
           sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
           myBle.sendString(str);
+          // ws.sendToAll(str);
+          ws.SendToAllExcludeClient(str, ws.getCliant()); // send to all cliants except the one who is ben this command received from
           // Serial.printf("in:%s | out:%s\n", command, str);
         }
         else
@@ -2079,7 +2217,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           myBle.sendString("Motor1=Stop\n");
         }
       }
-      else if (command.indexOf("ZERO_GYRO_")) // Zero Gyro
+      else if (command.startsWith("ZERO_GYRO_")) // Zero Gyro
       {
         uint timeout = 200;
         GyroOffsetingFlg = true;
@@ -2100,13 +2238,30 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         }
         myBle.sendString(str);
       }
+      else if (command.startsWith("START_UPDATE_")) // START_UPDATE_1=5789 byte
+      {
+        MeasurmentTaskPause = true;
+        int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt() - 1;
+        uint32_t binSize = command.substring(command.indexOf("=") + 1).toInt();
+        ws.startUpdate(binSize);
+        UDP_len = binSize;
+        // start updateTask
+        if (eTaskGetState(&updateTaskHandle) != eRunning)
+          xTaskCreate(updateTask, "updateTask", 4 * 1024, NULL, 3, &updateTaskHandle);
+      }
+      else if (command.startsWith("STOP_UPDATE_")) // STOP_UPDATE_1
+      {
+        // do something to hult the update and send back update if failed later : to do
+      }
     }
     //// GETTING VALUES
     else if (command.startsWith("GET_"))
     {
       command = command.substring(4);
-      /* */ if (command.startsWith("INIT")) // GET_INIT
+      /* */ if (command.startsWith("INIT_")) // GET_INIT
       {
+        int index = atoi(command.substring(command.lastIndexOf("_") + 1).c_str());
+
         String str = "";
         for (int index = 1; index <= 8; index++)
         {
@@ -2127,37 +2282,66 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
       }
-      else if (command.startsWith("VER"))
+      else if (command.startsWith("DIM_LIM_")) // GET_DIM_LIM_1
+      {
+        int index = atoi(command.substring(command.lastIndexOf("_") + 1).c_str());
+
+        String str;
+        for (int i = 0; i < 5; i++)
+        {
+          float val = dimLimit[i] * 255;
+          str += "DIM_LIM" + String(i + 1) + "=" + String((int)val) + "\n";
+        }
+        myBle.sendString(str);
+        ws.sendToAll(str.c_str());
+      }
+      else if (command.startsWith("RGB_")) // GET_RGB_1
+      {
+        ws.sendToAll(String("RGB_INFO_1=" + String(RGB1.red) + "," + String(RGB1.green) + "," + String(RGB1.blue) + "," + String(RGB1.brightness) + "\n").c_str());
+      }
+      else if (command.startsWith("VER_"))
       {
         String response = "Version=" + Version + "\n";
-        Serial.println(response.c_str());
+        // Serial.println(response.c_str());
         myBle.sendString(response.c_str());
+        ws.sendToThisClient(response.c_str());
       }
-      else if (command.startsWith("CONDITIONS"))
+      else if (command.startsWith("CONDITION_CONFIG"))
       {
-        if (eTaskGetState(&sendConditionsTaskHandle) != eRunning)
-        {
-          xTaskCreate(sendConditionsTask, "sendConditionsTask", 1024 * 4, NULL, 2, &sendConditionsTaskHandle);
-        }
+        String str = readStringFromFile(CondFile);
+        wrapJson(str.c_str(), jsonKeys::CONDITON_CONFIG, str);
+        Serial.println("SENDING CONDITON CONFIG");
+        ws.sendToAll(str.c_str());
+        // if (eTaskGetState(&sendConditionsTaskHandle) != eRunning)
+        // {
+        //   xTaskCreate(sendConditionsTask, "sendConditionsTask", 1024 * 4, NULL, 2, &sendConditionsTaskHandle);
+        // }
       }
       else if (command.startsWith("UI_CONFIG"))
       {
-        if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
-        {
-          xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 4, NULL, 2, &sendUiConfigTaskHandle);
-        }
+        String str = readStringFromFile(ConfigFile);
+        wrapJson(str.c_str(), jsonKeys::UI_CONFIG, str);
+        Serial.println("SENDING UI CONFIG");
+        ws.sendToAll(str.c_str());
+        // send to all clients
+        // if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
+        // {
+        //   xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 10, NULL, 2, &sendUiConfigTaskHandle);
+        // }
       }
       else if (command.startsWith("GYRO_ORI_")) // gyro oriantation
       {
         String response = "Orientation=" + GyroOriantation + "\n";
         myBle.sendString(response.c_str());
+        ws.sendToThisClient(response.c_str());
       }
       else if (command.startsWith("DIM_LIM_")) // dimer limit DIM_LIM_123
       {
         int index = atoi(command.substring(command.indexOf("_") + 1).c_str());
-        float val = dimLimit[index] * 128;
+        float val = dimLimit[index] * 255;
         sprintf(str, "dimMax%d.val=%d\xFF\xFF\xFF", index + 1, (int)val);
         myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("SYS_INFO")) // system informations
       {
@@ -2172,6 +2356,14 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         sprintf(str, "MacAddress:%012llX,%s,Version:%s\xFF\xFF\xFF", chipid, LisenceStr.c_str(), Version);
         Serial.println(str);
         myBle.sendString(str);
+        ws.sendToThisClient(str);
+      }
+      else if (command.startsWith("WIFI_INFO_JSON_"))
+      {
+        int index = (command.substring(command.lastIndexOf("_") + 1)).toInt(); // unused for now
+        String msg = wifi_WebSocket_Settings.getJson();
+        myBle.sendString(msg.c_str());
+        ws.sendToThisClient(msg.c_str());
       }
     }
     //// DEFAULTING VALUES
@@ -2364,11 +2556,14 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       else if (command.startsWith("MAX_DIM_")) // maximum Dimmer MAX_DIM_1=123
       {
         float val = command.substring(command.indexOf("=") + 1).toFloat();
-        dimLimit[index] = val / 255;
-        dimTmp[index] = (double)32767 * dimLimit[index];
-        DimValChanged = true;
-        sprintf(str, "show.txt=\"Dim%d MaxLimit=%d\"\n", index + 1, (int)(32768 * dimLimit[index]));
-        myBle.sendString(str);
+        unsigned int dimNum = command.substring(command.lastIndexOf("_") + 1).toInt() - 1;
+        dimLimit[dimNum] = val / 255;
+        dimTmp[dimNum] = (double)32767 * dimLimit[dimNum];
+        // save
+        EEPROM.writeFloat(E2ADD.dimLimitSave[dimNum], dimLimit[dimNum]);
+        EEPROM.commit();
+        // add debug print
+        // Serial.printf("DIM%d val%f", dimNum, val);
       }
       else if (command.startsWith("BATT_CAP_")) // Battery Cap BAT_CAP=345
       {
@@ -2482,41 +2677,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       command = command.substring(5);
       int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt();
 
-      /* */ if (command.startsWith("DIM_LIMITS_")) // dimers limit
-      {
-        int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt();
-
-        for (int i = 0; i < 7; i++)
-        {
-          EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimit[i]);
-          EEPROM.commit();
-        }
-        String response = "XrouteAlarm=Limit Saved OK! \n";
-        myBle.sendString(response.c_str());
-      }
-      else if (command.startsWith("CONDITIONS_")) // conditions
-      {
-        int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt();
-
-        confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
-        MeasurmentTaskPause = true;                                                     // change to mutex in the future
-        myBle.startDirectRead();
-        if (eTaskGetState(&takeConditionFileTaskHandle) != eRunning)
-          xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
-        break; // breake for preventing forthure processing the accumulated string
-      }
-      else if (command.startsWith("UI_CONFIG_")) // UI config file
-      {
-        int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt();
-
-        confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
-        MeasurmentTaskPause = true;                                                     // change to mutex in the future
-        myBle.startDirectRead();
-        if (eTaskGetState(&takeUiConfigFileTaskHandle) != eRunning)
-          xTaskCreate(takeUiConfigFileTask, "takeUiConfigFileTask", 4 * 1024, NULL, 1, &takeUiConfigFileTaskHandle);
-        break; // breake for preventing forthure processing the accumulated string
-      }
-      else if (command.startsWith("GYRO_ORI_"))
+      /**/ if (command.startsWith("GYRO_ORI_"))
       {
         int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt();
 
@@ -2525,6 +2686,35 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         String strTmp = EEPROM.readString(E2ADD.GyroOriantationSave);
         GyroOriantation = strTmp;
+      }
+      else if (command.startsWith("WIFI_SSID_")) // WIFI_SSID_1=ssid
+      {
+        String ssid = command.substring(command.indexOf("=") + 1);
+        wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiSSID, ssid);
+        Serial.println("Wifi SSID:" + ssid);
+      }
+      else if (command.startsWith("WIFI_PASS_")) // WIFI_PASS_1=pass\r
+      {
+        String pass = command.substring(command.indexOf("=") + 1);
+        wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiPassword, pass);
+        Serial.println("Wifi PASS:" + pass);
+      }
+      else if (command.startsWith("WIFI_MODE_")) // WIFI_MODE_1=STA /
+      {
+        String mode = command.substring(command.indexOf("=") + 1);
+        if (mode == "STA")
+        {
+          wifi_WebSocket_Settings.set<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_STA);
+        }
+        else if (mode == "AP")
+        {
+          wifi_WebSocket_Settings.set<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_AP);
+        }
+        else if (mode == "STA_AP")
+        {
+          wifi_WebSocket_Settings.set<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_APSTA);
+        }
+        ws.begin(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));
       }
     }
     ///// ERROR
@@ -2659,34 +2849,136 @@ void setup()
     Serial.printf("BLE PASS : %s\n", String(myBle.getPassKey()));
   }
 
-  // Network
+  // user infos
+  if (!wifi_WebSocket_Settings.loadUserData())
+  {
+    Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]No valid JSON found, starting fresh.");
+  }
+  else
+  {
+    Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]==> LOADED OK !");
+  }
+
+  // Network AND websocket
   if (true)
   {
     // Configure network
-    ws.setAP("Xroute-AP", "12345678");
-    ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
-    //  ws.setSTA("TP-Link_20D8", "83937361");
+    String ssid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID, "karavanicin.com_2.4GHz");
+    String pass = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword, "1020304050");
+    String apName = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApName, "Xroute-AP");
+    String apPass = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApPassword, "12345678");
+    String hostName = wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName, "xroute");
+    wifi_mode_t mode = wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_APSTA);
+    int port = wifi_WebSocket_Settings.get<int>(NetworkKeys::Port, 81);
+    ws.setAP(apName.c_str(), apPass.c_str());
+    ws.setSTA(ssid.c_str(), pass.c_str());
+    // ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
+    // ws.setSTA("TP-Link_20D8", "83937361");
     // ws.setSTA("SAMAN POCO", "83601359");
-    ws.setHostname("xroute");
-    ws.setPort(81);
-
-    ws.setStatusBuilder([](StaticJsonDocument<512> &doc)
+    ws.setHostname(hostName.c_str());
+    ws.setHostname("xroute-ali");
+    ws.setPort(port);
+    ws.setStatusBuilder([](StaticJsonDocument<4096> &doc)
                         {
     doc["uptime"] = millis();
     doc["status"] = "OK"; });
-
     ws.onJson([](JsonDocument &doc)
               {
-    Serial.print("JSON received: ");
-    serializeJsonPretty(doc, Serial);
-    Serial.println(); });
+  // 1) Treat the entire doc as a JsonObject
+  JsonObject root = doc.as<JsonObject>();
 
+  // 2) Iterate over its key/value pairs. If you know there’s exactly one wrapper,
+  //    you can just grab the first pair.
+  if (root.size() == 0) {
+    Serial.println("No keys found in incoming JSON");
+    return;
+  }
+  // Take the first key/value pair in `root`
+  JsonPair kv = *root.begin();
+  const char *wrapperKey = kv.key().c_str();
+  JsonVariant   wrappedValue = kv.value();
+  Serial.print("Detected wrapper key: ");
+  Serial.println(wrapperKey);
+  // Now `wrappedValue` is whatever was under that key. If you know it’s an array:
+  if (!wrappedValue.is<JsonArray>()) {
+    Serial.println("Warning: expected an array under the wrapper key");
+    return;
+  }
+  JsonArray arr = wrappedValue.as<JsonArray>();
+  Serial.print("Array size under \"");
+  Serial.print(wrapperKey);
+  Serial.print("\": ");
+  Serial.println(arr.size());
+
+  // Example: if you want to print the first element of that array:
+  if (arr.size() > 0 && arr[0].is<JsonObject>()) 
+  {
+    Serial.println("First element:");
+    String data;
+    //serializeJsonPretty(arr[0].as<JsonObject>(), data);// it cuases ~2.2X more size
+    serializeJson(arr[0].as<JsonObject>(), data);
+    
+    //Serial.println("==========="+data+"===========");
+    if (strncmp(wrapperKey,jsonKeys::UI_CONFIG,9) == 0)
+    {
+      bool status = SaveStringToFile(data, ConfigFile);
+      if (status == true)
+      {
+        myBle.sendString("UiSevadSuccessful\n");
+        ws.sendToAll("UiSevadSuccessful\n");
+      }
+      else
+      {
+        myBle.sendString("UiSevadError\n");
+        ws.sendToAll("UiSevadError\n");
+      }
+    }
+    else if (strncmp(wrapperKey,jsonKeys::CONDITON_CONFIG,11) == 0)
+    {
+      jsonCon.saveConditionsFileFromString(CondFile, data);
+      Serial.println("Condition Received Successfully");
+      Serial.println("Checking file....");
+      if (jsonCon.isJsonFileOk(CondFile))
+      {
+        myBle.sendString("ConditionSevadSuccessful\n");
+        ws.sendToAll("ConditionSevadSuccessful\n");
+        Serial.println("Condition File is ok");
+        Serial.println("deleting old conditions vector");
+        cndtions.clear(); // it will automatically call all the destroyers
+        // there was a problem with destructor and vector that it executes destructor unwanted time and i got negative numbers so i comment destructer --
+        Conditions::ConditionCount = 0;
+        Serial.println("jsonCon.readJsonConditionsFromFile(CondFile)");
+        jsonCon.readJsonConditionsFromFile(CondFile);
+      }
+      else
+      {
+        myBle.sendString("ConditionSevadError\n");
+        ws.sendToAll("ConditionSevadError\n");
+      }
+      
+    }
+    else
+    {
+      //message not valid key
+      Serial.println("message not valid key");
+    }
+    
+  } });
     ws.onCommand([](const char *msg)
-                 { 
-                  //Serial.printf("Raw command: %s\n", msg);
-                  sendCmdToExecute((char *)msg); });
+                 { sendCmdToExecute((char *)msg); });
 
-    ws.begin();
+    ws.onUpdate([](const char *msg, size_t length)
+                {
+                  while (UDP_bufferBussy)
+                  {
+                    vTaskDelay(pdMS_TO_TICKS(1));
+                  }
+                  UDP_bufferBussy=true;
+                  UDP_buffLen=length;                  
+                  memcpy(UDP_buffer,msg,length);
+                  UDP_dataReady=true; });
+
+    ws.begin(mode);
   }
 
   // Tasks
@@ -2767,6 +3059,7 @@ void setup()
 }
 void loop()
 {
+
   vTaskDelay(pdMS_TO_TICKS(1000));
 }
 void loadSavedValue()

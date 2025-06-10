@@ -15,5 +15,14 @@ void giveMeMacAdress();
 bool SaveStringToFile(String str, String path);
 String readStringFromFile(String path);
 int getDimVal(int n);
+bool wrapJson(const char *inputJson, const char *wrapperKey, String &outputJson);
+bool unwrapJson(const char *inputJson, const char *wrapperKey, String &outputJson);
+struct RGB_VALS
+{
+  uint8_t red;
+  uint8_t green;
+  uint8_t blue;
+  uint8_t brightness;
+};
 
 #endif

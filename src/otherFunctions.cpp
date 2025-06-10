@@ -162,3 +162,87 @@ String readStringFromFile(String path)
     return fileContent;
   }
 }
+// ——— CONFIGURABLE CAPACITIES ———
+// Adjust these if your JSON is larger or smaller than shown below:
+static const size_t RAW_CAPACITY = 4096;     // capacity for a “flat” object
+static const size_t WRAPPED_CAPACITY = 4096; // capacity for { key: [ <flat> ] }
+
+// ——— wrapJson(…) ———
+// Parses `inputJson` (a flat object) and produces `outputJson` such that:
+//   outputJson == { "<wrapperKey>": [ <entire inputJson-object> ] }
+//
+//   wrapperKey: the array-name you want at the top level (e.g. "UiConfig",
+//               "MySettings", "Foo", etc.)
+//
+// Returns true on success (and fills outputJson); false on error.
+bool wrapJson(const char *inputJson, const char *wrapperKey, String &outputJson)
+{
+  // 1) Parse the flat input into a temporary JsonDocument
+  StaticJsonDocument<RAW_CAPACITY> sourceDoc;
+  DeserializationError err = deserializeJson(sourceDoc, inputJson);
+  if (err)
+  {
+    Serial.printf("wrapJson: deserializeJson() failed: %s\n", err.f_str());
+    return false;
+  }
+
+  // 2) Create a bigger JsonDocument to hold { wrapperKey: [ { … } ] }
+  StaticJsonDocument<WRAPPED_CAPACITY> wrappedDoc;
+
+  // 3) Create a JsonArray under wrapperKey
+  //    Equivalent to:  wrappedDoc[wrapperKey] = JsonArray();
+  JsonArray arr = wrappedDoc.createNestedArray(wrapperKey);
+
+  // 4) Copy the entire source object into that array
+  arr.add(sourceDoc.as<JsonObject>());
+
+  // 5) Serialize out to String
+  outputJson = "";
+  serializeJson(wrappedDoc, outputJson);
+  return true;
+}
+
+// ——— unwrapJson(…) ———
+// Parses `inputJson` (which must be { "<wrapperKey>": [ { … } ] })
+// and extracts the first object inside that array. The result is
+//   outputJson == the inner object (flat).
+//
+// Returns true on success; false if parsing fails, if the key is missing,
+// or if the array is empty.
+bool unwrapJson(const char *inputJson, const char *wrapperKey, String &outputJson)
+{
+  // 1) Parse the wrapped JSON
+  StaticJsonDocument<WRAPPED_CAPACITY> wrappedDoc;
+  DeserializationError err = deserializeJson(wrappedDoc, inputJson);
+  if (err)
+  {
+    Serial.printf("unwrapJson: deserializeJson() failed: %s\n", err.f_str());
+    return false;
+  }
+
+  // 2) Verify the wrapperKey exists and is an array
+  if (!wrappedDoc.containsKey(wrapperKey) || !wrappedDoc[wrapperKey].is<JsonArray>())
+  {
+    Serial.printf("unwrapJson: \"%s\" array missing or not an array\n", wrapperKey);
+    return false;
+  }
+  JsonArray uiArray = wrappedDoc[wrapperKey];
+
+  // 3) Ensure the array is not empty
+  if (uiArray.isNull() || uiArray.size() == 0)
+  {
+    Serial.printf("unwrapJson: \"%s\" array is empty\n", wrapperKey);
+    return false;
+  }
+
+  // 4) Grab the first element (a JsonObject)
+  JsonObject innerObj = uiArray[0];
+
+  // 5) Copy it into its own (smaller) document, then serialize
+  StaticJsonDocument<RAW_CAPACITY> outDoc;
+  outDoc.set(innerObj);
+
+  outputJson = "";
+  serializeJson(outDoc, outputJson);
+  return true;
+}

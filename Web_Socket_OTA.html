@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 OTA Firmware Uploader</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+        }
+        h1 {
+            margin-top: 0;
+            color: #1a73e8;
+        }
+        /* NEW: Styles for the configuration section */
+        #config-section {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        #config-section legend {
+            padding: 0 0.5rem;
+            font-weight: bold;
+            color: #5f6368;
+        }
+        .config-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 0.5rem 0;
+        }
+        .config-item label {
+            margin-right: 1rem;
+        }
+        .config-item input {
+            padding: 0.4rem;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            width: 60%;
+        }
+        #drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 3rem;
+            cursor: pointer;
+            transition: border-color 0.3s, background-color 0.3s;
+        }
+        #drop-zone.drag-over {
+            border-color: #1a73e8;
+            background-color: #e8f0fe;
+        }
+        #file-input {
+            display: none;
+        }
+        #file-info {
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            color: #5f6368;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        #upload-btn, #interrupt-btn {
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s, opacity 0.3s;
+        }
+        #upload-btn {
+            background-color: #1a73e8;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        #upload-btn:not(:disabled) {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #upload-btn:hover:not(:disabled) {
+            background-color: #185abc;
+        }
+        #interrupt-btn {
+            background-color: #e57373;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        #interrupt-btn:not(:disabled) {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #interrupt-btn:hover:not(:disabled) {
+            background-color: #d32f2f;
+        }
+        /* UPDATED: Container for progress bars */
+        .progress-wrapper {
+            margin-top: 1.5rem;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            accent-color: #1a73e8;
+            border-radius: 6px;
+        }
+        .progress-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: #5f6368;
+            text-align: left;
+        }
+        .progress-percent {
+            font-weight: bold;
+            margin-left: 10px;
+            color: #1a73e8;
+        }
+        #log-area {
+            margin-top: 1.5rem;
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 1rem;
+            height: 150px;
+            overflow-y: auto;
+            text-align: left;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #202124;
+        }
+        .log-entry { white-space: pre-wrap; word-break: break-all; }
+        .log-entry.error { color: #d93025; }
+        .log-entry.success { color: #1e8e3e; }
+        .log-entry.info { color: #1a73e8; }
+        .log-entry.raw { color: #5f6368; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 OTA Uploader</h1>
+
+        <fieldset id="config-section">
+            <legend>Connection Settings</legend>
+            <div class="config-item">
+                <label for="host-input">Hostname:</label>
+                <input type="text" id="host-input" value="xroute-ali.local">
+            </div>
+            <div class="config-item">
+                <label for="port-input">Port:</label>
+                <input type="text" id="port-input" value="81">
+            </div>
+        </fieldset>
+        
+        <div id="drop-zone">
+            <p>Drag & Drop your `.bin` file here or</p>
+            <button onclick="event.stopPropagation(); document.getElementById('file-input').click();" class="select-btn">Select File</button>
+        </div>
+        
+        <input type="file" id="file-input" accept=".bin">
+        <div id="file-info">No file selected.</div>
+        
+        <div class="button-container">
+            <button id="upload-btn" disabled>Upload Firmware</button>
+            <button id="interrupt-btn" disabled>Hold to Interrupt</button>
+        </div>
+
+        <div id="upload-progress-container" class="progress-wrapper">
+            <label class="progress-label" for="upload-progress-bar">Browser Upload Progress</label>
+            <div style="display: flex; align-items: center;">
+                <progress id="upload-progress-bar" class="progress-bar" max="100" value="0"></progress>
+                <span id="upload-progress-percent" class="progress-percent">0%</span>
+            </div>
+        </div>
+
+        <div id="firmware-progress-container" class="progress-wrapper">
+            <label class="progress-label" for="firmware-progress-bar">ESP32 Firmware Progress</label>
+            <div style="display: flex; align-items: center;">
+                <progress id="firmware-progress-bar" class="progress-bar" max="100" value="0"></progress>
+                <span id="firmware-progress-percent" class="progress-percent">0%</span>
+            </div>
+        </div>
+        
+        <h3>Logs</h3>
+        <div id="log-area"></div>
+    </div>
+
+<script>
+    // UPDATED: Added references for new UI elements
+    const hostInput = document.getElementById('host-input');
+    const portInput = document.getElementById('port-input');
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo = document.getElementById('file-info');
+    const uploadBtn = document.getElementById('upload-btn');
+    const interruptBtn = document.getElementById('interrupt-btn');
+    const logArea = document.getElementById('log-area');
+    
+    const uploadProgressContainer = document.getElementById('upload-progress-container');
+    const uploadProgressBar = document.getElementById('upload-progress-bar');
+    const uploadProgressPercent = document.getElementById('upload-progress-percent');
+
+    const firmwareProgressContainer = document.getElementById('firmware-progress-container');
+    const firmwareProgressBar = document.getElementById('firmware-progress-bar');
+    const firmwareProgressPercent = document.getElementById('firmware-progress-percent');
+
+    let firmwareFile = null;
+    let isInterrupted = false;
+    let socket = null;
+
+    function logMessage(message, type = 'info') {
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logArea.appendChild(entry);
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    // UPDATED: Function to set color on both progress bars
+    function setProgressBarsColor(color) {
+        uploadProgressBar.style.accentColor = color;
+        firmwareProgressBar.style.accentColor = color;
+    }
+
+    function handleFileSelect(file) {
+        if (file && file.name.endsWith('.bin')) {
+            firmwareFile = file;
+            const fileSize = (firmwareFile.size / 1024).toFixed(2);
+            fileInfo.textContent = `File: ${firmwareFile.name} (${fileSize} KB)`;
+            uploadBtn.disabled = false;
+            logMessage(`File selected: ${firmwareFile.name}`, 'success');
+        } else {
+            firmwareFile = null;
+            fileInfo.textContent = 'Please select a valid .bin file.';
+            uploadBtn.disabled = true;
+            logMessage('Invalid file type. Please select a .bin file.', 'error');
+        }
+    }
+
+    fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files[0]));
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName=>dropZone.addEventListener(eName,(e)=>{e.preventDefault();e.stopPropagation();},!1));
+    dropZone.addEventListener('dragover', () => dropZone.classList.add('drag-over'));
+    ['dragleave', 'drop'].forEach(eName=>dropZone.addEventListener(eName,()=>dropZone.classList.remove('drag-over')));
+    dropZone.addEventListener('drop', (e) => handleFileSelect(e.dataTransfer.files[0]));
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    interruptBtn.addEventListener('mousedown', () => { if (socket && socket.readyState === 1) { isInterrupted = true; logMessage('Upload paused by user.', 'error'); }});
+    interruptBtn.addEventListener('mouseup', () => { if (isInterrupted) { isInterrupted = false; logMessage('Upload resumed by user.', 'info'); }});
+    interruptBtn.addEventListener('mouseleave', () => { if (isInterrupted) { isInterrupted = false; logMessage('Upload resumed as mouse left button.', 'info'); }});
+
+    uploadBtn.addEventListener('click', () => {
+        if (!firmwareFile) {
+            logMessage('No file to upload.', 'error');
+            return;
+        }
+
+        // UPDATED: Show and reset both progress bars
+        uploadProgressContainer.style.display = 'block';
+        uploadProgressBar.value = 0;
+        uploadProgressPercent.textContent = '0%';
+        
+        firmwareProgressContainer.style.display = 'block';
+        firmwareProgressBar.value = 0;
+        firmwareProgressPercent.textContent = '0%';
+        setProgressBarsColor('#1a73e8'); // Reset to default blue
+        
+        uploadBtn.disabled = true;
+        interruptBtn.disabled = false;
+        isInterrupted = false;
+
+        // NEW: Get host and port from input fields
+        const host = hostInput.value.trim();
+        const port = portInput.value.trim();
+        const wsUrl = `ws://${host}:${port}/`;
+
+        logMessage(`Attempting to connect to ${wsUrl}...`, 'info');
+        socket = new WebSocket(wsUrl);
+        socket.binaryType = 'arraybuffer';
+
+        socket.onopen = () => {
+            logMessage('WebSocket connection established.', 'success');
+            const startCommand = `SET_START_UPDATE_1=${firmwareFile.size}\n`;
+            logMessage(`Sending command: ${startCommand}`, 'info');
+            socket.send(startCommand);
+            
+            setTimeout(() => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    logMessage(`File read successfully. Starting chunked upload...`, 'info');
+                    sendNextChunk(e.target.result, 0);
+                };
+                reader.onerror = () => { logMessage('Error reading file.', 'error'); socket.close(); };
+                reader.readAsArrayBuffer(firmwareFile);
+            }, 1000);
+        };
+
+        const CHUNK_SIZE = 8192; 
+        // UPDATED: Set delay to 200ms as requested
+        const UPLOAD_DELAY_MS = 200;
+
+        function sendNextChunk(fileData, offset) {
+            if (!socket || socket.readyState !== 1) { logMessage('Cannot send chunk, socket is not open.', 'error'); return; }
+            if (isInterrupted) { setTimeout(() => sendNextChunk(fileData, offset), 100); return; }
+            if (offset >= fileData.byteLength) { logMessage('All file chunks sent from browser.', 'info'); return; }
+
+            const chunk = fileData.slice(offset, offset + CHUNK_SIZE);
+            socket.send(chunk);
+
+            // UPDATED: This now only updates the BROWSER UPLOAD progress bar
+            const percent = ((offset + chunk.byteLength) / fileData.byteLength) * 100;
+            uploadProgressBar.value = percent;
+            uploadProgressPercent.textContent = `${Math.floor(percent)}%`;
+
+            setTimeout(() => sendNextChunk(fileData, offset + chunk.byteLength), UPLOAD_DELAY_MS);
+        }
+
+        socket.onmessage = (event) => {
+            const rawMessage = event.data;
+            logMessage(`[RAW] Received: "${rawMessage}"`, 'raw');
+            const message = typeof rawMessage === 'string' ? rawMessage.trim() : rawMessage;
+
+            if (message.startsWith('UPD_PRC_1=')) {
+                // UPDATED: This now only updates the ESP32 FIRMWARE progress bar
+                const parts = message.split('=');
+                if (parts.length === 2) {
+                    const percent = parseFloat(parts[1]);
+                    if (!isNaN(percent)) {
+                        firmwareProgressBar.value = percent;
+                        firmwareProgressPercent.textContent = `${Math.floor(percent)}%`;
+                    }
+                }
+            } else if (message === 'UPD_COMPLETED') {
+                logMessage('Interpreted as: Update completed successfully!', 'success');
+                uploadProgressBar.value = 100;
+                uploadProgressPercent.textContent = '100%';
+                firmwareProgressBar.value = 100;
+                firmwareProgressPercent.textContent = '100%';
+                setProgressBarsColor('#1e8e3e'); // Green for success
+                socket.close();
+            } else if (message === 'UPD_FAILED') {
+                logMessage('Interpreted as: Update FAILED.', 'error');
+                setProgressBarsColor('#d93025'); // Red for failure
+                socket.close();
+            }
+        };
+
+        socket.onerror = (error) => {
+            logMessage('WebSocket error occurred. Check the console.', 'error');
+            setProgressBarsColor('#d93025');
+            console.error('WebSocket Error:', error);
+        };
+
+        socket.onclose = (event) => {
+            let reason = event.wasClean ? "Normal closure" : "Connection closed abnormally";
+            logMessage(`WebSocket connection closed. Reason: ${reason}`, 'info');
+
+            // If closed and not successfully completed, mark as error
+            if (firmwareProgressBar.value < 100) {
+                 // Check if it's already red from a failure message
+                if (firmwareProgressBar.style.accentColor !== 'rgb(217, 48, 37)') {
+                     logMessage(`Connection closed prematurely.`, 'error');
+                     setProgressBarsColor('#d93025');
+                }
+            }
+            
+            uploadBtn.disabled = false;
+            interruptBtn.disabled = true;
+            isInterrupted = false;
+        };
+    });
+</script>
+</body>
+</html>
