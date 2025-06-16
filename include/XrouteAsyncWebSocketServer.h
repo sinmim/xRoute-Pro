@@ -65,9 +65,6 @@ public:
   void SendToAllExcludeClient(const char *message, AsyncWebSocketClient *exCliant);
 
   void printWiFiDetails();
-
-  static void apMonitorTask(void *pv);
-  void setStatusBuilder(std::function<void(StaticJsonDocument<4096> &)> cb);
   AsyncWebSocketClient *getCliant() { return LastClient; }
 
 private:
@@ -89,7 +86,6 @@ private:
 
   std::function<void(const char *)> _cmdCb;
   std::function<void(StaticJsonDocument<4096> &)> _jsonCb;
-  std::function<void(StaticJsonDocument<4096> &)> _statusCb;
   std::function<void(const char *, int len)> _updateCb;
 
   StaticJsonDocument<4096> _doc;

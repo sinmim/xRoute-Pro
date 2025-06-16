@@ -214,11 +214,6 @@ void XrouteAsyncWebSocketServer::onJson(std::function<void(StaticJsonDocument<40
   _jsonCb = cb;
 }
 
-void XrouteAsyncWebSocketServer::setStatusBuilder(std::function<void(StaticJsonDocument<4096> &)> cb)
-{
-  _statusCb = cb;
-}
-
 void XrouteAsyncWebSocketServer::sendToAll(const char *message)
 {
   if (_ws)
@@ -498,105 +493,99 @@ static std::map<uint32_t, String> jsonBuffers;
 
 void XrouteAsyncWebSocketServer::registerEvents()
 {
-  _ws->onEvent([this](AsyncWebSocket *server,
-                      AsyncWebSocketClient *client,
-                      AwsEventType type,
-                      void *arg,
-                      uint8_t *data,
-                      size_t len)
-               {
-    switch (type) {
-      case WS_EVT_CONNECT: {
-         // Add to our registry
-                {
+  _ws->onEvent(
+      [this](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
+      {
+        switch (type)
+        {
+        case WS_EVT_CONNECT:
+        {
+          client->setCloseClientOnQueueFull(false); // saman : it will drop excessive datas to prevent client disconnection
+          //  Add to our registry
           std::lock_guard<std::mutex> lock(_clientsLock);
           _clients.push_back(client);
+          int cid = client->id();
+          _clientCount++;
+          Serial.printf("[WS][%u] CONNECTED  (total %u)\n", cid, (unsigned)_clientCount.load());
+          break;
         }
-         int cid = client->id();
-        _clientCount++;
-        Serial.printf("[WS][%u] CONNECTED  (total %u)\n",
-                      cid, (unsigned)_clientCount.load());
-        break;
-      }
-
-      case WS_EVT_DISCONNECT: {
-                // Remove from registry
+        case WS_EVT_DISCONNECT:
         {
+          // Remove from registry
           std::lock_guard<std::mutex> lock(_clientsLock);
           auto it = std::find(_clients.begin(), _clients.end(), client);
-          if (it != _clients.end()) {
+          if (it != _clients.end())
+          {
             _clients.erase(it);
           }
+          uint32_t cid = client->id();
+          _clientCount--;
+          Serial.printf("[WS][%u] DISCONNECTED  (total %u)\n", cid, (unsigned)_clientCount.load());
+          break;
         }
-        uint32_t cid = client->id();
-        _clientCount--;
-        Serial.printf("[WS][%u] DISCONNECTED  (total %u)\n",
-                      cid, (unsigned)_clientCount.load());
-        break;
-      }
-
-case WS_EVT_DATA: {
-  if(updatingFlg)
-  {
-    _updateCb((const char*)data,len);
-    updateProgress += len;
-    return;
-  }
-  auto* info = reinterpret_cast<AwsFrameInfo*>(arg);
-
-  // only consider text / continuation frames
-  if ((info->opcode == WS_TEXT || info->opcode == WS_CONTINUATION) && data && len) {
-
-    // 1) Plain-text “commands” come as a single WS_TEXT frame, index==0,
-    //    and don’t start with '{'
-    if (info->opcode == WS_TEXT 
-        && info->index == 0 
-        && data[0] != '{') {
-      // capture last client for sendToThisClient()
-      LastClient = client;
-
-      // copy into a null-terminated buffer
-      char cmd[len+1];
-      memcpy(cmd, data, len);
-      cmd[len] = '\0';
-
-      // invoke your command callback
-      if (_cmdCb) {
-        _cmdCb(cmd);
-      }
-    }
-    // 2) Otherwise, treat as JSON (possibly fragmented)
-    else {
-      auto& buf = jsonBuffers[client->id()];
-      buf.concat(reinterpret_cast<const char*>(data), len);
-
-      // try parsing on every chunk
-      _doc.clear();
-      DeserializationError err = deserializeJson(_doc, buf);
-
-      if (!err) {
-        // full JSON received
-        if (_jsonCb) {
-          _jsonCb(_doc);
+        case WS_EVT_DATA:
+        {
+          if (updatingFlg)
+          {
+            _updateCb((const char *)data, len);
+            updateProgress += len;
+            return;
+          }
+          auto *info = reinterpret_cast<AwsFrameInfo *>(arg);
+          // only consider text / continuation frames
+          if ((info->opcode == WS_TEXT || info->opcode == WS_CONTINUATION) && data && len)
+          {
+            // 1) Plain-text “commands” come as a single WS_TEXT frame, index==0,
+            //    and don’t start with '{'
+            if (info->opcode == WS_TEXT && info->index == 0 && data[0] != '{')
+            {
+              // capture last client for sendToThisClient()
+              LastClient = client;
+              // copy into a null-terminated buffer
+              char cmd[len + 1];
+              memcpy(cmd, data, len);
+              cmd[len] = '\0';
+              // invoke your command callback
+              if (_cmdCb)
+              {
+                _cmdCb(cmd);
+              }
+            }
+            // 2) Otherwise, treat as JSON (possibly fragmented)
+            else
+            {
+              auto &buf = jsonBuffers[client->id()];
+              buf.concat(reinterpret_cast<const char *>(data), len);
+              // try parsing on every chunk
+              _doc.clear();
+              DeserializationError err = deserializeJson(_doc, buf);
+              if (!err)
+              {
+                // full JSON received
+                if (_jsonCb)
+                {
+                  _jsonCb(_doc);
+                }
+                jsonBuffers.erase(client->id());
+              }
+              else if (err == DeserializationError::IncompleteInput)
+              {
+                // waiting for more fragments…
+              }
+              else
+              {
+                // fatal parse error—log and drop buffer
+                Serial.printf("JSON parse error: %s\n", err.c_str());
+                jsonBuffers.erase(client->id());
+              }
+            }
+          }
+          break;
         }
-        jsonBuffers.erase(client->id());
-      }
-      else if (err == DeserializationError::IncompleteInput) {
-        // waiting for more fragments…
-      }
-      else {
-        // fatal parse error—log and drop buffer
-        Serial.printf("JSON parse error: %s\n", err.c_str());
-        jsonBuffers.erase(client->id());
-      }
-    }
-  }
-  break;
-}
-      
-      default:
-        break;
-    } });
+        default:
+          break;
+        }
+      });
 }
 
 <<<<<<< HEAD

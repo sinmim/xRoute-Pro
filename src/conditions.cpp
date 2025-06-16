@@ -214,7 +214,7 @@ void Conditions::setRel(bool state)
 void Conditions::stopMotor(int motorNumber)
 {
     char str[16];
-    sprintf(str, "SET_MOT_%d=Stop\n", motorNumber);
+    sprintf(str, "SET_MOT_%d=STOP\n", motorNumber);
     sendCmd(str);
 }
 

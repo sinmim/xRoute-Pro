@@ -32,12 +32,11 @@
 #define __________________________________________VAR_DEF
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
-String Version = "0.1.6";
+String Version = "0.1.4";
 // userInfo
 #include "SettingsStore.h"
 #include "userInfoKeys.h"
 SettingsStore wifi_WebSocket_Settings("/wifi_WebSocket_Settings.json");
-
 //========Update
 #include <Update.h>
 //_#include "AESLib.h"
@@ -2176,12 +2175,16 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
           myBle.sendString("sw" + String(index) + "=ON\n");
+          ws.sendToAll(String("sw" + String(index) + "=ON\n").c_str());
+          //vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         else if (command.lastIndexOf("OFF") > 0)
         {
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
           myBle.sendString("sw" + String(index) + "=OFF\n");
+          ws.sendToAll(String("sw" + String(index) + "=OFF\n").c_str());
+          //vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         else
         {
@@ -2199,6 +2202,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
           setRelay(RELAYS.relPos, v / 10);
           myBle.sendString("Motor1=Up\n");
+          ws.sendToAll(String("Motor1=Up\n").c_str());
         }
         else if (command.indexOf("DOWN") > 0)
         {
@@ -2207,6 +2211,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
           setRelay(RELAYS.relPos, v / 10);
           myBle.sendString("Motor1=Down\n");
+          ws.sendToAll(String("Motor1=Down\n").c_str());
         }
         else if (command.indexOf("STOP") > 0)
         {
@@ -2215,6 +2220,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
           setRelay(RELAYS.relPos, v / 10);
           myBle.sendString("Motor1=Stop\n");
+          ws.sendToAll(String("Motor1=Stop\n").c_str());
         }
       }
       else if (command.startsWith("ZERO_GYRO_")) // Zero Gyro
@@ -2364,6 +2370,21 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String msg = wifi_WebSocket_Settings.getJson();
         myBle.sendString(msg.c_str());
         ws.sendToThisClient(msg.c_str());
+      }
+      else if (command.startsWith("WIFI_IP_"))
+      {
+        int index = (command.substring(command.lastIndexOf("_") + 1)).toInt(); // unused for now
+        String myIp = "WIFI_IP_1=" + WiFi.localIP().toString() + "\n";
+        myBle.sendString(myIp.c_str());
+        ws.sendToThisClient(myIp.c_str());
+      }
+      else if (command.startsWith("HOST_NAME_"))
+      {
+        int index = command.substring(command.lastIndexOf("_") + 1).toInt();
+        String hostName = wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName);
+        hostName = "HOST_NAME_1=" + hostName + "\n";
+        ws.sendToThisClient(hostName.c_str());
+        myBle.sendString(hostName.c_str());
       }
     }
     //// DEFAULTING VALUES
@@ -2714,7 +2735,13 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         {
           wifi_WebSocket_Settings.set<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_APSTA);
         }
-        ws.begin(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));
+        ws.switchMode(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));
+      }
+      else if (command.startsWith("HOST_NAME_"))
+      {
+        String hostName = command.substring(command.indexOf("=") + 1);
+        wifi_WebSocket_Settings.set<String>(NetworkKeys::HostName, hostName);
+        ESP.restart();
       }
     }
     ///// ERROR
@@ -2726,6 +2753,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     {
       Serial.println("[PARSING ERROR] : " + command + " : " + String(RES));
     }
+    vTaskDelay(pdTICKS_TO_MS(10));
   }
   // if there is missing '\n' print error
   if (accumulatedData.length() > 0)
@@ -2873,15 +2901,11 @@ void setup()
     ws.setAP(apName.c_str(), apPass.c_str());
     ws.setSTA(ssid.c_str(), pass.c_str());
     // ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
-    // ws.setSTA("TP-Link_20D8", "83937361");
-    // ws.setSTA("SAMAN POCO", "83601359");
+    //  ws.setSTA("TP-Link_20D8", "83937361");
+    //  ws.setSTA("SAMAN POCO", "83601359");
     ws.setHostname(hostName.c_str());
-    ws.setHostname("xroute-ali");
+    // ws.setHostname("xroute-ali");
     ws.setPort(port);
-    ws.setStatusBuilder([](StaticJsonDocument<4096> &doc)
-                        {
-    doc["uptime"] = millis();
-    doc["status"] = "OK"; });
     ws.onJson([](JsonDocument &doc)
               {
   // 1) Treat the entire doc as a JsonObject
@@ -2980,7 +3004,6 @@ void setup()
 
     ws.begin(mode);
   }
-
   // Tasks
   if (true)
   {

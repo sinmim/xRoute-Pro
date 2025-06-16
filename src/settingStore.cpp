@@ -112,6 +112,8 @@ String SettingsStore::getPath()
 String SettingsStore::getJson()
 {
     String str;
+    //lets add wifi ip adress to this json by key name : "STA_IP"
+    
     serializeJson(_doc, str);
     return str;
 }
