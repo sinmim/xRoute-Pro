@@ -2,12 +2,6 @@
 #include <ESPmDNS.h>
 #define ME Serial.print("[XrouteAsyncWebSocketServer]:")
 
-enum WiFiMode
-{
-  MODE_STA,
-  MODE_AP,
-  MODE_AP_STA
-};
 wifi_mode_t XrouteAsyncWebSocketServer ::currentMode = WIFI_MODE_STA;
 
 void XrouteAsyncWebSocketServer::setSTA(const char *ssid, const char *pass)
@@ -18,14 +12,14 @@ void XrouteAsyncWebSocketServer::setSTA(const char *ssid, const char *pass)
 
 void XrouteAsyncWebSocketServer::printWiFiDetails()
 {
-  if (currentMode == MODE_STA && WiFi.status() == WL_CONNECTED)
+  if (currentMode == WIFI_MODE_STA && WiFi.status() == WL_CONNECTED)
   {
     Serial.print("STA IP Address: ");
     Serial.println(WiFi.localIP());
     Serial.print("STA RSSI: ");
     Serial.println(WiFi.RSSI());
   }
-  else if (currentMode == MODE_AP)
+  else if (currentMode == WIFI_MODE_AP)
   {
     Serial.print("AP IP Address: ");
     Serial.println(WiFi.softAPIP());
@@ -177,6 +171,11 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
     Serial.println("✔ WebSocket server listening on port 81");
     currentMode = WIFI_MODE_AP;
     return true;
+  }
+  else
+  {
+    Serial.println("✖ Invalid mode");
+    return false;
   }
 }
 
