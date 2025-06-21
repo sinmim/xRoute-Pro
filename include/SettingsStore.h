@@ -70,6 +70,14 @@ public:
   {
     if (_doc.containsKey(key))
     {
+      // the value exist so show me value and existing val in serial
+      Serial.print("SettingsStore: key '");
+      Serial.print(key);
+      Serial.print("' value '");
+      Serial.print(value);
+      Serial.print("' existing '");
+      Serial.print(_doc[key].as<T>());
+      Serial.println("'");
       if (_doc[key].as<T>() == value)
       {
         return;

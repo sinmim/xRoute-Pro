@@ -30,9 +30,9 @@
 #include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
+String Version = "0.1.7";
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
-String Version = "0.1.4";
 // userInfo
 #include "SettingsStore.h"
 #include "userInfoKeys.h"
@@ -166,7 +166,12 @@ extern relConfig RELAYS;
 int blePass;
 // END-----------------------DATA's
 #endif
+//===========================CPU
+#include "CPU_Usage.h"
+CPU_Usage cpu_monitor;
 //===========================Files
+// a std vector of uint8_t
+//==============================
 const String statesFile = "/LastStates.txt";
 #include <ButtonConfig.h>
 const String ConfigFile = "/ConfigFile.txt";
@@ -1108,10 +1113,23 @@ void OVR_CRNT_PRTCT_TASK(void *parameters)
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
+void cpuMonitoringTask(void *parameters)
+{
+  cpu_monitor.begin(2000, 1000);
+  vTaskDelay(1000);
+  for (;;)
+  {
+    float usage_core0 = cpu_monitor.get_cpu_usage_core0();
+    float usage_core1 = cpu_monitor.get_cpu_usage_core1();
+    float usage_total = cpu_monitor.get_cpu_usage_total();
+    Serial.printf("Core 0: %.1f%% | Core 1: %.1f%% | Average: %.1f%%\n",
+                  usage_core0, usage_core1, usage_total);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
 void ramMonitorTask(void *pvParameters)
 {
   (void)pvParameters; // Unused parameter
-
   for (;;)
   {
     // Measure RAM usage
@@ -1448,6 +1466,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
   int endPos;
   while ((endPos = accumulatedData.indexOf('\n')) != -1)
   {
+    MeasurmentTaskPause = true;
+
     String command = accumulatedData.substring(0, endPos);
     // remove \r if exist at the end beqause in postman it sends \n\r
     if (command.endsWith("\r"))
@@ -2175,16 +2195,16 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
           myBle.sendString("sw" + String(index) + "=ON\n");
-          ws.sendToAll(String("sw" + String(index) + "=ON\n").c_str());
-          //vTaskDelay(10 / portTICK_PERIOD_MS);
+          ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getCliant());
+          // vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         else if (command.lastIndexOf("OFF") > 0)
         {
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
           myBle.sendString("sw" + String(index) + "=OFF\n");
-          ws.sendToAll(String("sw" + String(index) + "=OFF\n").c_str());
-          //vTaskDelay(10 / portTICK_PERIOD_MS);
+          ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getCliant());
+          // vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         else
         {
@@ -2258,6 +2278,14 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       else if (command.startsWith("STOP_UPDATE_")) // STOP_UPDATE_1
       {
         // do something to hult the update and send back update if failed later : to do
+      }
+      else if (command.startsWith("DEV_RESET_1")) // Restart xRoute
+      {
+        ESP.restart();
+      }
+      else
+      {
+        RES = 1;
       }
     }
     //// GETTING VALUES
@@ -2385,6 +2413,18 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         hostName = "HOST_NAME_1=" + hostName + "\n";
         ws.sendToThisClient(hostName.c_str());
         myBle.sendString(hostName.c_str());
+      }
+      else if (command.startsWith("BLE_PASS_"))
+      {
+        int index = command.substring(command.lastIndexOf("_") + 1).toInt();
+        // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
+        String response = "BLEPASSWORD=" + String(myBle.getPassKey()) + "\n";
+        myBle.sendString(response.c_str());
+        Serial.println(response.c_str());
+      }
+      else
+      {
+        RES = 2;
       }
     }
     //// DEFAULTING VALUES
@@ -2718,7 +2758,11 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       {
         String pass = command.substring(command.indexOf("=") + 1);
         wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiPassword, pass);
-        Serial.println("Wifi PASS:" + pass);
+        String str = "WIFI_PASS_CHANGED=OK\n";
+        myBle.sendString(str);
+        ws.sendToAll(str.c_str());
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        ESP.restart();
       }
       else if (command.startsWith("WIFI_MODE_")) // WIFI_MODE_1=STA /
       {
@@ -2736,12 +2780,44 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           wifi_WebSocket_Settings.set<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_APSTA);
         }
         ws.switchMode(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));
+        String str = "WIFI_MODE_CHANGED=OK\n";
+        myBle.sendString(str);
+        ws.sendToAll(str.c_str());
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        ESP.restart();
       }
       else if (command.startsWith("HOST_NAME_"))
       {
         String hostName = command.substring(command.indexOf("=") + 1);
         wifi_WebSocket_Settings.set<String>(NetworkKeys::HostName, hostName);
         ESP.restart();
+      }
+      else if (command.startsWith("BLE_PASS_")) // example : BLE_PASS_1=123456,654321
+      {
+        int index = command.substring(command.lastIndexOf("_") + 1).toInt();
+        // extract 6 digit oldPass from = to ,
+        int eq = command.indexOf('=');
+        int comma = command.indexOf(',');
+        String oldPassStr = command.substring(eq + 1, comma);
+        uint32_t oldPass = atoi(oldPassStr.c_str());
+        // extract 6 digit newPass from , to end
+        String newPassStr = command.substring(comma + 1);
+        uint32_t newPass = atoi(newPassStr.c_str());
+        // check if oldPass is correct
+        if (oldPass == myBle.getPassKey())
+        {
+          EEPROM.writeUInt(E2ADD.blePassSave, newPass);
+          EEPROM.commit();
+          // set new passkey and wipe bonds
+          Serial.println("PassKey: " + String(myBle.getPassKey()));
+          myBle.sendData("BLE_PASSWORD_CHANGED_OK\n");
+          ws.sendToAll("BLE_PASSWORD_CHANGED_OK\n");
+          myBle.setPassKey(newPass, true);
+        }
+        else
+        {
+          myBle.sendString("BLE_PASSWORD_CHANGED_ERROR\n");
+        }
       }
     }
     ///// ERROR
@@ -2753,7 +2829,9 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     {
       Serial.println("[PARSING ERROR] : " + command + " : " + String(RES));
     }
+
     vTaskDelay(pdTICKS_TO_MS(10));
+    MeasurmentTaskPause = false;
   }
   // if there is missing '\n' print error
   if (accumulatedData.length() > 0)
@@ -2900,7 +2978,7 @@ void setup()
     int port = wifi_WebSocket_Settings.get<int>(NetworkKeys::Port, 81);
     ws.setAP(apName.c_str(), apPass.c_str());
     ws.setSTA(ssid.c_str(), pass.c_str());
-    // ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
+    //  ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
     //  ws.setSTA("TP-Link_20D8", "83937361");
     //  ws.setSTA("SAMAN POCO", "83601359");
     ws.setHostname(hostName.c_str());
@@ -2989,7 +3067,15 @@ void setup()
     
   } });
     ws.onCommand([](const char *msg)
-                 { sendCmdToExecute((char *)msg); });
+                 {
+                   // Serial.println("D:");
+                   sendCmdToExecute((char *)msg);
+                   // ws.sendToAll(msg);
+                   //  testStr=msg;
+                   //  TestFlag=true;
+                   // add msg to wsCmdData
+
+                 });
 
     ws.onUpdate([](const char *msg, size_t length)
                 {
@@ -3001,9 +3087,9 @@ void setup()
                   UDP_buffLen=length;                  
                   memcpy(UDP_buffer,msg,length);
                   UDP_dataReady=true; });
-
     ws.begin(mode);
   }
+
   // Tasks
   if (true)
   {
@@ -3064,27 +3150,38 @@ void setup()
         NULL,
         2,
         NULL);
+    // CPU
     // xTaskCreate(
-    //     WifiTask,
-    //     "WifiTask",
-    //     8 * 1024, // stack size
-    //     NULL,     // task argument
-    //     1,        // task priority
+    //     cpuMonitoringTask,
+    //     "cpuMonitoringTask",
+    //     3 * 1024,
+    //     NULL,
+    //     1,
     //     NULL);
-    // xTaskCreate(
-    //     ramMonitorTask,
-    //     "ramMonitorTask",
-    //     1024, // stack size
-    //     NULL, // task argument
-    //     1,    // task priority
-    //     NULL);
+    // RAM
+    //  xTaskCreate(
+    //      ramMonitorTask,
+    //      "ramMonitorTask",
+    //      1024, // stack size
+    //      NULL, // task argument
+    //      1,    // task priority
+    //      NULL);
+    // WIFI
+    //  xTaskCreate(
+    //      WifiTask,
+    //      "WifiTask",
+    //      8 * 1024, // stack size
+    //      NULL,     // task argument
+    //      1,        // task priority
+    //      NULL);
   }
 }
+
 void loop()
 {
-
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  vTaskDelay(pdMS_TO_TICKS(100));
 }
+
 void loadSavedValue()
 {
   if (EEPROM.readUInt(E2ADD.E2promFirsTime) == E2PROM_NOT_FIRST_TIME_RUN_VAL)

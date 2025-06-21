@@ -29,7 +29,6 @@
         margin-top: 0;
         color: #1a73e8;
       }
-      /* NEW: Styles for the configuration section */
       #config-section {
         border: 1px solid #ccc;
         border-radius: 8px;
@@ -48,14 +47,47 @@
         justify-content: space-between;
         margin: 0.5rem 0;
       }
+      /* Style for the checkbox to align it nicely */
+      .config-item.checkbox-item {
+        justify-content: flex-start;
+        gap: 10px;
+      }
       .config-item label {
         margin-right: 1rem;
       }
-      .config-item input {
+      .config-item input[type="text"] {
         padding: 0.4rem;
         border-radius: 4px;
         border: 1px solid #ccc;
         width: 60%;
+      }
+       .config-item input[type="checkbox"] {
+        width: 1.3em;
+        height: 1.3em;
+        cursor: pointer;
+      }
+      .version-display {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1rem;
+      }
+      #version-label {
+        font-weight: bold;
+        color: #333;
+      }
+      #getVersion-btn {
+        background-color: #5f6368;
+        color: white;
+        border: none;
+        padding: 0.6rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background-color 0.3s;
+      }
+      #getVersion-btn:hover {
+        background-color: #3c4043;
       }
       #drop-zone {
         border: 2px dashed #ccc;
@@ -117,7 +149,6 @@
       #interrupt-btn:hover:not(:disabled) {
         background-color: #d32f2f;
       }
-      /* UPDATED: Container for progress bars */
       .progress-wrapper {
         margin-top: 1.5rem;
         display: none;
@@ -176,8 +207,8 @@
   </head>
   <body>
     <div class="container">
-        <div style="height: 10px;"></div>
-        
+      <div style="height: 10px"></div>
+
       <h1>xRoute-Pro OTA</h1>
       <fieldset id="config-section">
         <legend>Connection Settings</legend>
@@ -188,6 +219,14 @@
         <div class="config-item">
           <label for="port-input">Port:</label>
           <input type="text" id="port-input" value="81" />
+        </div>
+         <div class="config-item checkbox-item">
+          <label for="sync-upload-checkbox">Sync Upload:</label>
+          <input type="checkbox" id="sync-upload-checkbox" checked title="Wait for ESP32 if browser upload is too far ahead."/>
+        </div>
+        <div class="version-display">
+          <button id="getVersion-btn">Get Version</button>
+          <span id="version-label">Version: N/A</span>
         </div>
       </fieldset>
 
@@ -246,7 +285,6 @@
     </div>
 
     <script>
-      // UPDATED: Added references for new UI elements
       const hostInput = document.getElementById("host-input");
       const portInput = document.getElementById("port-input");
       const dropZone = document.getElementById("drop-zone");
@@ -255,7 +293,8 @@
       const uploadBtn = document.getElementById("upload-btn");
       const interruptBtn = document.getElementById("interrupt-btn");
       const logArea = document.getElementById("log-area");
-
+      const getVersionBtn = document.getElementById("getVersion-btn");
+      const versionLabel = document.getElementById("version-label");
       const uploadProgressContainer = document.getElementById(
         "upload-progress-container"
       );
@@ -263,20 +302,20 @@
       const uploadProgressPercent = document.getElementById(
         "upload-progress-percent"
       );
-
       const firmwareProgressContainer = document.getElementById(
         "firmware-progress-container"
       );
-      const firmwareProgressBar = document.getElementById(
-        "firmware-progress-bar"
-      );
+      const firmwareProgressBar = document.getElementById("firmware-progress-bar");
       const firmwareProgressPercent = document.getElementById(
         "firmware-progress-percent"
       );
+      // NEW: Reference to the sync checkbox
+      const syncUploadCheckbox = document.getElementById("sync-upload-checkbox");
+
 
       let firmwareFile = null;
       let isInterrupted = false;
-      let socket = null;
+      let uploadSocket = null;
 
       function logMessage(message, type = "info") {
         const entry = document.createElement("div");
@@ -286,7 +325,6 @@
         logArea.scrollTop = logArea.scrollHeight;
       }
 
-      // UPDATED: Function to set color on both progress bars
       function setProgressBarsColor(color) {
         uploadProgressBar.style.accentColor = color;
         firmwareProgressBar.style.accentColor = color;
@@ -334,7 +372,7 @@
       dropZone.addEventListener("click", () => fileInput.click());
 
       interruptBtn.addEventListener("mousedown", () => {
-        if (socket && socket.readyState === 1) {
+        if (uploadSocket && uploadSocket.readyState === 1) {
           isInterrupted = true;
           logMessage("Upload paused by user.", "error");
         }
@@ -358,34 +396,31 @@
           return;
         }
 
-        // UPDATED: Show and reset both progress bars
         uploadProgressContainer.style.display = "block";
         uploadProgressBar.value = 0;
         uploadProgressPercent.textContent = "0%";
-
         firmwareProgressContainer.style.display = "block";
         firmwareProgressBar.value = 0;
         firmwareProgressPercent.textContent = "0%";
-        setProgressBarsColor("#1a73e8"); // Reset to default blue
+        setProgressBarsColor("#1a73e8");
 
         uploadBtn.disabled = true;
         interruptBtn.disabled = false;
         isInterrupted = false;
 
-        // NEW: Get host and port from input fields
         const host = hostInput.value.trim();
         const port = portInput.value.trim();
         const wsUrl = `ws://${host}:${port}/`;
 
-        logMessage(`Attempting to connect to ${wsUrl}...`, "info");
-        socket = new WebSocket(wsUrl);
-        socket.binaryType = "arraybuffer";
+        logMessage(`Attempting to connect to ${wsUrl} for upload...`, "info");
+        uploadSocket = new WebSocket(wsUrl);
+        uploadSocket.binaryType = "arraybuffer";
 
-        socket.onopen = () => {
-          logMessage("WebSocket connection established.", "success");
+        uploadSocket.onopen = () => {
+          logMessage("WebSocket connection established for upload.", "success");
           const startCommand = `SET_START_UPDATE_1=${firmwareFile.size}\n`;
-          logMessage(`Sending command: ${startCommand}`, "info");
-          socket.send(startCommand);
+          logMessage(`Sending command: ${startCommand.trim()}`, "info");
+          uploadSocket.send(startCommand);
 
           setTimeout(() => {
             const reader = new FileReader();
@@ -398,18 +433,18 @@
             };
             reader.onerror = () => {
               logMessage("Error reading file.", "error");
-              socket.close();
+              uploadSocket.close();
             };
             reader.readAsArrayBuffer(firmwareFile);
           }, 1000);
         };
 
         const CHUNK_SIZE = 8192;
-        // UPDATED: Set delay to 200ms as requested
-        const UPLOAD_DELAY_MS = 200;
+        const UPLOAD_DELAY_MS = 0;//20;
+        const SYNC_WAIT_MS = 500; // How long to wait before re-checking sync
 
         function sendNextChunk(fileData, offset) {
-          if (!socket || socket.readyState !== 1) {
+          if (!uploadSocket || uploadSocket.readyState !== 1) {
             logMessage("Cannot send chunk, socket is not open.", "error");
             return;
           }
@@ -422,10 +457,21 @@
             return;
           }
 
-          const chunk = fileData.slice(offset, offset + CHUNK_SIZE);
-          socket.send(chunk);
+          // *** NEW SYNC LOGIC ***
+          if (syncUploadCheckbox.checked) {
+              const browserProgress = uploadProgressBar.value;
+              const firmwareProgress = firmwareProgressBar.value;
+              if (browserProgress - firmwareProgress > 2) {
+                  logMessage(`Sync: Browser is ahead. Pausing to let ESP32 catch up...`, "info");
+                  // Wait for a moment, then try to send the same chunk again.
+                  setTimeout(() => sendNextChunk(fileData, offset), SYNC_WAIT_MS);
+                  return; // Important: Stop here and don't send the chunk yet.
+              }
+          }
 
-          // UPDATED: This now only updates the BROWSER UPLOAD progress bar
+          const chunk = fileData.slice(offset, offset + CHUNK_SIZE);
+          uploadSocket.send(chunk);
+
           const percent =
             ((offset + chunk.byteLength) / fileData.byteLength) * 100;
           uploadProgressBar.value = percent;
@@ -437,14 +483,13 @@
           );
         }
 
-        socket.onmessage = (event) => {
+        uploadSocket.onmessage = (event) => {
           const rawMessage = event.data;
           logMessage(`[RAW] Received: "${rawMessage}"`, "raw");
           const message =
             typeof rawMessage === "string" ? rawMessage.trim() : rawMessage;
 
           if (message.startsWith("UPD_PRC_1=")) {
-            // UPDATED: This now only updates the ESP32 FIRMWARE progress bar
             const parts = message.split("=");
             if (parts.length === 2) {
               const percent = parseFloat(parts[1]);
@@ -462,30 +507,30 @@
             uploadProgressPercent.textContent = "100%";
             firmwareProgressBar.value = 100;
             firmwareProgressPercent.textContent = "100%";
-            setProgressBarsColor("#1e8e3e"); // Green for success
-            socket.close();
+            setProgressBarsColor("#1e8e3e");
+            uploadSocket.close();
           } else if (message === "UPD_FAILED") {
             logMessage("Interpreted as: Update FAILED.", "error");
-            setProgressBarsColor("#d93025"); // Red for failure
-            socket.close();
+            setProgressBarsColor("#d93025");
+            uploadSocket.close();
+          } else {
+             logMessage(`Received unexpected message during upload: ${message}`, "info");
           }
         };
 
-        socket.onerror = (error) => {
+        uploadSocket.onerror = (error) => {
           logMessage("WebSocket error occurred. Check the console.", "error");
           setProgressBarsColor("#d93025");
           console.error("WebSocket Error:", error);
         };
 
-        socket.onclose = (event) => {
+        uploadSocket.onclose = (event) => {
           let reason = event.wasClean
             ? "Normal closure"
             : "Connection closed abnormally";
           logMessage(`WebSocket connection closed. Reason: ${reason}`, "info");
 
-          // If closed and not successfully completed, mark as error
           if (firmwareProgressBar.value < 100) {
-            // Check if it's already red from a failure message
             if (firmwareProgressBar.style.accentColor !== "rgb(217, 48, 37)") {
               logMessage(`Connection closed prematurely.`, "error");
               setProgressBarsColor("#d93025");
@@ -495,6 +540,59 @@
           uploadBtn.disabled = false;
           interruptBtn.disabled = true;
           isInterrupted = false;
+        };
+      });
+      
+      getVersionBtn.addEventListener("click", () => {
+        const host = hostInput.value.trim();
+        const port = portInput.value.trim();
+
+        if (!host || !port) {
+            logMessage("Hostname and Port must be provided to get the version.", "error");
+            return;
+        }
+
+        const wsUrl = `ws://${host}:${port}/`;
+        logMessage(`Requesting version from ${wsUrl}...`, "info");
+        versionLabel.textContent = "Version: Fetching...";
+
+        const versionSocket = new WebSocket(wsUrl);
+
+        versionSocket.onopen = () => {
+            logMessage("Connection for version check established.", "success");
+            const command = "GET_VER_1\n";
+            logMessage(`Sending command: ${command.trim()}`, "info");
+            versionSocket.send(command);
+        };
+
+        versionSocket.onmessage = (event) => {
+            const message = typeof event.data === "string" ? event.data.trim() : "";
+            logMessage(`[RAW] Version check response: "${message}"`, "raw");
+
+            if (message.startsWith("Version=")) {
+                const parts = message.split("=");
+                if (parts.length === 2) {
+                    const version = parts[1];
+                    versionLabel.textContent = `Version: ${version}`;
+                    logMessage(`Successfully retrieved version: ${version}`, "success");
+                } else {
+                    versionLabel.textContent = "Version: Invalid format";
+                    logMessage(`Received malformed version string: ${message}`, "error");
+                }
+            } else {
+                 logMessage(`Unexpected response during version check: ${message}`, "info");
+            }
+            versionSocket.close();
+        };
+
+        versionSocket.onerror = (error) => {
+            logMessage("Failed to connect for version check. Is the device online?", "error");
+            versionLabel.textContent = "Version: Connection Failed";
+            console.error("Version Check WebSocket Error:", error);
+        };
+
+        versionSocket.onclose = () => {
+            logMessage("Connection for version check closed.", "info");
         };
       });
     </script>
