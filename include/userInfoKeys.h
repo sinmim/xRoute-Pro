@@ -21,6 +21,7 @@ namespace jsonKeys
 {
     constexpr char UI_CONFIG[] = "UI_CONFIG";
     constexpr char CONDITON_CONFIG[] = "CONDITION_CONFIG";
+    constexpr char WIFI_INFO[] = "WIFI_INFO";
 }
 
 #endif // SETTINGS_KEYS_H

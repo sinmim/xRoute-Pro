@@ -1,5 +1,6 @@
 #include "XrouteAsyncWebSocketServer.h"
 #include <ESPmDNS.h>
+#include "freertos/semphr.h"
 #define ME Serial.print("[XrouteAsyncWebSocketServer]:")
 
 wifi_mode_t XrouteAsyncWebSocketServer ::currentMode = WIFI_MODE_STA;
@@ -207,33 +208,103 @@ void XrouteAsyncWebSocketServer::onJson(std::function<void(StaticJsonDocument<40
 
 void XrouteAsyncWebSocketServer::sendToAll(const char *message)
 {
-  if (_ws)
-    _ws->textAll(message);
+  if (!_ws->availableForWriteAll())
+  {
+    Serial.println("[WS] ❌ Cannot broadcast — send queues full for all clients");
+    return;
+  }
+
+  QueuedWebSocketCmd cmd;
+  cmd.message = std::string(message);
+  cmd.who = ALL_CLIENTS;
+
+  {
+    std::lock_guard<std::mutex> lock(_sendQueueLock);
+    _wsSendQueue.push(cmd);
+  }
+
+  if (_sendNotify)
+    xSemaphoreGive(_sendNotify);
 }
 
 void XrouteAsyncWebSocketServer::sendToClient(const char *message, AsyncWebSocketClient *client)
 {
-  if (client)
-    client->text(message);
+  if (!client)
+    return;
+
+  if (!_ws->availableForWrite(client->id()))
+  {
+    Serial.printf("[WS] ❌ Cannot respond to client %u — send queue full, response dropped\n", client->id());
+    return;
+  }
+
+  QueuedWebSocketCmd cmd;
+  cmd.message = std::string(message);
+  cmd.client = client;
+  cmd.who = THIS_CLIENT;
+
+  {
+    std::lock_guard<std::mutex> lock(_sendQueueLock);
+    _wsSendQueue.push(cmd);
+  }
+
+  if (_sendNotify)
+    xSemaphoreGive(_sendNotify);
 }
 
 void XrouteAsyncWebSocketServer::sendToThisClient(const char *message)
 {
-  if (LastClient)
-    LastClient->text(message);
+  if (!LastClient)
+    return;
+
+  if (!_ws->availableForWrite(LastClient->id()))
+  {
+    Serial.printf("[WS] ❌ Cannot respond to client %u — send queue full, response dropped\n", LastClient->id());
+    return;
+  }
+
+  QueuedWebSocketCmd cmd;
+  cmd.message = std::string(message);
+  cmd.client = LastClient;
+  cmd.who = THIS_CLIENT;
+
+  {
+    std::lock_guard<std::mutex> lock(_sendQueueLock);
+    _wsSendQueue.push(cmd);
+  }
+
+  if (_sendNotify)
+    xSemaphoreGive(_sendNotify);
 }
 
-void XrouteAsyncWebSocketServer::SendToAllExcludeClient(const char *message, AsyncWebSocketClient *ExClient)
+void XrouteAsyncWebSocketServer::SendToAllExcludeClient(const char *message, AsyncWebSocketClient *exClient)
 {
-  std::lock_guard<std::mutex> lock(_clientsLock);
-  for (AsyncWebSocketClient *c : _clients)
+  if (!exClient)
+    return;
+
   {
-    if (!c)
-      continue; // just in case
-    if (c == ExClient)
-      continue; // skip that one
-    c->text(message);
+    std::lock_guard<std::mutex> lock(_clientsLock);
+
+    if (_clients.size() <= 1)
+    {
+      // Only one client connected — it's the one to be excluded
+      Serial.println("[WS] 👤 Only one client connected (excluded) — skipping send");
+      return;
+    }
   }
+
+  QueuedWebSocketCmd cmd;
+  cmd.message = std::string(message);
+  cmd.client = exClient;
+  cmd.who = EXCLUDE_CLIENT;
+
+  {
+    std::lock_guard<std::mutex> lock(_sendQueueLock);
+    _wsSendQueue.push(cmd);
+  }
+
+  if (_sendNotify)
+    xSemaphoreGive(_sendNotify);
 }
 
 // — in XrouteAsyncWebSocketServer.cpp:
@@ -355,6 +426,7 @@ void XrouteAsyncWebSocketServer::begin(wifi_mode_t mode)
     init(WIFI_MODE_AP);
   }
 
+  // Cleanup task
   xTaskCreate([](void *arg)
               {
   auto self = (XrouteAsyncWebSocketServer*)arg;
@@ -372,6 +444,51 @@ void XrouteAsyncWebSocketServer::begin(wifi_mode_t mode)
     last_n = n;
     vTaskDelay(pdMS_TO_TICKS(1000));  // every 5 seconds
   } }, "WS_Cleanup", 2048, this, 1, nullptr);
+
+  // sending task
+  if (_sendNotify == nullptr)
+    _sendNotify = xSemaphoreCreateBinary();
+
+  xTaskCreate([](void *arg)
+              {
+    auto self = (XrouteAsyncWebSocketServer*)arg;
+    for (;;)
+    {
+        // ✅ Use self->_sendNotify here instead of raw _sendNotify
+        if (xSemaphoreTake(self->_sendNotify, pdMS_TO_TICKS(500)) == pdTRUE)
+        {
+            while (true)
+            {
+                QueuedWebSocketCmd cmd;
+                {
+                    std::lock_guard<std::mutex> lock(self->_sendQueueLock);
+                    if (self->_wsSendQueue.empty())
+                        break;
+                    cmd = self->_wsSendQueue.front();
+                    self->_wsSendQueue.pop();
+                }
+                if (cmd.who == THIS_CLIENT && cmd.client)
+                {
+                    if (self->_ws->availableForWrite(cmd.client->id()))
+                        cmd.client->text(cmd.message.c_str());
+                }
+                else if (cmd.who == ALL_CLIENTS)
+                {
+                    if (self->_ws->availableForWriteAll())
+                        self->_ws->textAll(cmd.message.c_str());
+                }
+                else if (cmd.who == EXCLUDE_CLIENT && cmd.client)
+                {
+                    std::lock_guard<std::mutex> lock(self->_clientsLock);
+                    for (AsyncWebSocketClient *c : self->_clients)
+                    {
+                        if (c && c != cmd.client && self->_ws->availableForWrite(c->id()))
+                            c->text(cmd.message.c_str());
+                    }
+                }
+            }
+        }
+    } }, "WS_SEND_TASK", 4096, this, 1, nullptr);
 }
 
 wifi_mode_t XrouteAsyncWebSocketServer::switchMode(wifi_mode_t mode)

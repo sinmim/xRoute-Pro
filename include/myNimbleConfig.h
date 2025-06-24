@@ -66,7 +66,7 @@
 
 // ---- Host/Stack ----
 #ifndef CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE
-#define CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE 4096
+#define CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE 8192 //TODO chon jsonharo tooye parseram estefade mikonam fek konam baese stack ovf mishe bekhatere in az 4k be 8k bordam bala . badan bayad dorostesh konama ba ye taske jodagoone va gheyre
 #endif
 
 #ifndef CONFIG_BT_NIMBLE_USE_ESP_TIMER

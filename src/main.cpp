@@ -1467,7 +1467,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
   while ((endPos = accumulatedData.indexOf('\n')) != -1)
   {
     MeasurmentTaskPause = true;
-
     String command = accumulatedData.substring(0, endPos);
     // remove \r if exist at the end beqause in postman it sends \n\r
     if (command.endsWith("\r"))
@@ -2139,10 +2138,9 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
           DimValChanged = true;
           sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
-
           myBle.sendString(str);
           //  ws.sendToAll(str);
-          ws.SendToAllExcludeClient(str, ws.getCliant()); // send to all cliants except the one who is ben this command received from
+          ws.SendToAllExcludeClient(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
           // Serial.printf("in:%s | out:%s\n", command, str);
         }
         else
@@ -2166,6 +2164,31 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RGB1.brightness = command.substring(comma3 + 1).toInt();
         }
       }
+      else if (command.startsWith("SW_")) // SW_12=ON
+      {
+        int index = atoi(command.substring(command.indexOf("_") + 1, command.indexOf('=')).c_str());
+        if (command.lastIndexOf("ON") > 0)
+        {
+          RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
+          setRelay(RELAYS.relPos, v / 10);
+          myBle.sendString("sw" + String(index) + "=ON\n");
+          ws.sendToAll(String("sw" + String(index) + "=ON\n").c_str());
+          // vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
+        else if (command.lastIndexOf("OFF") > 0)
+        {
+          RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
+          setRelay(RELAYS.relPos, v / 10);
+          myBle.sendString("sw" + String(index) + "=OFF\n");
+          ws.sendToAll(String("sw" + String(index) + "=OFF\n").c_str());
+          // vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
+        else
+        {
+          RES = 1;
+        }
+        // saveStatesToFile(); to do add save again . its for preventing damage to flash for test
+      }
       else if (command.startsWith("MAX_DIM_")) // MAX_DIM_
       {
         int dimNumber = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt() - 1;
@@ -2179,38 +2202,13 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
           myBle.sendString(str);
           // ws.sendToAll(str);
-          ws.SendToAllExcludeClient(str, ws.getCliant()); // send to all cliants except the one who is ben this command received from
+          ws.SendToAllExcludeClient(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
           // Serial.printf("in:%s | out:%s\n", command, str);
         }
         else
         {
           RES = 1;
         }
-      }
-      else if (command.startsWith("SW_")) // SW_12=ON
-      {
-        int index = atoi(command.substring(command.indexOf("_") + 1, command.indexOf('=')).c_str());
-        if (command.lastIndexOf("ON") > 0)
-        {
-          RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
-          setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("sw" + String(index) + "=ON\n");
-          ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getCliant());
-          // vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
-        else if (command.lastIndexOf("OFF") > 0)
-        {
-          RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
-          setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("sw" + String(index) + "=OFF\n");
-          ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getCliant());
-          // vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
-        else
-        {
-          RES = 1;
-        }
-        // saveStatesToFile(); to do add save again . its for preventing damage to flash for test
       }
       else if (command.startsWith("MOT_")) // MOT_1=UP
       {
@@ -2395,7 +2393,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       else if (command.startsWith("WIFI_INFO_JSON_"))
       {
         int index = (command.substring(command.lastIndexOf("_") + 1)).toInt(); // unused for now
-        String msg = wifi_WebSocket_Settings.getJson();
+        String msg = wifi_WebSocket_Settings.getJson();               
+        wrapJson(msg.c_str(), jsonKeys::WIFI_INFO, msg);
         myBle.sendString(msg.c_str());
         ws.sendToThisClient(msg.c_str());
       }
@@ -2417,8 +2416,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       else if (command.startsWith("BLE_PASS_"))
       {
         int index = command.substring(command.lastIndexOf("_") + 1).toInt();
-        // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
-        String response = "BLEPASSWORD=" + String(myBle.getPassKey()) + "\n";
+        // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n"; TODO: 
+        String response = "BLE_PASS_1=" + String(myBle.getPassKey()) + "\n";
         myBle.sendString(response.c_str());
         Serial.println(response.c_str());
       }
@@ -2779,8 +2778,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         {
           wifi_WebSocket_Settings.set<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_APSTA);
         }
-        ws.switchMode(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));
-        String str = "WIFI_MODE_CHANGED=OK\n";
+        //ws.switchMode(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));TODO : switch mode causes crash so lets restart for now
+        String str = "WIFI_MODE_CHANGED_OK\n";
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
         vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -2860,14 +2859,27 @@ void sendCmdToExecute(char *str)
   // Simulate BLE data reception
   uint8_t *pData = reinterpret_cast<uint8_t *>(str); // Removed const_cast - ensure str is mutable if needed, or cast differently
   size_t length = strlen(str);
-
-  // Get the server characteristic pointer from the MyBle instance
-  // Assumes 'myBle' is an accessible instance of your MyBle class
   NimBLECharacteristic *pServerChar = myBle.getServerCharacteristic();
-
-  // Call the helper function directly, passing the characteristic
-  // This is needed if commands like "StartUpdate=" might be simulated
   processReceivedCommandData(pServerChar, pData, length);
+}
+
+std::deque<String> wsCmdQueue;
+SemaphoreHandle_t wsCmdQueueMutex;
+
+void wsCmdQueTask(void *pvParameters)
+{
+  while (true)
+  {
+    String cmd;
+    while (!wsCmdQueue.empty())
+    {
+      cmd = wsCmdQueue.front();
+      wsCmdQueue.pop_front();
+      sendCmdToExecute((char *)cmd.c_str());
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
 }
 //--------------------
 void setup()
@@ -2974,7 +2986,7 @@ void setup()
     String apName = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApName, "Xroute-AP");
     String apPass = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApPassword, "12345678");
     String hostName = wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName, "xroute");
-    wifi_mode_t mode = wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_APSTA);
+    wifi_mode_t mode = wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_AP);
     int port = wifi_WebSocket_Settings.get<int>(NetworkKeys::Port, 81);
     ws.setAP(apName.c_str(), apPass.c_str());
     ws.setSTA(ssid.c_str(), pass.c_str());
@@ -3066,16 +3078,21 @@ void setup()
     }
     
   } });
+
+    wsCmdQueueMutex = xSemaphoreCreateMutex();
+    xTaskCreate(wsCmdQueTask, "wsCmdQueTask", 4 * 1024, NULL, 1, NULL);
     ws.onCommand([](const char *msg)
                  {
-                   // Serial.println("D:");
-                   sendCmdToExecute((char *)msg);
-                   // ws.sendToAll(msg);
-                   //  testStr=msg;
-                   //  TestFlag=true;
-                   // add msg to wsCmdData
-
-                 });
+                  uint32_t time=micros();
+                   if (wsCmdQueue.size() < 8)  // Optional limit to prevent unbounded growth
+                   {
+                     wsCmdQueue.push_back(String(msg));
+                   }
+                   else
+                   {
+                     Serial.println("⚠ Command queue full, dropping incoming message");
+                   }
+                   Serial.println("time="+String(micros()-time)); });
 
     ws.onUpdate([](const char *msg, size_t length)
                 {
@@ -3093,7 +3110,6 @@ void setup()
   // Tasks
   if (true)
   {
-
     xTaskCreate(
         MeasurmentTask,
         "MeasurmentTask",
@@ -3181,7 +3197,6 @@ void loop()
 {
   vTaskDelay(pdMS_TO_TICKS(100));
 }
-
 void loadSavedValue()
 {
   if (EEPROM.readUInt(E2ADD.E2promFirsTime) == E2PROM_NOT_FIRST_TIME_RUN_VAL)

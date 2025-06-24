@@ -6,6 +6,23 @@
 #include <ArduinoJson.h>
 #include <functional>
 #include <atomic>
+#include <queue>
+#include <mutex>
+
+enum WS_WHO
+{
+  CLIENT,
+  ALL_CLIENTS,
+  EXCLUDE_CLIENT,
+  THIS_CLIENT,
+};
+
+struct QueuedWebSocketCmd
+{
+  std::string message;
+  AsyncWebSocketClient *client;
+  uint8_t who;
+};
 
 class XrouteAsyncWebSocketServer
 {
@@ -13,10 +30,8 @@ public:
   bool updatingFlg;
   uint32_t updateLen;
   uint32_t updateProgress;
-  uint32_t getUpdateLen()
-  {
-    return updateLen;
-  }
+
+  uint32_t getUpdateLen() { return updateLen; }
   void startUpdate(uint32_t len)
   {
     updateProgress = 0;
@@ -29,18 +44,10 @@ public:
     updateLen = 0;
     updatingFlg = false;
   }
-  float getProgress()
-  {
-    return (float)updateProgress / (float)updateLen;
-  }
-  bool isUpdating()
-  {
-    return updatingFlg;
-  }
+  float getProgress() { return (float)updateProgress / (float)updateLen; }
+  bool isUpdating() { return updatingFlg; }
 
-  /// How many WS clients are currently connected?
   size_t clientCount() const { return _clientCount.load(); }
-  /// Convenience: “anyone there?”
   bool hasClients() const { return _ws->count() > 0; }
 
   void setSTA(const char *ssid, const char *pass);
@@ -53,21 +60,20 @@ public:
 
   void registerEvents();
   bool init(wifi_mode_t mode);
-  void onUpdate(std::function<void(const char *, int len)> cb)
-  {
-    _updateCb = cb;
-  }
+  void onUpdate(std::function<void(const char *, int len)> cb) { _updateCb = cb; }
   void onCommand(std::function<void(const char *)> cb);
   void onJson(std::function<void(StaticJsonDocument<4096> &)> cb);
+
   void sendToAll(const char *message);
   void sendToClient(const char *message, AsyncWebSocketClient *client);
   void sendToThisClient(const char *message);
-  void SendToAllExcludeClient(const char *message, AsyncWebSocketClient *exCliant);
+  void SendToAllExcludeClient(const char *message, AsyncWebSocketClient *exClient);
 
   void printWiFiDetails();
-  AsyncWebSocketClient *getCliant() { return LastClient; }
+  AsyncWebSocketClient *getClient() { return LastClient; }
 
 private:
+  SemaphoreHandle_t _sendNotify;
   static wifi_mode_t currentMode;
   std::atomic<size_t> _clientCount{0};
   const char *_staSsid = nullptr;
@@ -76,10 +82,12 @@ private:
   const char *_apPass = nullptr;
   const char *_host = "xroute";
   uint16_t _port = 81;
-  AsyncWebSocketClient *LastClient;
-  // client vector
+  AsyncWebSocketClient *LastClient = nullptr;
+
   std::vector<AsyncWebSocketClient *> _clients;
-  std::mutex _clientsLock; // or use portENTER_CRITICAL / portEXIT_CRITICAL since FreeRTOS
+  std::mutex _clientsLock;
+  std::mutex _sendQueueLock;
+  std::queue<QueuedWebSocketCmd> _wsSendQueue;
 
   AsyncWebServer *_server = nullptr;
   AsyncWebSocket *_ws = nullptr;
@@ -87,9 +95,7 @@ private:
   std::function<void(const char *)> _cmdCb;
   std::function<void(StaticJsonDocument<4096> &)> _jsonCb;
   std::function<void(const char *, int len)> _updateCb;
-
   StaticJsonDocument<4096> _doc;
-  // char _outBuf[2048];
 };
 
 #endif
