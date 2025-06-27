@@ -1,4 +1,3 @@
-// SettingsStore.h
 #ifndef SETTINGS_STORE_H
 #define SETTINGS_STORE_H
 
@@ -6,117 +5,132 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
 
-/*
-  SettingsStore
+// --- Debugging ---
+// Comment this line out to disable all debug messages from this library
+#define ENABLE_SETTINGS_STORE_DEBUG
 
-  - Stores arbitrary key/value pairs in a JSON file on SPIFFS.
-  - Constructor takes a SPIFFS file path (e.g. "/config/wifi.json").
-  - get<T>(key, defaultValue):
-      • If 'key' exists, returns its value as T.
-      • If missing, inserts defaultValue, immediately saves JSON, and returns defaultValue.
-  - set<T>(key, value):
-      • If new value ≠ existing, updates JSON[key] = value, immediately saves.
-      • If identical, does nothing.
-  - loadUserData():     Loads JSON from the given path (or starts empty if missing).
-  - saveUserData():     Writes in-memory JSON to SPIFFS.
-  - waitForChange(ms):  Blocks until a set/get-insert occurs or timeout.
-*/
+#ifdef ENABLE_SETTINGS_STORE_DEBUG
+#define SETTINGS_LOG(format, ...) printf("[settingStore] " format "\n", ##__VA_ARGS__)
+#else
+#define SETTINGS_LOG(format, ...)
+#endif
 
 class SettingsStore
 {
 public:
-  // Pass your desired SPIFFS path, e.g. "/config/settings.json".
-  // Defaults to "/settings.json" if omitted.
+  String getPath()
+  {
+    return _path;
+  }
+
   explicit SettingsStore(const char *filePath = "/settings.json");
 
-  // Load whatever JSON is saved at _path (or start empty if none).
-  // Returns true on success.
-  bool loadUserData();
+  /**
+   * @brief Starts the background task and loads initial settings from SPIFFS.
+   * @return true on success, false on failure to create the task.
+   */
+  bool begin();
 
-  // Write current in-memory JSON to SPIFFS. Returns true on success.
-  bool saveUserData();
-
-  // Generic getter:
-  //   - If 'key' exists, returns _doc[key].as<T>().
-  //   - Otherwise, inserts initializer, saves immediately, and returns initializer.
-  template <typename T>
-  T get(const String &key, const T &initializer)
-  {
-    if (_doc.containsKey(key))
-    {
-      return _doc[key].as<T>();
-    }
-    _doc[key] = initializer;
-    saveUserData();
-    return initializer;
-  }
-  // get without initializer
-  template <typename T>
-  T get(const String &key)
-  {
-    if (_doc.containsKey(key))
-    {
-      return _doc[key].as<T>();
-    }
-    return T(); // Return default-constructed value for the type T
-  }
-
-  // Generic setter:
-  //   - If JSON[key] == value, does nothing.
-  //   - Otherwise, updates JSON[key] = value and immediately saveUserData().
+  /**
+   * @brief Queues a key-value pair to be saved.
+   * This is non-blocking. The save operation happens in a background task.
+   */
   template <typename T>
   void set(const String &key, const T &value)
   {
-    if (_doc.containsKey(key))
+    if (key.length() >= MAX_KEY_LEN)
     {
-      // the value exist so show me value and existing val in serial
-      Serial.print("SettingsStore: key '");
-      Serial.print(key);
-      Serial.print("' value '");
-      Serial.print(value);
-      Serial.print("' existing '");
-      Serial.print(_doc[key].as<T>());
-      Serial.println("'");
-      if (_doc[key].as<T>() == value)
-      {
-        return;
-      }
+      SETTINGS_LOG("Error: Key is too long: %s", key.c_str());
+      return;
     }
-    _doc[key] = value;
-    saveUserData();
+    String strValue = String(value);
+    if (strValue.length() >= MAX_VAL_LEN)
+    {
+      SETTINGS_LOG("Error: Value is too long for key '%s'", key.c_str());
+      return;
+    }
+
+    SettingsCmd cmd;
+    strncpy(cmd.key, key.c_str(), MAX_KEY_LEN);
+    strncpy(cmd.value, strValue.c_str(), MAX_VAL_LEN);
+
+    if (xQueueSend(_cmdQueue, &cmd, 0) != pdPASS)
+    {
+      SETTINGS_LOG("Error: Settings queue is full. Failed to set key '%s'.", key.c_str());
+    }
   }
 
-  // Overload for C‐string values (stored as Arduino String):
-  void set(const String &key, const char *value)
+  /**
+   * @brief Gets a value for a given key.
+   * If the key does not exist, it returns the provided default value.
+   * This function is read-only and will not modify the settings file.
+   */
+  template <typename T>
+  T get(const String &key, const T &defaultValue)
   {
+    T val = defaultValue;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
     if (_doc.containsKey(key))
     {
-      String old = _doc[key].as<String>();
-      if (old.equals(value))
+      JsonVariant variant = _doc[key];
+      if (!variant.isNull())
       {
-        return;
+        val = variant.as<T>();
       }
     }
-    _doc[key] = String(value);
-    saveUserData();
+    xSemaphoreGive(_mutex);
+    return val;
   }
 
-  // If you want to wait until any set/get-insert happens:
-  // Returns true if a change occurred before timeoutMs, false if timed out.
-  bool waitForChange(uint32_t timeoutMs);
+  /**
+   * @brief Gets a value for a given key.
+   * Returns a default-constructed value (e.g., 0, "") if the key doesn't exist.
+   */
+  template <typename T>
+  T get(const String &key)
+  {
+    return get<T>(key, T());
+  }
 
-  // some more helpers by saman
-  String getPath();
+  /**
+   * @brief Loads settings from the file system. Called automatically by begin().
+   * @return true on success, false on failure.
+   */
+  bool loadSettings();
+
+  /**
+   * @brief Returns the full settings file content as a JSON string.
+   */
   String getJson();
 
 private:
-  String _path;                   // SPIFFS path for this instance's JSON
-  bool _changed;                  // Becomes true on set()/get-insert(); reset after save
-  DynamicJsonDocument _doc{1024}; // Adjust size if you need more fields
+  // --- Constants for the command queue ---
+  // Using fixed-size char arrays is safer for passing data between tasks
+  // than using String objects, which cause memory corruption in this context.
+  static const int MAX_KEY_LEN = 32;
+  static const int MAX_VAL_LEN = 128;
 
-  // Mounts (or formats) SPIFFS if necessary.
+  struct SettingsCmd
+  {
+    char key[MAX_KEY_LEN];
+    char value[MAX_VAL_LEN];
+  };
+
+  static void settingsTask(void *param);
+  void applyAndSave(const char *key, const char *value);
+  bool saveSettings();
   bool ensureSPIFFS();
+
+  String _path;
+  StaticJsonDocument<2048> _doc; // Using StaticJsonDocument is safer on MCUs
+  SemaphoreHandle_t _mutex;
+  QueueHandle_t _cmdQueue;
+  TaskHandle_t _taskHandle = NULL;
 };
 
-#endif // SETTINGS_STORE_H
+#endif

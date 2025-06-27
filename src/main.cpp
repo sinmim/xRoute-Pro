@@ -30,7 +30,7 @@
 #include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
-String Version = "0.1.7";
+String Version = "0.1.8";
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
 // userInfo
@@ -2124,8 +2124,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     }
     */
     int RES = 0;
-    //// SETING VALUES
-    if (command.startsWith("SET_"))
+    /**/ if (command.startsWith("SET_"))
     {
       command = command.substring(4);
       /**/ if (command.startsWith("DIM_")) // DIM_12=34
@@ -2286,7 +2285,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         RES = 1;
       }
     }
-    //// GETTING VALUES
     else if (command.startsWith("GET_"))
     {
       command = command.substring(4);
@@ -2392,9 +2390,15 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       }
       else if (command.startsWith("WIFI_INFO_JSON_"))
       {
-        int index = (command.substring(command.lastIndexOf("_") + 1)).toInt(); // unused for now
-        String msg = wifi_WebSocket_Settings.getJson();               
-        wrapJson(msg.c_str(), jsonKeys::WIFI_INFO, msg);
+        int index = (command.substring(command.lastIndexOf("_") + 1)).toInt();
+        String msg = "{ \"WIFI_INFO\" : [{";
+        msg += "\"ssid\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID) + "\",";
+        msg += "\"pass\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword) + "\",";
+        msg += "\"apName\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::ApName) + "\",";
+        msg += "\"hostN\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName) + "\",";
+        msg += "\"STA_AP\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::STA_AP)) + ",";
+        msg += "\"LOCAL_IP\" : \"" + WiFi.localIP().toString() + "\",";
+        msg += "\"port\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::Port)) + "}]}";
         myBle.sendString(msg.c_str());
         ws.sendToThisClient(msg.c_str());
       }
@@ -2416,7 +2420,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       else if (command.startsWith("BLE_PASS_"))
       {
         int index = command.substring(command.lastIndexOf("_") + 1).toInt();
-        // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n"; TODO: 
+        // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n"; TODO:
         String response = "BLE_PASS_1=" + String(myBle.getPassKey()) + "\n";
         myBle.sendString(response.c_str());
         Serial.println(response.c_str());
@@ -2426,7 +2430,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         RES = 2;
       }
     }
-    //// DEFAULTING VALUES
     else if (command.startsWith("DEF_"))
     {
       command = command.substring(4);
@@ -2510,7 +2513,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       String response = "XrouteAlarm=Default OK\n";
       myBle.sendString(response.c_str());
     }
-    //// CALIBRATIONS instruments
     else if (command.startsWith("CAL_"))
     {
       command = command.substring(4);
@@ -2731,12 +2733,10 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         myBle.sendString(str);
       }
     }
-    //// SAVE
     else if (command.startsWith("SAVE_"))
     {
       command = command.substring(5);
       int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt();
-
       /**/ if (command.startsWith("GYRO_ORI_"))
       {
         int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt();
@@ -2778,7 +2778,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         {
           wifi_WebSocket_Settings.set<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_APSTA);
         }
-        //ws.switchMode(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));TODO : switch mode causes crash so lets restart for now
+        // ws.switchMode(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));TODO : switch mode causes crash so lets restart for now
         String str = "WIFI_MODE_CHANGED_OK\n";
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
@@ -2819,7 +2819,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         }
       }
     }
-    ///// ERROR
     else
     {
       RES = 10;
@@ -2828,7 +2827,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     {
       Serial.println("[PARSING ERROR] : " + command + " : " + String(RES));
     }
-
     vTaskDelay(pdTICKS_TO_MS(10));
     MeasurmentTaskPause = false;
   }
@@ -2968,7 +2966,7 @@ void setup()
   }
 
   // user infos
-  if (!wifi_WebSocket_Settings.loadUserData())
+  if (!wifi_WebSocket_Settings.begin())
   {
     Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]No valid JSON found, starting fresh.");
   }
@@ -2988,13 +2986,14 @@ void setup()
     String hostName = wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName, "xroute");
     wifi_mode_t mode = wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_AP);
     int port = wifi_WebSocket_Settings.get<int>(NetworkKeys::Port, 81);
-    ws.setAP(apName.c_str(), apPass.c_str());
-    ws.setSTA(ssid.c_str(), pass.c_str());
     //  ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
     //  ws.setSTA("TP-Link_20D8", "83937361");
     //  ws.setSTA("SAMAN POCO", "83601359");
+    //  ws.setHostname("xroute-ali");
+    //  ws.setPort(81);
+    ws.setAP(apName.c_str(), apPass.c_str());
+    ws.setSTA(ssid.c_str(), pass.c_str());
     ws.setHostname(hostName.c_str());
-    // ws.setHostname("xroute-ali");
     ws.setPort(port);
     ws.onJson([](JsonDocument &doc)
               {
@@ -3175,13 +3174,13 @@ void setup()
     //     1,
     //     NULL);
     // RAM
-    //  xTaskCreate(
-    //      ramMonitorTask,
-    //      "ramMonitorTask",
-    //      1024, // stack size
-    //      NULL, // task argument
-    //      1,    // task priority
-    //      NULL);
+    // xTaskCreate(
+    //     ramMonitorTask,
+    //     "ramMonitorTask",
+    //     1024, // stack size
+    //     NULL, // task argument
+    //     1,    // task priority
+    //     NULL);
     // WIFI
     //  xTaskCreate(
     //      WifiTask,

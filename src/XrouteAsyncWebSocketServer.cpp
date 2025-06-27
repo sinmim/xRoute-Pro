@@ -58,10 +58,11 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
 
   if (mode == WIFI_MODE_APSTA)
   {
+
     WiFi.mode(WIFI_MODE_APSTA);
     // 2) start the AP
     WiFi.softAP(_apSsid, _apPass);
-    Serial.println("▶ Soft-AP started");
+    Serial.println("▶WIFI_MODE_APSTA");
     // 3) start the STA
     Serial.printf("▶ Connecting to %s\n", _staSsid);
     Serial.printf("▶ Connecting to %s\n", _staPass);
@@ -108,6 +109,8 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
   }
   else if (mode == WIFI_MODE_STA)
   {
+    Serial.println("▶WIFI_MODE_STA");
+    Serial.println("✔ Connecting to SSID: " + String(_staSsid) + "  PASS: " + String(_staPass));
     WiFi.mode(WIFI_MODE_STA);
     WiFi.begin(_staSsid, _staPass);
     unsigned long currentMillis = millis();
@@ -119,11 +122,11 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
         Serial.println("Time oute");
         return false;
       }
-      delay(500);
+      vTaskDelay(pdMS_TO_TICKS(500));
       Serial.print('.');
     }
     Serial.println();
-    Serial.print("✔ STA IP: ");
+    Serial.print("✔ WIFI_MODE_STA IP: ");
     Serial.println(WiFi.localIP());
 
     // 4) mDNS responder
@@ -149,10 +152,9 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
   }
   else if (mode == WIFI_MODE_AP)
   {
+    Serial.println("▶WIFI_MODE_AP");
     WiFi.mode(WIFI_MODE_AP);
     WiFi.softAP(_apSsid, _apPass);
-    Serial.println("▶ Soft-AP started");
-    // 4) mDNS responder
     if (!MDNS.begin(_host))
     {
       Serial.println("✖ mDNS init failed");
@@ -208,6 +210,12 @@ void XrouteAsyncWebSocketServer::onJson(std::function<void(StaticJsonDocument<40
 
 void XrouteAsyncWebSocketServer::sendToAll(const char *message)
 {
+  if (!_ws)
+  {
+    Serial.println("[WS] ❌ WebSocket server not initialized");
+    return;
+  }
+
   if (!_ws->availableForWriteAll())
   {
     Serial.println("[WS] ❌ Cannot broadcast — send queues full for all clients");
@@ -425,23 +433,31 @@ void XrouteAsyncWebSocketServer::begin(wifi_mode_t mode)
   {
     init(WIFI_MODE_AP);
   }
-
   // Cleanup task
   xTaskCreate([](void *arg)
               {
   auto self = (XrouteAsyncWebSocketServer*)arg;
-  for(;;) {
-    // this forces the library to sweep out any TCP sockets
-    // that silently went away
-    self->_ws->cleanupClients();
-    // now _ws->count() reflects the real # of active clients
-    static size_t last_n=0;
-    size_t n = self->_ws->count();
-    if (n!=last_n)
+  for(;;) 
+  {
+    //if wifi is connected
+    if (WiFi.status() == WL_CONNECTED)
     {
-      Serial.printf("[WS] cleanup→ %u clients\n", (unsigned)n);
+      // this forces the library to sweep out any TCP sockets
+      // that silently went away
+      self->_ws->cleanupClients();
+      // now _ws->count() reflects the real # of active clients
+      static size_t last_n=0;
+      size_t n = self->_ws->count();
+      if (n!=last_n)
+      {
+        Serial.printf("[WS] cleanup→ %u clients\n", (unsigned)n);
+      }
+      last_n = n;
     }
-    last_n = n;
+    else
+    {
+        //Serial.println("[WS] Wifi connection not available");
+    }
     vTaskDelay(pdMS_TO_TICKS(1000));  // every 5 seconds
   } }, "WS_Cleanup", 2048, this, 1, nullptr);
 
