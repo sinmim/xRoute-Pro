@@ -30,7 +30,7 @@
 #include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
-String Version = "0.1.8";
+String Version = "0.1.9";
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
 // userInfo
@@ -916,15 +916,11 @@ void updateTask(void *parameters)
 TaskHandle_t sendUiConfigTaskHandle;
 void sendUiConfigTask(void *parameters)
 {
-  String str = readStringFromFile(ConfigFile);
   vTaskSuspend(MeasurmentTaskHandle);
-  // myBle.sendLongString("ConfigFile=\n" + str + "\nEND\n");
+  String str = readStringFromFile(ConfigFile);
   wrapJson(str.c_str(), jsonKeys::UI_CONFIG, str);
-  // ws.sendToClient(str.c_str(), ws.getCliant()); // send to recent client
   Serial.println("SENDING UI CONFIG");
-  ws.sendToAll(str.c_str()); // send to all clients
-  Serial.println("SENDING Finished");
-
+  ws.sendToAll(str.c_str());
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
 }
@@ -932,8 +928,11 @@ TaskHandle_t sendConditionsTaskHandle;
 void sendConditionsTask(void *parameters)
 {
   vTaskSuspend(MeasurmentTaskHandle);
-  String str = "ConditionsFile=\n" + readStringFromFile(CondFile) + "\nEND\n";
-  myBle.sendLongString(str);
+  String str = readStringFromFile(CondFile);
+  wrapJson(str.c_str(), jsonKeys::CONDITON_CONFIG, str);
+  Serial.println("SENDING CONDITON CONFIG");
+  ws.sendToAll(str.c_str());
+  myBle.sendString(str.c_str());
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
 }
@@ -2338,26 +2337,17 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       }
       else if (command.startsWith("CONDITION_CONFIG"))
       {
-        String str = readStringFromFile(CondFile);
-        wrapJson(str.c_str(), jsonKeys::CONDITON_CONFIG, str);
-        Serial.println("SENDING CONDITON CONFIG");
-        ws.sendToAll(str.c_str());
-        // if (eTaskGetState(&sendConditionsTaskHandle) != eRunning)
-        // {
-        //   xTaskCreate(sendConditionsTask, "sendConditionsTask", 1024 * 4, NULL, 2, &sendConditionsTaskHandle);
-        // }
+        if (eTaskGetState(&sendConditionsTaskHandle) != eRunning)
+        {
+          xTaskCreate(sendConditionsTask, "sendConditionsTask", 1024 * 10, NULL, 2, &sendConditionsTaskHandle);
+        }
       }
       else if (command.startsWith("UI_CONFIG"))
       {
-        String str = readStringFromFile(ConfigFile);
-        wrapJson(str.c_str(), jsonKeys::UI_CONFIG, str);
-        Serial.println("SENDING UI CONFIG");
-        ws.sendToAll(str.c_str());
-        // send to all clients
-        // if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
-        // {
-        //   xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 10, NULL, 2, &sendUiConfigTaskHandle);
-        // }
+        if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
+        {
+          xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 10, NULL, 2, &sendUiConfigTaskHandle);
+        }
       }
       else if (command.startsWith("GYRO_ORI_")) // gyro oriantation
       {
@@ -2398,6 +2388,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         msg += "\"hostN\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName) + "\",";
         msg += "\"STA_AP\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::STA_AP)) + ",";
         msg += "\"LOCAL_IP\" : \"" + WiFi.localIP().toString() + "\",";
+        msg += "\"RSSI\" : " + String(WiFi.RSSI()) + ",";
         msg += "\"port\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::Port)) + "}]}";
         myBle.sendString(msg.c_str());
         ws.sendToThisClient(msg.c_str());
