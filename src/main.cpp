@@ -707,7 +707,6 @@ void Reg_Uptime_Task(void *parameters)
     vTaskDelay(pdMS_TO_TICKS(1000)); // for 10 min it should be 1000ms
   }
 }
-
 TaskHandle_t MeasurmentTaskHandle;
 void ConditionsTask(void *parameters)
 {
@@ -792,7 +791,6 @@ void MeasurmentTask(void *parameters)
     {
       vTaskDelay(pdMS_TO_TICKS(100));
     }
-
     // Set relay voltages acording to powersupply
     if (relaySatat() == REL_FREE)
     {
@@ -888,7 +886,6 @@ void MeasurmentTask(void *parameters)
     sprintf(str, "Gyro=%1.3f,%1.3f,%1.1f,%1.1f\n", len * cos(alpha), len * sin(alpha), degX, degY);
     data += str;
     // Serial.println(String(">X:" + String(len * cos(alpha), 3) + ",Y:" + String(len * sin(alpha), 3)));
-
     data += "RELS=" + getRelsStatStr() + "\n";
     myBle.sendString(data);
     ws.sendToAll(data.c_str());
@@ -1029,7 +1026,6 @@ void DimerTask(void *parameters)
           }
         }
       }
-
       vTaskDelay(10 / portTICK_RATE_MS);
     }
     else
@@ -1123,12 +1119,10 @@ void OVR_CRNT_PRTCT_TASK(void *parameters)
   char str[128];
   int cntr = 0;
   vTaskDelay(5000 / portTICK_PERIOD_MS); // waiting for measurments to stablize
-
   for (;;)
   {
     if (UpdatingFlg)
       vTaskDelete(NULL);
-
     if (dimShortFlg)
     {
       ledcWrite(channelTable[dimShortNum], 0);
@@ -1139,7 +1133,6 @@ void OVR_CRNT_PRTCT_TASK(void *parameters)
       vTaskDelay(1000);
       dimShortFlg = false;
     }
-
     a0Fast = ((amp0 - amp0Offset) * A0calCo);
     if (0) // disable overCurrent protection
       if (abs(a0Fast) > 140)
@@ -1147,7 +1140,7 @@ void OVR_CRNT_PRTCT_TASK(void *parameters)
         overCrntFlg = true;
         if (!overCrntFlg)
         {
-          sprintf(str, "XrouteAlarm=OVER CURRENT protection. Amp > 14.0 \xFF\xFF\xFF");
+          sprintf(str, "XrouteAlarm=OVER CURRENT protection. Amp > 14.0\n");
           sendToAll(str);
         }
         for (int i = 0; i < 7; i++)
@@ -1226,7 +1219,6 @@ void BatteryTask(void *parameters)
   }
   String str = myBattery.SelectBatteryAcordingToFullVoltage((int)battFullVoltage);
   Serial.println("Battery init: " + str);
-
   for (;;)
   {
     if (UpdatingFlg)
@@ -1239,7 +1231,7 @@ void BatteryTask(void *parameters)
     {
       if (!ampSenisConnected)
       {
-        sendToAll("XrouteAlarm=Amp Meter Connected !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=Amp Meter Connected !\n");
         ampSenisConnected = true;
         myBattery.setPercent(myBattery.getBtPerV());
       }
@@ -3178,65 +3170,67 @@ void setup()
   // Tasks
   if (true)
   {
+    // printTaskResourceUsage(1);
     xTaskCreate(
         MeasurmentTask,
         "MeasurmentTask",
-        4 * 1024, // stack size
-        NULL,     // task argument
-        2,        // task priority
+        2300, // ✔️
+        NULL, // task argument
+        2,    // task priority
         &MeasurmentTaskHandle);
     xTaskCreate(
         DimerTask,
         "DimerTask",
-        2.5 * 1024, // stack size
+        2.5 * 1024, // ✔️
         NULL,       // task argument
         3,          // task priority
         NULL);
     xTaskCreate(
         adcReadingTask,
         "ADC READING TASK",
-        3 * 1024, // stack size
-        NULL,     // task argument
-        2,        // task priority
+        1.5 * 1024, // ✔️
+        NULL,       // task argument
+        2,          // task priority
         NULL);
     xTaskCreate(
         led_indicator_task,
         "led_indicator_task",
-        3 * 1024, // stack size
-        NULL,     // task argument
-        2,        // task priority
+        1.2 * 1024, // ✔️
+        NULL,       // task argument
+        2,          // task priority
         NULL);
     xTaskCreate(
         OVR_CRNT_PRTCT_TASK,
         "OVR_CRNT_PRTCT_TASK",
-        2.5 * 1024, // stack size
+        1.5 * 1024, // ✔️
         NULL,       // task argument
         2,          // task priority
         NULL);
     xTaskCreate(
         I2C_SENSORS_TASK, //-------------STACK optimized up to here
         "I2C_SENSORS_TASK",
-        3 * 1024, // stack size
+        3 * 1024, // ❌
         NULL,     // task argument
         2,        // task priority
         NULL);
     xTaskCreate(
         BatteryTask,
         "BatteryTask",
-        3 * 1024,
+        1.5 * 1024, // ✔️
         NULL,
         2,
         NULL);
     xTaskCreate(
         ConditionsTask,
         "ConditionsTask",
-        5 * 1024,
+        5 * 1024, // ❌
         NULL,
         2,
         NULL);
     xTaskCreate(
         Reg_Uptime_Task,
-        "regControlTask", 6 * 1024,
+        "regControlTask",
+        2 * 1024, // ✔️
         NULL,
         3,
         NULL);
@@ -3249,13 +3243,13 @@ void setup()
     //     1,
     //     NULL);
     // RAM
-    // xTaskCreate(
-    //     ramMonitorTask,
-    //     "ramMonitorTask",
-    //     1024, // stack size
-    //     NULL, // task argument
-    //     1,    // task priority
-    //     NULL);
+    xTaskCreate(
+        ramMonitorTask,
+        "ramMonitorTask",
+        1024, // stack size
+        NULL, // task argument
+        1,    // task priority
+        NULL);
     // WIFI
     //  xTaskCreate(
     //      WifiTask,
