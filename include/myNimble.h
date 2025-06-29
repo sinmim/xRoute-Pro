@@ -1,5 +1,13 @@
 #ifndef MY_NIM_BLE_H
 #define MY_NIM_BLE_H
+
+#define ENABLE_MY_NIM_BLE_DEBUG
+#ifdef ENABLE_MY_NIM_BLE_DEBUG
+#define NIMBLE_LOG(format, ...) printf("[NimBle] " format "\n", ##__VA_ARGS__)
+#else
+#define NIMBLE_LOG(format, ...)
+#endif
+
 #include "myNimbleConfig.h"
 #include <NimBLEDevice.h>
 #include <Arduino.h>
@@ -90,7 +98,6 @@ private:
       }
     }
   };
-
   class MyServerCallbacks : public NimBLEServerCallbacks
   {
     MyBle *pMyBleInstance;
@@ -168,7 +175,6 @@ private:
       return true;
     }
   };
-
   class MyCallbacks : public NimBLECharacteristicCallbacks
   {
   private:

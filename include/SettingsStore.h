@@ -12,7 +12,6 @@
 
 // --- Debugging ---
 #define ENABLE_SETTINGS_STORE_DEBUG
-
 #ifdef ENABLE_SETTINGS_STORE_DEBUG
 #define SETTINGS_LOG(format, ...) printf("[settingStore] " format "\n", ##__VA_ARGS__)
 #else

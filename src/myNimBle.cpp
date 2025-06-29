@@ -24,7 +24,7 @@ MyBle::MyBle(bool clientMode) : isClientMode(clientMode),
     sendQueueMutex = xSemaphoreCreateMutex();
     if (sendQueueMutex == NULL)
     {
-        Serial.println("!!! Error creating send queue mutex !!!");
+        NIMBLE_LOG("!!! Error creating send queue mutex !!!");
     }
     xTaskCreate(sendTask, "SendTask", 4096, this, 1, NULL);
     xTaskCreate(timeOutTask, "timeOutTask", 4096, this, 1, NULL);
@@ -56,20 +56,20 @@ void MyBle::begin(std::function<void(NimBLERemoteCharacteristic *pNimBLERemoteCh
             this->pClient = NimBLEDevice::createClient();
             if (!this->pClient)
             {
-                Serial.println("!!! Failed to create NimBLE client !!!");
+                NIMBLE_LOG("!!! Failed to create NimBLE client !!!");
                 return;
             }
             this->pClient->setClientCallbacks(new MyClientCallback(this), true);
-            Serial.println("BLE Client Initialized");
+            NIMBLE_LOG("BLE Client Initialized");
         }
         else
         {
-            Serial.println("BLE Client already exists.");
+            NIMBLE_LOG("BLE Client already exists.");
         }
     }
     else
     {
-        Serial.println("Error: Called begin() in Server Mode.");
+        NIMBLE_LOG("Error: Called begin() in Server Mode.");
     }
 }
 
@@ -79,19 +79,19 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
 
     if (isClientMode)
     {
-        Serial.println("Error: Called beginServer() in Client Mode.");
+        NIMBLE_LOG("Error: Called beginServer() in Client Mode.");
         return;
     }
 
     if (this->pServer)
     {
-        Serial.println("BLE Server already exists.");
+        NIMBLE_LOG("BLE Server already exists.");
         NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
         if (pAdvertising && !pAdvertising->isAdvertising() &&
             this->pServer->getConnectedCount() < CONFIG_BT_NIMBLE_MAX_CONNECTIONS)
         {
             pAdvertising->start();
-            Serial.println("Restarting Advertising...");
+            NIMBLE_LOG("Restarting Advertising...");
         }
         return;
     }
@@ -105,15 +105,12 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
     NimBLEDevice::init(deviceName);
     deviceName += uniqueID;
     deviceCode = uniqueID;
-    Serial.printf("BLE Server Initializing with name: %s\n", deviceName.c_str());
-
+    NIMBLE_LOG("BLE Server Initializing with name: %s", deviceName.c_str());
     // Disable security for open connections
     NimBLEDevice::setSecurityAuth(false, false, false);
-
     // Create server and set callbacks
     this->pServer = NimBLEDevice::createServer();
     this->pServer->setCallbacks(new MyServerCallbacks(this), true);
-
     // Create service and characteristic (no encryption)
     NimBLEService *pService = this->pServer->createService(serviceUUID);
     pServerCharacteristic = pService->createCharacteristic(
@@ -123,20 +120,18 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             NIMBLE_PROPERTY::NOTIFY);
     pServerCharacteristic->setCallbacks(new MyCallbacks(*this));
     pService->start();
-
     // Start advertising
     NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->setName(deviceName);
     pAdvertising->addServiceUUID(serviceUUID);
     pAdvertising->enableScanResponse(true);
-
     if (pAdvertising->start())
     {
-        Serial.println("BLE Server Advertising started successfully!");
+        NIMBLE_LOG("BLE Server Advertising started successfully!");
     }
     else
     {
-        Serial.println("!!! Failed to start BLE Advertising !!!");
+        NIMBLE_LOG("!!! Failed to start BLE Advertising !!!");
     }
 }
 
@@ -168,7 +163,7 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             this->pServer = NimBLEDevice::createServer();
             if (!this->pServer)
             {
-                Serial.println("!!! Failed to create NimBLE server !!!");
+                NIMBLE_LOG("!!! Failed to create NimBLE server !!!");
                 return;
             }
             this->pServer->setCallbacks(new MyServerCallbacks(this), true);
@@ -177,7 +172,7 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
             NimBLEService *pService = this->pServer->createService(serviceUUID);
             if (!pService)
             {
-                Serial.println("!!! Failed to create NimBLE service !!!");
+                NIMBLE_LOG("!!! Failed to create NimBLE service !!!");
                 return;
             }
 
@@ -192,7 +187,7 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
                     NIMBLE_PROPERTY::WRITE_ENC); // <-- drop INDICATE
             if (!this->pServerCharacteristic)
             {
-                Serial.println("!!! Failed to create NimBLE characteristic !!!");
+                NIMBLE_LOG("!!! Failed to create NimBLE characteristic !!!");
                 return;
             }
 
@@ -209,34 +204,34 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
 
                 if (pAdvertising->start())
                 {
-                    Serial.println("BLE Server Advertising started successfully!");
+                    NIMBLE_LOG("BLE Server Advertising started successfully!");
                 }
                 else
                 {
-                    Serial.println("!!! Failed to start BLE Advertising !!!");
+                    NIMBLE_LOG("!!! Failed to start BLE Advertising !!!");
                 }
             }
             else
             {
-                Serial.println("!!! Failed to get Advertising object !!!");
+                NIMBLE_LOG("!!! Failed to get Advertising object !!!");
             }
         }
         else
         {
-            Serial.println("BLE Server already exists.");
+            NIMBLE_LOG("BLE Server already exists.");
             // Restart advertising if not already advertising
             NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
             if (pAdvertising && !pAdvertising->isAdvertising() &&
                 this->pServer->getConnectedCount() < CONFIG_BT_NIMBLE_MAX_CONNECTIONS)
             {
                 pAdvertising->start();
-                Serial.println("Restarting Advertising...");
+                NIMBLE_LOG("Restarting Advertising...");
             }
         }
     }
     else
     {
-        Serial.println("Error: Called beginServer() in Client Mode.");
+        NIMBLE_LOG("Error: Called beginServer() in Client Mode.");
     }
 }
 
@@ -294,7 +289,7 @@ void MyBle::timeOutTask(void *param)
                 {
                     self->sendStringToMac("GIVE_ME_PASSKEY\n", waiteList[i].connInfo);
                     waiteList[i].retyForRespons++;
-                    Serial.printf("Sent 'GIVE_ME_PASSKEY' to %s\n", waiteList[i].MacAdd.toString().c_str());
+                    NIMBLE_LOG("Sent 'GIVE_ME_PASSKEY' to %s\n", waiteList[i].MacAdd.toString().c_str());
                 }
             }
             // calculate timeout in a single line
@@ -320,7 +315,7 @@ void MyBle::sendStringToMac(String str, NimBLEConnInfo &connInfo)
 {
     if (!isConnected() || !pServerCharacteristic)
     {
-        Serial.println("Not connected or characteristic not available.");
+        NIMBLE_LOG("Not connected or characteristic not available.");
         return;
     }
     pServerCharacteristic->setValue(str);
@@ -372,20 +367,19 @@ bool MyBle::connectToServer(NimBLEAddress pAddress)
         }
     }
 
-    Serial.print("Connecting to Address: ");
+    NIMBLE_LOG("Connecting to Address: ");
     Serial.println(pAddress.toString().c_str());
 
     if (this->pClient->connect(pAddress))
     { // Use member pClient
-        Serial.println("Connected successfully!");
+        NIMBLE_LOG("Connected successfully!");
         NimBLERemoteService *pRemoteService = this->pClient->getService(serviceUUID);
         if (!pRemoteService)
         { /*...*/
             this->pClient->disconnect();
             return false;
         }
-        Serial.println("Found Service");
-
+        NIMBLE_LOG("Found Service");
         // Assign to member pRemoteCharacteristic
         this->pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
         if (!this->pRemoteCharacteristic)
@@ -393,7 +387,7 @@ bool MyBle::connectToServer(NimBLEAddress pAddress)
             this->pClient->disconnect();
             return false;
         }
-        Serial.println("Found Characteristic");
+        NIMBLE_LOG("Found Characteristic");
 
         if (this->pRemoteCharacteristic->canNotify())
         { // Use member pRemoteCharacteristic
@@ -406,13 +400,13 @@ bool MyBle::connectToServer(NimBLEAddress pAddress)
                 }
                 else
                 {
-                    Serial.println("Notification received, but no client callback registered!");
+                    NIMBLE_LOG("Notification received, but no client callback registered!");
                 }
             };
 
             if (this->pRemoteCharacteristic->subscribe(true, notifyCallbackWrapper))
             { // Use member
-                Serial.println("Subscribed to notifications");
+                NIMBLE_LOG("Subscribed to notifications");
                 connectedFlg = true;
                 return true;
             }
@@ -430,7 +424,7 @@ bool MyBle::connectToServer(NimBLEAddress pAddress)
     }
     else
     {
-        Serial.println("Failed to connect to server");
+        NIMBLE_LOG("Failed to connect to server");
         this->pRemoteCharacteristic = nullptr; // Reset member pointer
         return false;
     }
@@ -450,7 +444,7 @@ void MyBle::sendString(String str)
     // return if its not connected
     if (!isConnected())
     {
-        // Serial.println("Not connected.");
+        // NIMBLE_LOG("Not connected.");
         return;
     }
     if (isClientMode)
@@ -460,12 +454,12 @@ void MyBle::sendString(String str)
         {
             if (!this->pRemoteCharacteristic->writeValue(str, false))
             { // false = no response
-                Serial.println("Client write failed!");
+                NIMBLE_LOG("Client write failed!");
             }
         }
         else
         {
-            Serial.println("Warning: Client not connected or characteristic cannot be written.");
+            NIMBLE_LOG("Warning: Client not connected or characteristic cannot be written.");
         }
         return;
     }
@@ -477,7 +471,7 @@ void MyBle::sendString(String str)
     }
     else
     {
-        Serial.println("!!! Error: Could not take send queue mutex in sendString !!!");
+        NIMBLE_LOG("!!! Error: Could not take send queue mutex in sendString !!!");
     }
 }
 
@@ -548,7 +542,7 @@ void MyBle::sendLongString2(String str)
     {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-    Serial.println("[sendLongString] Finished sending long string.");
+    NIMBLE_LOG("[sendLongString] Finished sending long string.");
 }
 */
 //*/
@@ -567,7 +561,7 @@ void MyBle::sendLongString(String str)
         sendString(strChunk);
         // justSend(strChunk);
         vTaskDelay(pdMS_TO_TICKS(30));
-        // Serial.println("A:"+strChunk);
+        // NIMBLE_LOG("A:"+strChunk);
         // Saman : i checked for this and it actually do the process til the end
     }
 }
@@ -577,7 +571,7 @@ void MyBle::disconnect()
 {
     if (isClientMode && this->pClient && this->pClient->isConnected())
     { // Use member pClient
-        Serial.println("Disconnecting client...");
+        NIMBLE_LOG("Disconnecting client...");
         this->pClient->disconnect();
         connectedFlg = false;
         this->pRemoteCharacteristic = nullptr; // Reset member pointer
@@ -590,7 +584,7 @@ void MyBle::disconnect()
         {
             // Simplified: Disconnect handle 0. Might not disconnect all.
             // Reliable disconnect-all needs iterating handles/peers if API allows.
-            Serial.println("Attempting to disconnect client with handle 0...");
+            NIMBLE_LOG("Attempting to disconnect client with handle 0...");
             this->pServer->disconnect(0);
         }
         vTaskDelay(pdMS_TO_TICKS(100)); // Allow callbacks time
@@ -624,12 +618,12 @@ bool MyBle::isConnected()
 void MyBle::pause()
 {
     runFlg = false;
-    Serial.println("MyBle paused");
+    NIMBLE_LOG("MyBle paused");
 }
 void MyBle::resume()
 {
     runFlg = true;
-    Serial.println("MyBle resumed");
+    NIMBLE_LOG("MyBle resumed");
 }
 bool MyBle::isRunning() { return runFlg; }
 bool MyBle::isNewConnection()
@@ -679,7 +673,7 @@ String MyBle::directRead()
 
 void MyBle::deleteAllBonds()
 {
-    Serial.println("Deleting all bonds...");
+    NIMBLE_LOG("Deleting all bonds...");
 
     // Get the number of bonded devices
     int numBonds = NimBLEDevice::getNumBonds();
@@ -696,25 +690,25 @@ void MyBle::deleteAllBonds()
             Serial.println("Found Bond: " + String(pAddrs[i].toString().c_str()));
         }
 
-        Serial.println("Now deleting bonds...");
+        NIMBLE_LOG("Now deleting bonds...");
         // Now delete them using the stored addresses
         for (int i = 0; i < numBonds; i++)
         {
             Serial.println("Deleting bond for: " + String(pAddrs[i].toString().c_str()));
             if (!NimBLEDevice::deleteBond(pAddrs[i]))
             {
-                Serial.println("...Failed to delete bond.");
+                NIMBLE_LOG("...Failed to delete bond.");
             }
             vTaskDelay(pdMS_TO_TICKS(10)); // Small delay between deletions
         }
 
         delete[] pAddrs; // Clean up temporary array
 
-        Serial.println("Bond deletion complete. Recommend restarting ESP32.");
+        NIMBLE_LOG("Bond deletion complete. Recommend restarting ESP32.");
     }
     else
     {
-        Serial.println("No bonds to delete.");
+        NIMBLE_LOG("No bonds to delete.");
     }
 }
 // Scan Result Callback
@@ -725,14 +719,14 @@ void MyBle::onResult(NimBLEAdvertisedDevice *advertisedDevice)
 
     if (advertisedDevice->isAdvertisingService(serviceUUID))
     {
-        Serial.println("Found target service!");
+        NIMBLE_LOG("Found target service!");
         bleAddTmp = advertisedDevice->getAddress().toString().c_str(); // Static temp storage
 
         // Stop scan using isScanning() check
         if (NimBLEDevice::getScan()->isScanning())
         { // Use isScanning()
             NimBLEDevice::getScan()->stop();
-            Serial.println("Scan stopped.");
+            NIMBLE_LOG("Scan stopped.");
         }
     }
 }
@@ -754,6 +748,7 @@ void MyBle::setPassKey(uint32_t _password, bool wipe)
         clearwhitelist();
         clearwaitelist();
     }
+    NIMBLE_LOG("BLE PASS : %s", String(getPassKey()));
 }
 
 // === NEW: getPassKey ===
@@ -780,7 +775,7 @@ void MyBle::addToWhiteList(const NimBLEAddress &address, const NimBLEConnInfo &c
     }
     else
     {
-        Serial.println("Whitelist is full!");
+        NIMBLE_LOG("Whitelist is full!");
     }
 }
 void MyBle::addToWaiteList(const NimBLEAddress &address, const NimBLEConnInfo &connInfo)
@@ -800,7 +795,7 @@ void MyBle::addToWaiteList(const NimBLEAddress &address, const NimBLEConnInfo &c
     }
     else
     {
-        Serial.println("Waitelist is full!");
+        NIMBLE_LOG("Waitelist is full!");
     }
 }
 bool MyBle::isInWhiteList(const NimBLEAddress &address)
@@ -886,7 +881,6 @@ bool MyBle::getResponsFromClient(const NimBLEAddress &address)
     }
     return false;
 }
-
 void MyBle::authenticate(NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
 {
     static String accumulatedData;
@@ -909,7 +903,7 @@ void MyBle::authenticate(NimBLEConnInfo &connInfo, uint8_t *pData, size_t length
                 removeFromWaiteList(connInfo.getAddress());
                 // send successfull to the peer
                 sendStringToMac("PASSKEY_ACCEPTED\n", connInfo);
-                Serial.printf("PASSKEY:%d is correct. %s added to whitelist\n", _passKey, connInfo.getAddress().toString().c_str());
+                NIMBLE_LOG("PASSKEY:%d is correct. %s added to whitelist\n", _passKey, connInfo.getAddress().toString().c_str());
             }
             else
             {

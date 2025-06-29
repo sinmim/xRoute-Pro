@@ -115,8 +115,7 @@ bool SettingsStore::loadSettings()
     //print the content of file
     String jsonStr;
     serializeJsonPretty(_doc, jsonStr);
-    SETTINGS_LOG("==========>Loaded JSON: \n%s", jsonStr.c_str());
-    
+    SETTINGS_LOG("Inside JSON: \n%s", jsonStr.c_str());
     xSemaphoreGive(_mutex);
     return true;
 }

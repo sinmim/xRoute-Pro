@@ -3030,7 +3030,6 @@ void setup()
   {
     myBle.beginServer(onDataReceived);
     myBle.setPassKey(EEPROM.readUInt(E2ADD.blePassSave), true); // to do : false this to prevent wiping
-    Serial.printf("BLE PASS : %s\n", String(myBle.getPassKey()));
   }
 
   // user infos
