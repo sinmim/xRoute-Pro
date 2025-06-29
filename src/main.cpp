@@ -169,6 +169,12 @@ int blePass;
 //===========================CPU
 #include "CPU_Usage.h"
 CPU_Usage cpu_monitor;
+//===========================Licensing
+#include <licensing.h>
+const String RegFilePath = "/RegFile.txt";
+const String UpTimeFilePath = "/UpTime.txt";
+RegDev *xrtLcns;
+Leasing *xrtLizing;
 //===========================Files
 // a std vector of uint8_t
 //==============================
@@ -647,6 +653,61 @@ int dimShortNum = 0;
 MyBle myBle(false); // i need to use this object in other files
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
+void Reg_Uptime_Task(void *parameters)
+{
+  if (!xrtLcns->openLog())
+  {
+    Serial.println("Error opening or creating Lisence file");
+    vTaskDelete(NULL);
+  }
+  if (!xrtLizing->openLog())
+  {
+    Serial.println("Error opening or creating Lizing file");
+    vTaskDelete(NULL);
+  }
+  int min_10 = 0;
+  for (;;)
+  {
+    if (xrtLcns->isActive(xrtLcns->wrkLcns))
+    {
+      if (++min_10 % 600 == 0) // 10 min
+      {
+        xrtLizing->Uptime_tick();
+        xrtLizing->saveTime(xrtLizing->uptime);
+        Serial.println(xrtLizing->timeToStr(xrtLizing->uptime));
+        Serial.println(xrtLizing->timeToStr(xrtLizing->expTime));
+      }
+      if (xrtLizing->getTime(xrtLizing->uptime) > xrtLizing->getTime(xrtLizing->expTime))
+      {
+        xrtLcns->deactivate(xrtLcns->wrkLcns);
+      }
+    }
+    else
+    {
+      bool flag = false;
+      for (int i = 1; i <= 8; i++)
+      {
+        if (relState_0_15(i - 1))
+        {
+          char str[16];
+          sprintf(str, "SET_SW_%d=OFF\n", i);
+          sendCmdToExecute(str);
+          vTaskDelay(pdMS_TO_TICKS(100));
+          flag = true;
+        }
+      }
+      if (flag)
+      {
+        String str = "XrouteAlarm=No active license! Please check your license status!!\n";
+        myBle.sendString(str);
+        ws.sendToAll(str.c_str());
+        vTaskDelay(pdTICKS_TO_MS(1000));
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(1000)); // for 10 min it should be 1000ms
+  }
+}
+
 TaskHandle_t MeasurmentTaskHandle;
 void ConditionsTask(void *parameters)
 {
@@ -2935,6 +2996,12 @@ void setup()
     Serial.println("SPIFF ERROR !");
   }
 
+  // licensing
+  if (true)
+  {
+    xrtLcns = new RegDev(RegFilePath);
+    xrtLizing = new Leasing(UpTimeFilePath);
+  }
   // Config the Conditions
   if (true)
   {
@@ -3167,6 +3234,12 @@ void setup()
         5 * 1024,
         NULL,
         2,
+        NULL);
+    xTaskCreate(
+        Reg_Uptime_Task,
+        "regControlTask", 6 * 1024,
+        NULL,
+        3,
         NULL);
     // CPU
     // xTaskCreate(
