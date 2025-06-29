@@ -33,7 +33,6 @@ private:
   static const int MAX_RETRY_ATTEMPTS = 3;
   static const int AUT_TIME_OUT = 5000;
   static const int WAITE_FOR_USER_ENTERING_PASSKEY = 20000;
-  
 
   static std::vector<whiteListInfo> whiteList;
   static std::vector<waiteListInfo> waiteList;
@@ -223,6 +222,8 @@ protected:
 
 public:
   static String bleAddTmp; // Static for scan result? Review if needed.
+  String deviceCode;
+  String getDeviceCode() const { return deviceCode; }
 
   MyBle(bool clientMode = true);
   ~MyBle();
@@ -270,7 +271,7 @@ public:
   void clearwaitelist();
   void disconnectAllWhiteList();
   void sendStringToMac(String str, NimBLEConnInfo &connInfo);
-  
+
   void setResponsFromClient(const NimBLEAddress &address, bool userIsEnteringPass);
   bool getResponsFromClient(const NimBLEAddress &address);
 };

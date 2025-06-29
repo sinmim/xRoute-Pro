@@ -152,7 +152,8 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
   }
   else if (mode == WIFI_MODE_AP)
   {
-    Serial.println("▶WIFI_MODE_AP");
+    Serial.println("▶WIFI_MODE_AP | AP_NAME:" + String(_apSsid) + " | AP_PASS:" + String(_apPass));
+
     WiFi.mode(WIFI_MODE_AP);
     WiFi.softAP(_apSsid, _apPass);
     if (!MDNS.begin(_host))
@@ -212,7 +213,7 @@ void XrouteAsyncWebSocketServer::sendToAll(const char *message)
 {
   if (!_ws)
   {
-    Serial.println("[WS] ❌ WebSocket server not initialized");
+    // Serial.println("[WS] ❌ WebSocket server not initialized");
     return;
   }
 

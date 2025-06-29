@@ -104,6 +104,7 @@ void MyBle::beginServer(std::function<void(NimBLECharacteristic *pCharacteristic
     std::string deviceName = "xRoutePro";
     NimBLEDevice::init(deviceName);
     deviceName += uniqueID;
+    deviceCode = uniqueID;
     Serial.printf("BLE Server Initializing with name: %s\n", deviceName.c_str());
 
     // Disable security for open connections
@@ -446,10 +447,10 @@ bool MyBle::connectToMac(String macAddress)
 // Send String (Client or Server)
 void MyBle::sendString(String str)
 {
-    //return if its not connected
+    // return if its not connected
     if (!isConnected())
     {
-        //Serial.println("Not connected.");
+        // Serial.println("Not connected.");
         return;
     }
     if (isClientMode)

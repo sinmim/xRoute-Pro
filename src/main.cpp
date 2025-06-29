@@ -30,7 +30,7 @@
 #include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
-String Version = "0.1.9";
+String Version = "0.2.0";
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
 // userInfo
@@ -65,7 +65,7 @@ Adafruit_MPU6050 mpu;
 #define MPU_DISSCONNECT 0
 #define MPU_CONNECTED 1
 bool MPU_STATE = MPU_DISSCONNECT;
-float accXValue = 0, accYValue = 0, accZValue = 0, len = 0, alpha = 0, accSensitivity = 0;
+float accXValue = 0, accYValue = 0, accZValue = 0, len = 0, alpha = 0, accSensitivity = 0, degX = 0, degY = 0;
 float accXValueOffset = 0;
 float accYValueOffset = 0;
 boolean GyroOffsetingFlg = false;
@@ -428,7 +428,6 @@ void I2C_SENSORS_TASK(void *parameters)
 #define BARO_INTERVAL 200
 #define GYRO_INTERVAL 5
 #define HUM_INTERVAL 200
-
 #define ADD_INTERNAL_GYRO 0x19
 #define ADD_INTERNAL_BAROMETER 0x5C
 #define ADD_AHT10 0x38
@@ -436,19 +435,15 @@ void I2C_SENSORS_TASK(void *parameters)
 #define ADD_BMP280 0x76
 #define NO_SENSOR 0
   Wire.begin();
-
   uint8_t mainGyro = NO_SENSOR;
   uint8_t mainBarometer = NO_SENSOR;
   uint8_t mainHumSensor = NO_SENSOR;
-
   I2CDevice internalGyro(ADD_INTERNAL_GYRO, "INTERNAL_GYRO");
   I2CDevice internalBarometer(ADD_INTERNAL_BAROMETER, "INTERNAL_BAROMETER");
   I2CDevice externalAHT10(ADD_AHT10, "AHT10");
   I2CDevice externalMPU6050(ADD_MPU6050, "MPU6050");
   I2CDevice externalBMP280(ADD_BMP280, "BMP280");
-
   int cntr = 0;
-
   for (;;)
   {
     if (UpdatingFlg)
@@ -589,22 +584,19 @@ void I2C_SENSORS_TASK(void *parameters)
         }
       }
     }
-
     // Actual mesurments and filtering
     if (cntr % BARO_INTERVAL == 0 && mainBarometer == ADD_INTERNAL_BAROMETER && GyroLicense->isActive() == true)
     {
       digitalAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffset);
     }
-
     if (cntr % GYRO_INTERVAL == 0)
     {
       if (mainGyro == ADD_INTERNAL_GYRO) //&& GyroLicense->isActive() == true) must be checked i disabled it for ali for now
       {
         float tempx, tempy;
         readaxels(ADD_INTERNAL_GYRO, &tempx, &tempy);
-        accXValue = LOW_PASS_FILTER(tempx, accXValue, sigmoid(50 * fabs(accXValue - (mpuAcc.acceleration.x / 10.0F)), 0.9999, 10, 2));
-        accYValue = LOW_PASS_FILTER(tempy, accYValue, sigmoid(50 * fabs(accYValue - (mpuAcc.acceleration.y / 10.0F)), 0.9999, 10, 2));
-
+        accXValue = LOW_PASS_FILTER(tempx, accXValue, sigmoid(50 * fabs(accXValue - (mpuAcc.acceleration.x / 10.0F)), 0.90, 10, 2));
+        accYValue = LOW_PASS_FILTER(tempy, accYValue, sigmoid(50 * fabs(accYValue - (mpuAcc.acceleration.y / 10.0F)), 0.90, 10, 2)); // accXValue = LOW_PASS_FILTER(tempx, accXValue, sigmoid(50 * fabs(accXValue - (mpuAcc.acceleration.x / 10.0F)), 0.9999, 10, 2));
         if (GyroOffsetingFlg)
         {
           accXValue = LOW_PASS_FILTER(tempx, accXValue, 0.0);
@@ -622,12 +614,10 @@ void I2C_SENSORS_TASK(void *parameters)
       {
         float tempx, tempy;
         readaxels(ADD_MPU6050, &tempx, &tempy);
-
         accXValue = LOW_PASS_FILTER(mpuAcc.acceleration.x / 10.0F, accXValue, 0.98);
         accYValue = LOW_PASS_FILTER(mpuAcc.acceleration.y / 10.0F, accYValue, 0.98);
       }
     }
-
     if (cntr % HUM_INTERVAL == 0)
     {
       if (mainHumSensor == ADD_BMP280)
@@ -644,7 +634,6 @@ void I2C_SENSORS_TASK(void *parameters)
         digitalTemp = temp.temperature;
       }
     }
-
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
@@ -764,7 +753,6 @@ void MeasurmentTask(void *parameters)
     // b is now being calculated in the battery monitoring task
     // b = (v - battEmptyVoltage) / (battFullVoltage - battEmptyVoltage) * 100;
     // b = constrain(b, 0, 100);
-
     if ((a1 + a2) < 0)
       battHourLeft = LOW_PASS_FILTER((b * batteryCap) / fabs(a1 + a2), battHourLeft, 0.98);
     else
@@ -777,12 +765,21 @@ void MeasurmentTask(void *parameters)
     gwPrcnt = constrain(gwPrcnt, 0, 1820);
     pt100mv = pt100 * PT_mvCal;
     String data = "";
-
     //=====Gyro calculation
     if (true) //(GyroLicense->isActive()) // it must be checked later , i disabled lisence for ali cheching
     {
       float ofsetlesX = (accXValue - accXValueOffset) * revX;
       float ofsetlesY = (accYValue - accYValueOffset) * revY;
+      // print
+      degX = asin(ofsetlesX) * 180 / PI;
+      degY = asin(ofsetlesY) * 180 / PI;
+      // handle nan
+      if (isnan(degX))
+        degX = 90;
+      if (isnan(degY))
+        degY = 90;
+      // Serial.println("dX:" + String(degX, 3) + ",dY:" + String(degY, 3));
+      // Serial.println("X:" + String(ofsetlesX, 3) + ",Y:" + String(ofsetlesY, 3));
       alpha = atan(ofsetlesY / ofsetlesX);
       if (ofsetlesX < 0 && ofsetlesY > 0)
         alpha += PI;
@@ -790,11 +787,10 @@ void MeasurmentTask(void *parameters)
         alpha += PI;
       if (ofsetlesX > 0 && ofsetlesY < 0)
         alpha += (2 * PI);
-      len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY);
+      len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY) * 12; // sensitivity is 12 times now
       if (len > 1)
         len = 1;
     }
-
     //=====
     // sprintf(str, "SOLVOL1=%d\n", (int)v);
     // data += str;
@@ -828,6 +824,10 @@ void MeasurmentTask(void *parameters)
     data += str;
     sprintf(str, "GAZ1=%d\n", (int)a1);
     data += str;
+    sprintf(str, "Gyro=%1.3f,%1.3f,%1.1f,%1.1f\n", len * cos(alpha), len * sin(alpha), degX, degY);
+    data += str;
+    // Serial.println(String(">X:" + String(len * cos(alpha), 3) + ",Y:" + String(len * sin(alpha), 3)));
+
     data += "RELS=" + getRelsStatStr() + "\n";
     myBle.sendString(data);
     ws.sendToAll(data.c_str());
@@ -835,7 +835,6 @@ void MeasurmentTask(void *parameters)
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
-
 // websocket OTA
 #define OTA_BUFFER_SIZE 2048
 uint8_t *UDP_buffer = nullptr;
@@ -912,7 +911,6 @@ void updateTask(void *parameters)
     }
   }
 }
-
 TaskHandle_t sendUiConfigTaskHandle;
 void sendUiConfigTask(void *parameters)
 {
@@ -1443,7 +1441,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
 {
   char str[128];
   static RGB_VALS RGB1;
-
   static String accumulatedData;
   if (myUpdate != nullptr)
   {
@@ -2385,6 +2382,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         msg += "\"ssid\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID) + "\",";
         msg += "\"pass\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword) + "\",";
         msg += "\"apName\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::ApName) + "\",";
+        msg += "\"apPass\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::ApPassword) + "\",";
         msg += "\"hostN\" : \"" + wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName) + "\",";
         msg += "\"STA_AP\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::STA_AP)) + ",";
         msg += "\"LOCAL_IP\" : \"" + WiFi.localIP().toString() + "\",";
@@ -2780,6 +2778,20 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       {
         String hostName = command.substring(command.indexOf("=") + 1);
         wifi_WebSocket_Settings.set<String>(NetworkKeys::HostName, hostName);
+        String str = "HOST_NAME_CHANGED_OK\n";
+        myBle.sendString(str);
+        ws.sendToAll(str.c_str());
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        ESP.restart();
+      }
+      else if (command.startsWith("WIFI_AP_PASS_"))
+      {
+        String pass = command.substring(command.indexOf("=") + 1);
+        wifi_WebSocket_Settings.set<String>(NetworkKeys::ApPassword, pass);
+        String str = "WIFI_AP_PASS_CHANGED_OK\n";
+        myBle.sendString(str);
+        ws.sendToAll(str.c_str());
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
         ESP.restart();
       }
       else if (command.startsWith("BLE_PASS_")) // example : BLE_PASS_1=123456,654321
@@ -2851,10 +2863,8 @@ void sendCmdToExecute(char *str)
   NimBLECharacteristic *pServerChar = myBle.getServerCharacteristic();
   processReceivedCommandData(pServerChar, pData, length);
 }
-
 std::deque<String> wsCmdQueue;
 SemaphoreHandle_t wsCmdQueueMutex;
-
 void wsCmdQueTask(void *pvParameters)
 {
   while (true)
@@ -2972,11 +2982,13 @@ void setup()
     // Configure network
     String ssid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID, "karavanicin.com_2.4GHz");
     String pass = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword, "1020304050");
-    String apName = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApName, "Xroute-AP");
+    String defApName = "Xroute-AP" + String(myBle.getDeviceCode());
+    String apName = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApName, defApName);
     String apPass = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApPassword, "12345678");
     String hostName = wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName, "xroute");
-    wifi_mode_t mode = wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_AP);
+    wifi_mode_t mode = wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_STA);
     int port = wifi_WebSocket_Settings.get<int>(NetworkKeys::Port, 81);
+    wifi_WebSocket_Settings.saveIfChanged();
     //  ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
     //  ws.setSTA("TP-Link_20D8", "83937361");
     //  ws.setSTA("SAMAN POCO", "83601359");
@@ -3182,7 +3194,6 @@ void setup()
     //      NULL);
   }
 }
-
 void loop()
 {
   vTaskDelay(pdMS_TO_TICKS(100));
