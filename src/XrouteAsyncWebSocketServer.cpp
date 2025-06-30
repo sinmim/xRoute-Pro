@@ -438,28 +438,20 @@ void XrouteAsyncWebSocketServer::begin(wifi_mode_t mode)
   xTaskCreate([](void *arg)
               {
   auto self = (XrouteAsyncWebSocketServer*)arg;
-  for(;;) 
+  for (;;)
   {
-    //if wifi is connected
-    if (WiFi.status() == WL_CONNECTED)
+    if (self->_ws)
     {
-      // this forces the library to sweep out any TCP sockets
-      // that silently went away
       self->_ws->cleanupClients();
-      // now _ws->count() reflects the real # of active clients
-      static size_t last_n=0;
+      static size_t last_n = 0;
       size_t n = self->_ws->count();
-      if (n!=last_n)
+      if (n != last_n)
       {
         Serial.printf("[WS] cleanup→ %u clients\n", (unsigned)n);
+        last_n = n;
       }
-      last_n = n;
     }
-    else
-    {
-        //Serial.println("[WS] Wifi connection not available");
-    }
-    vTaskDelay(pdMS_TO_TICKS(1000));  // every 5 seconds
+    vTaskDelay(pdMS_TO_TICKS(1000));
   } }, "WS_Cleanup", 2048, this, 1, nullptr);
 
   // sending task

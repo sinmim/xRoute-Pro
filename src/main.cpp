@@ -653,6 +653,10 @@ int dimShortNum = 0;
 MyBle myBle(false); // i need to use this object in other files
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
+void pauseUnnessesaryTasks()
+{
+
+}
 void Reg_Uptime_Task(void *parameters)
 {
   if (!xrtLcns->openLog())
@@ -707,7 +711,6 @@ void Reg_Uptime_Task(void *parameters)
     vTaskDelay(pdMS_TO_TICKS(1000)); // for 10 min it should be 1000ms
   }
 }
-TaskHandle_t MeasurmentTaskHandle;
 void ConditionsTask(void *parameters)
 {
   vTaskDelay(pdMS_TO_TICKS(6000));
@@ -780,6 +783,7 @@ void saveStatesToFile()
   }
 }
 bool MeasurmentTaskPause = false;
+TaskHandle_t MeasurmentTaskHandle;
 void MeasurmentTask(void *parameters)
 {
   char str[64];
@@ -911,7 +915,7 @@ void updateTask(void *parameters)
   float lastProgressPercent = 0;
   uint32_t progress;
   uint64_t start = millis();
-  uint TIME_OUT = 5000;
+  uint TIME_OUT = 15000;
 
   for (;;)
   {
@@ -931,6 +935,7 @@ void updateTask(void *parameters)
       free(UDP_buffer);
       UDP_bufferBussy = false;
       MeasurmentTaskPause = false;
+      vTaskResume(MeasurmentTaskHandle);
       vTaskDelete(NULL);
     }
     UDP_dataReady = false;
@@ -964,6 +969,7 @@ void updateTask(void *parameters)
         free(UDP_buffer);
         UDP_bufferBussy = false;
         MeasurmentTaskPause = false;
+        vTaskResume(MeasurmentTaskHandle);
         vTaskDelete(NULL);
       }
     }
@@ -1515,7 +1521,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
   int endPos;
   while ((endPos = accumulatedData.indexOf('\n')) != -1)
   {
-    MeasurmentTaskPause = true;
+    // MeasurmentTaskPause = true;
     String command = accumulatedData.substring(0, endPos);
     // remove \r if exist at the end beqause in postman it sends \n\r
     if (command.endsWith("\r"))
@@ -2313,6 +2319,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       else if (command.startsWith("START_UPDATE_")) // START_UPDATE_1=5789 byte
       {
         MeasurmentTaskPause = true;
+        vTaskSuspend(MeasurmentTaskHandle);
         int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt() - 1;
         uint32_t binSize = command.substring(command.indexOf("=") + 1).toInt();
         ws.startUpdate(binSize);
@@ -2441,6 +2448,28 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         msg += "\"LOCAL_IP\" : \"" + WiFi.localIP().toString() + "\",";
         msg += "\"RSSI\" : " + String(WiFi.RSSI()) + ",";
         msg += "\"port\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::Port)) + "}]}";
+        myBle.sendString(msg.c_str());
+        ws.sendToThisClient(msg.c_str());
+      }
+      else if (command.startsWith("DEVICE_INFO_JSON_"))
+      {
+        int index = (command.substring(command.lastIndexOf("_") + 1)).toInt();
+        StaticJsonDocument<512> doc;
+
+        JsonObject root = doc.createNestedObject("DEVICE_INFO");
+        JsonObject licenses = root.createNestedObject("licenses");
+        licenses["Gyro"] = xrtLcns->isActive(xrtLcns->gyroLcns) ? "True" : "False";
+        licenses["Humidity"] = xrtLcns->isActive(xrtLcns->humLcns) ? "True" : "False";
+        licenses["Current"] = xrtLcns->isActive(xrtLcns->crntLcns) ? "True" : "False";
+        licenses["Work"] = xrtLcns->isActive(xrtLcns->wrkLcns) ? "True" : "False";
+        licenses["Gas"] = xrtLcns->isActive(xrtLcns->gasLcns) ? "True" : "False";
+
+        JsonObject info = root.createNestedObject("info");
+        info["MAC_ADDRESS"] = 123456789;
+        info["DEVICE_NAME"] = "xRoute-pro";
+
+        String msg;
+        serializeJson(doc, msg);
         myBle.sendString(msg.c_str());
         ws.sendToThisClient(msg.c_str());
       }
@@ -3025,13 +3054,16 @@ void setup()
   }
 
   // user infos
-  if (!wifi_WebSocket_Settings.begin())
+  if (true)
   {
-    Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]No valid JSON found, starting fresh.");
-  }
-  else
-  {
-    Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]==> LOADED OK !");
+    if (!wifi_WebSocket_Settings.begin())
+    {
+      Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]No valid JSON found, starting fresh.");
+    }
+    else
+    {
+      Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]==> LOADED OK !");
+    }
   }
 
   // Network AND websocket
@@ -3156,6 +3188,7 @@ void setup()
 
     ws.onUpdate([](const char *msg, size_t length)
                 {
+                  Serial.println(".");
                   while (UDP_bufferBussy)
                   {
                     vTaskDelay(pdMS_TO_TICKS(1));
@@ -3175,43 +3208,43 @@ void setup()
         MeasurmentTask,
         "MeasurmentTask",
         2300, // ✔️
-        NULL, // task argument
-        2,    // task priority
+        NULL,
+        2,
         &MeasurmentTaskHandle);
     xTaskCreate(
         DimerTask,
         "DimerTask",
         2.5 * 1024, // ✔️
-        NULL,       // task argument
-        3,          // task priority
+        NULL,
+        3,
         NULL);
     xTaskCreate(
         adcReadingTask,
         "ADC READING TASK",
         1.5 * 1024, // ✔️
-        NULL,       // task argument
-        2,          // task priority
+        NULL,
+        2,
         NULL);
     xTaskCreate(
         led_indicator_task,
         "led_indicator_task",
         1.2 * 1024, // ✔️
-        NULL,       // task argument
-        2,          // task priority
+        NULL,
+        2,
         NULL);
     xTaskCreate(
         OVR_CRNT_PRTCT_TASK,
         "OVR_CRNT_PRTCT_TASK",
         1.5 * 1024, // ✔️
-        NULL,       // task argument
-        2,          // task priority
+        NULL,
+        2,
         NULL);
     xTaskCreate(
         I2C_SENSORS_TASK, //-------------STACK optimized up to here
         "I2C_SENSORS_TASK",
         3 * 1024, // ❌
-        NULL,     // task argument
-        2,        // task priority
+        NULL,
+        2,
         NULL);
     xTaskCreate(
         BatteryTask,
@@ -3230,7 +3263,7 @@ void setup()
     xTaskCreate(
         Reg_Uptime_Task,
         "regControlTask",
-        2 * 1024, // ✔️
+        3 * 1024, // ✔️
         NULL,
         3,
         NULL);
@@ -3243,20 +3276,20 @@ void setup()
     //     1,
     //     NULL);
     // RAM
-    xTaskCreate(
-        ramMonitorTask,
-        "ramMonitorTask",
-        1024, // stack size
-        NULL, // task argument
-        1,    // task priority
-        NULL);
+    // xTaskCreate(
+    //     ramMonitorTask,
+    //     "ramMonitorTask",
+    //     1024, // stack size
+    //     NULL,
+    //     1,
+    //     NULL);
     // WIFI
     //  xTaskCreate(
     //      WifiTask,
     //      "WifiTask",
     //      8 * 1024, // stack size
-    //      NULL,     // task argument
-    //      1,        // task priority
+    //      NULL,
+    //      1,
     //      NULL);
   }
 }
