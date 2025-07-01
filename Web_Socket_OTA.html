@@ -421,6 +421,7 @@
           const startCommand = `SET_START_UPDATE_1=${firmwareFile.size}\n`;
           logMessage(`Sending command: ${startCommand.trim()}`, "info");
           uploadSocket.send(startCommand);
+          //dedlay 1 sec
 
           setTimeout(() => {
             const reader = new FileReader();

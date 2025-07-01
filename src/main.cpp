@@ -920,7 +920,7 @@ void pauseUnnessesaryTasks()
       {MeasurmentTaskHandle,
        DimerTask_Handle,
        adcReadingTask_Handle,
-       //led_indicator_task_Handle,
+       // led_indicator_task_Handle,
        OVR_CRNT_PRTCT_TASK_Handle,
        I2C_SENSORS_TASK_Handle,
        BatteryTask_Handle,
@@ -940,7 +940,7 @@ void resumeUnnessesaryTasks()
       {MeasurmentTaskHandle,
        DimerTask_Handle,
        adcReadingTask_Handle,
-       //led_indicator_task_Handle,
+       // led_indicator_task_Handle,
        OVR_CRNT_PRTCT_TASK_Handle,
        I2C_SENSORS_TASK_Handle,
        BatteryTask_Handle,
@@ -2368,7 +2368,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         // MeasurmentTaskPause = true;
         // vTaskSuspend(MeasurmentTaskHandle);
         pauseUnnessesaryTasks();
-
         int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt() - 1;
         uint32_t binSize = command.substring(command.indexOf("=") + 1).toInt();
         ws.startUpdate(binSize);

@@ -152,10 +152,19 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
   }
   else if (mode == WIFI_MODE_AP)
   {
-    Serial.println("▶WIFI_MODE_AP | AP_NAME:" + String(_apSsid) + " | AP_PASS:" + String(_apPass));
+    IPAddress local_IP(192, 168, 4, 1); // default AP IP
+    IPAddress gateway(0, 0, 0, 0);      // signal no internet
+    IPAddress subnet(255, 255, 255, 0);
 
+    Serial.println("▶WIFI_MODE_AP | AP_NAME:" + String(_apSsid) + " | AP_PASS:" + String(_apPass));
     WiFi.mode(WIFI_MODE_AP);
+    if (!WiFi.softAPConfig(local_IP, gateway, subnet))
+    {
+      Serial.println("✖ Failed to configure AP with 0.0.0.0 gateway");
+      return false;
+    }
     WiFi.softAP(_apSsid, _apPass);
+
     if (!MDNS.begin(_host))
     {
       Serial.println("✖ mDNS init failed");
@@ -356,9 +365,17 @@ void XrouteAsyncWebSocketServer::registerEvents()
         {
           if (updatingFlg)
           {
-            _updateCb((const char *)data, len);
-            updateProgress += len;
-            return;
+            if (updatingClient != nullptr && updatingClient == client)//preventing other cliants to curropt incomming update data
+            {
+              _updateCb((const char *)data, len);
+              updateProgress += len;
+              return;
+            }
+            else
+            {
+              Serial.println("Droping other incomming data");
+              return;
+            }
           }
           auto *info = reinterpret_cast<AwsFrameInfo *>(arg);
           // only consider text / continuation frames

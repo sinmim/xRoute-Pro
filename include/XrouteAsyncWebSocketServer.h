@@ -30,19 +30,22 @@ public:
   bool updatingFlg;
   uint32_t updateLen;
   uint32_t updateProgress;
+  AsyncWebSocketClient *updatingClient;
 
-  uint32_t getUpdateLen() { return updateLen; }
+  AsyncWebSocketClient *getUpdatingClient() { return updatingClient; }
   void startUpdate(uint32_t len)
   {
     updateProgress = 0;
     updateLen = len;
     updatingFlg = true;
+    updatingClient = LastClient;
   }
   void endUpdate()
   {
     updateProgress = 0;
     updateLen = 0;
     updatingFlg = false;
+    updatingClient = nullptr;
   }
   float getProgress() { return (float)updateProgress / (float)updateLen; }
   bool isUpdating() { return updatingFlg; }
