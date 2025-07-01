@@ -653,10 +653,7 @@ int dimShortNum = 0;
 MyBle myBle(false); // i need to use this object in other files
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
-void pauseUnnessesaryTasks()
-{
 
-}
 void Reg_Uptime_Task(void *parameters)
 {
   if (!xrtLcns->openLog())
@@ -783,7 +780,6 @@ void saveStatesToFile()
   }
 }
 bool MeasurmentTaskPause = false;
-TaskHandle_t MeasurmentTaskHandle;
 void MeasurmentTask(void *parameters)
 {
   char str[64];
@@ -904,7 +900,60 @@ bool UDP_bufferBussy = true;
 bool UDP_dataReady = false;
 int UDP_buffLen;
 int UDP_len;
+TaskHandle_t I2C_SENSORS_TASK_Handle;
+TaskHandle_t Reg_Uptime_Task_Handle;
+TaskHandle_t ConditionsTask_Handle;
+TaskHandle_t MeasurmentTaskHandle;
 TaskHandle_t updateTaskHandle;
+TaskHandle_t sendUiConfigTaskHandle;
+TaskHandle_t sendConditionsTaskHandle;
+TaskHandle_t DimerTask_Handle;
+TaskHandle_t adcReadingTask_Handle;
+TaskHandle_t led_indicator_task_Handle;
+TaskHandle_t OVR_CRNT_PRTCT_TASK_Handle;
+TaskHandle_t BatteryTask_Handle;
+TaskHandle_t takeConditionFileTaskHandle;
+TaskHandle_t takeUiConfigFileTaskHandle;
+void pauseUnnessesaryTasks()
+{
+  TaskHandle_t th[9] =
+      {MeasurmentTaskHandle,
+       DimerTask_Handle,
+       adcReadingTask_Handle,
+       //led_indicator_task_Handle,
+       OVR_CRNT_PRTCT_TASK_Handle,
+       I2C_SENSORS_TASK_Handle,
+       BatteryTask_Handle,
+       ConditionsTask_Handle,
+       Reg_Uptime_Task_Handle};
+  for (int i = 0; i < 9; i++)
+  {
+    if (th[i] != NULL)
+    {
+      vTaskSuspend(th[i]);
+    }
+  }
+}
+void resumeUnnessesaryTasks()
+{
+  TaskHandle_t th[9] =
+      {MeasurmentTaskHandle,
+       DimerTask_Handle,
+       adcReadingTask_Handle,
+       //led_indicator_task_Handle,
+       OVR_CRNT_PRTCT_TASK_Handle,
+       I2C_SENSORS_TASK_Handle,
+       BatteryTask_Handle,
+       ConditionsTask_Handle,
+       Reg_Uptime_Task_Handle};
+  for (int i = 0; i < 9; i++)
+  {
+    if (th[i] != NULL)
+    {
+      vTaskResume(th[i]);
+    }
+  }
+}
 void updateTask(void *parameters)
 {
   UDP_buffer = (uint8_t *)malloc(OTA_BUFFER_SIZE);
@@ -934,8 +983,9 @@ void updateTask(void *parameters)
       ws.endUpdate();
       free(UDP_buffer);
       UDP_bufferBussy = false;
-      MeasurmentTaskPause = false;
-      vTaskResume(MeasurmentTaskHandle);
+      // MeasurmentTaskPause = false;
+      // vTaskResume(MeasurmentTaskHandle);
+      resumeUnnessesaryTasks();
       vTaskDelete(NULL);
     }
     UDP_dataReady = false;
@@ -968,14 +1018,14 @@ void updateTask(void *parameters)
         ws.endUpdate();
         free(UDP_buffer);
         UDP_bufferBussy = false;
-        MeasurmentTaskPause = false;
-        vTaskResume(MeasurmentTaskHandle);
+        // MeasurmentTaskPause = false;
+        // vTaskResume(MeasurmentTaskHandle);
+        resumeUnnessesaryTasks();
         vTaskDelete(NULL);
       }
     }
   }
 }
-TaskHandle_t sendUiConfigTaskHandle;
 void sendUiConfigTask(void *parameters)
 {
   vTaskSuspend(MeasurmentTaskHandle);
@@ -986,7 +1036,6 @@ void sendUiConfigTask(void *parameters)
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
 }
-TaskHandle_t sendConditionsTaskHandle;
 void sendConditionsTask(void *parameters)
 {
   vTaskSuspend(MeasurmentTaskHandle);
@@ -1328,7 +1377,6 @@ void createTimerCondition(String _outputType, int _motorPort, int _upTimeMs, int
 }
 //--------------------EVENTS
 // Callback function to handle data received from the client
-TaskHandle_t takeConditionFileTaskHandle;
 void takeConditionFileTask(void *pvParameters)
 {
   while (true)
@@ -1365,7 +1413,6 @@ void takeConditionFileTask(void *pvParameters)
   }
   vTaskDelete(NULL);
 }
-TaskHandle_t takeUiConfigFileTaskHandle;
 void takeUiConfigFileTask(void *pvParameters)
 {
   // time out should be added
@@ -2318,8 +2365,10 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       }
       else if (command.startsWith("START_UPDATE_")) // START_UPDATE_1=5789 byte
       {
-        MeasurmentTaskPause = true;
-        vTaskSuspend(MeasurmentTaskHandle);
+        // MeasurmentTaskPause = true;
+        // vTaskSuspend(MeasurmentTaskHandle);
+        pauseUnnessesaryTasks();
+
         int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt() - 1;
         uint32_t binSize = command.substring(command.indexOf("=") + 1).toInt();
         ws.startUpdate(binSize);
@@ -3203,7 +3252,6 @@ void setup()
   // Tasks
   if (true)
   {
-    // printTaskResourceUsage(1);
     xTaskCreate(
         MeasurmentTask,
         "MeasurmentTask",
@@ -3217,56 +3265,56 @@ void setup()
         2.5 * 1024, // ✔️
         NULL,
         3,
-        NULL);
+        &DimerTask_Handle);
     xTaskCreate(
         adcReadingTask,
         "ADC READING TASK",
         1.5 * 1024, // ✔️
         NULL,
         2,
-        NULL);
+        &adcReadingTask_Handle);
     xTaskCreate(
         led_indicator_task,
         "led_indicator_task",
         1.2 * 1024, // ✔️
         NULL,
         2,
-        NULL);
+        &led_indicator_task_Handle);
     xTaskCreate(
         OVR_CRNT_PRTCT_TASK,
         "OVR_CRNT_PRTCT_TASK",
         1.5 * 1024, // ✔️
         NULL,
         2,
-        NULL);
+        &OVR_CRNT_PRTCT_TASK_Handle);
     xTaskCreate(
         I2C_SENSORS_TASK, //-------------STACK optimized up to here
         "I2C_SENSORS_TASK",
         3 * 1024, // ❌
         NULL,
         2,
-        NULL);
+        &I2C_SENSORS_TASK_Handle);
     xTaskCreate(
         BatteryTask,
         "BatteryTask",
         1.5 * 1024, // ✔️
         NULL,
         2,
-        NULL);
+        &BatteryTask_Handle);
     xTaskCreate(
         ConditionsTask,
         "ConditionsTask",
         5 * 1024, // ❌
         NULL,
         2,
-        NULL);
+        &ConditionsTask_Handle);
     xTaskCreate(
         Reg_Uptime_Task,
         "regControlTask",
         3 * 1024, // ✔️
         NULL,
         3,
-        NULL);
+        &Reg_Uptime_Task_Handle);
     // CPU
     // xTaskCreate(
     //     cpuMonitoringTask,

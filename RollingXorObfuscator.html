@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rolling XOR Obfuscator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@Z3dPD400;500;600;700&family=Fira+Code:wght@400;500&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        code, pre {
+            font-family: 'Fira Code', monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl bg-gray-800 rounded-xl shadow-2xl p-6 md:p-8">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-cyan-400">Rolling XOR Obfuscator</h1>
+            <p class="text-gray-400 mt-2">Replicates the C++ rolling XOR obfuscation logic in your browser.</p>
+        </div>
+
+        <!-- Input Form -->
+        <div class="space-y-6">
+            <div>
+                <label for="inputText" class="block text-sm font-medium text-gray-300 mb-2">Text to Obfuscate</label>
+                <input type="text" id="inputText" value="ABCDE" class="w-full bg-gray-700 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-200" placeholder="Enter your string here...">
+            </div>
+            <div>
+                <label for="seedValue" class="block text-sm font-medium text-gray-300 mb-2">Seed (0-255)</label>
+                <input type="number" id="seedValue" value="90" min="0" max="255" class="w-full bg-gray-700 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-200" placeholder="e.g., 90 or 0x5A">
+            </div>
+            <button id="obfuscateBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-cyan-500/30 transition-all duration-300 transform hover:scale-105">
+                <i class="fas fa-sync-alt mr-2"></i>Generate Obfuscation
+            </button>
+        </div>
+
+        <!-- Output Section -->
+        <div id="outputSection" class="mt-8 pt-6 border-t border-gray-700 hidden">
+            <!-- Obfuscated Output -->
+            <div>
+                <h2 class="text-xl font-semibold text-gray-100 mb-3">Obfuscated Bytes (C++ Format)</h2>
+                <div class="relative bg-gray-900 rounded-lg p-4">
+                    <pre><code id="obfuscatedOutput" class="text-green-400 break-words whitespace-pre-wrap"></code></pre>
+                    <button id="copyBtn" class="absolute top-3 right-3 bg-gray-700 hover:bg-gray-600 text-gray-300 p-2 rounded-md transition-all duration-200" title="Copy to Clipboard">
+                        <i class="far fa-copy"></i>
+                    </button>
+                </div>
+                <div id="copy-message" class="text-sm text-green-500 mt-2 h-4"></div>
+            </div>
+
+            <!-- Deobfuscated Verification -->
+            <div class="mt-6">
+                <h2 class="text-xl font-semibold text-gray-100 mb-3">Verification</h2>
+                <div class="bg-gray-900 rounded-lg p-4">
+                    <p class="text-gray-400">Recovered Text: <span id="deobfuscatedOutput" class="text-yellow-400 font-semibold"></span></p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Fallback for clipboard copy -->
+    <textarea id="clipboard-helper" style="position: absolute; left: -9999px;"></textarea>
+
+    <script>
+        // --- Core Obfuscation/Deobfuscation Logic ---
+
+        /**
+         * Performs rolling XOR obfuscation on a string.
+         * @param {string} input - The string to obfuscate.
+         * @param {number} seed - The initial XOR key (0-255).
+         * @returns {Uint8Array} - An array of obfuscated bytes.
+         */
+        function obfuscate_rolling(input, seed) {
+            const len = input.length;
+            const obf = new Uint8Array(len);
+            let current = seed;
+
+            for (let i = 0; i < len; i++) {
+                const c = input.charCodeAt(i);
+                const obfChar = c ^ current;
+                obf[i] = obfChar;
+                current = obfChar;
+            }
+            return obf;
+        }
+
+        /**
+         * Deobfuscates a byte array using rolling XOR.
+         * @param {Uint8Array} obf - The obfuscated byte array.
+         * @param {number} seed - The initial XOR key (0-255).
+         * @returns {string} - The original, deobfuscated string.
+         */
+        function deobfuscate_rolling(obf, seed) {
+            let original = '';
+            let prev = seed;
+
+            for (let i = 0; i < obf.length; i++) {
+                const obfChar = obf[i];
+                const origChar = obfChar ^ prev;
+                original += String.fromCharCode(origChar);
+                prev = obfChar;
+            }
+            return original;
+        }
+
+
+        // --- DOM Manipulation and Event Handling ---
+
+        const inputText = document.getElementById('inputText');
+        const seedValue = document.getElementById('seedValue');
+        const obfuscateBtn = document.getElementById('obfuscateBtn');
+        const outputSection = document.getElementById('outputSection');
+        const obfuscatedOutput = document.getElementById('obfuscatedOutput');
+        const deobfuscatedOutput = document.getElementById('deobfuscatedOutput');
+        const copyBtn = document.getElementById('copyBtn');
+        const copyMessage = document.getElementById('copy-message');
+
+        /**
+         * Main function to handle the obfuscation process and update the UI.
+         */
+        function handleObfuscation() {
+            const text = inputText.value;
+            let seed = parseInt(seedValue.value, 10);
+            
+            // Validate inputs
+            if (!text) {
+                alert('Please enter some text to obfuscate.');
+                return;
+            }
+            if (isNaN(seed) || seed < 0 || seed > 255) {
+                alert('Seed must be a number between 0 and 255.');
+                return;
+            }
+
+            // Perform obfuscation and deobfuscation
+            const obfuscated = obfuscate_rolling(text, seed);
+            const recovered = deobfuscate_rolling(obfuscated, seed);
+
+            // Format the output string like: {0xAB, 0xCD, ...}
+            const formattedOutput = `{${Array.from(obfuscated)
+                .map(byte => `0x${byte.toString(16).toUpperCase().padStart(2, '0')}`)
+                .join(',')}}`;
+
+            // Update the UI
+            obfuscatedOutput.textContent = formattedOutput;
+            deobfuscatedOutput.textContent = recovered;
+            outputSection.classList.remove('hidden');
+        }
+
+        // --- Event Listeners ---
+        obfuscateBtn.addEventListener('click', handleObfuscation);
+
+        // Allow pressing Enter in input fields to trigger obfuscation
+        inputText.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleObfuscation();
+        });
+        seedValue.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleObfuscation();
+        });
+        
+        // Handle clipboard copy
+        copyBtn.addEventListener('click', () => {
+            const textToCopy = obfuscatedOutput.textContent;
+            const helper = document.getElementById('clipboard-helper');
+            helper.value = textToCopy;
+            helper.select();
+            
+            try {
+                document.execCommand('copy');
+                copyMessage.textContent = 'Copied to clipboard!';
+            } catch (err) {
+                copyMessage.textContent = 'Failed to copy!';
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+            
+            // Clear the message after a few seconds
+            setTimeout(() => {
+                copyMessage.textContent = '';
+            }, 2000);
+        });
+
+        // Run on page load with default values
+        window.onload = handleObfuscation;
+    </script>
+
+</body>
+</html>
