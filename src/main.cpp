@@ -30,7 +30,7 @@
 #include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
-String Version = "0.2.4";
+String Version = "0.2.7";
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
 // userInfo
