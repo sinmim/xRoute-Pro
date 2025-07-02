@@ -61,7 +61,7 @@
         border: 1px solid #ccc;
         width: 60%;
       }
-       .config-item input[type="checkbox"] {
+      .config-item input[type="checkbox"] {
         width: 1.3em;
         height: 1.3em;
         cursor: pointer;
@@ -220,15 +220,21 @@
           <label for="port-input">Port:</label>
           <input type="text" id="port-input" value="81" />
         </div>
-         <div class="config-item checkbox-item">
+        <div class="config-item checkbox-item">
           <label for="sync-upload-checkbox">Sync Upload:</label>
-          <input type="checkbox" id="sync-upload-checkbox" checked title="Wait for ESP32 if browser upload is too far ahead."/>
+          <input
+            type="checkbox"
+            id="sync-upload-checkbox"
+            checked
+            title="Wait for ESP32 if browser upload is too far ahead."
+          />
         </div>
         <div class="version-display">
           <button id="getVersion-btn">Get Version</button>
           <span id="version-label">Version: N/A</span>
         </div>
       </fieldset>
+      <button id="reset-btn">Restart ESP32</button>
 
       <div id="drop-zone">
         <p>Drag & Drop your `.bin` file here or</p>
@@ -305,13 +311,16 @@
       const firmwareProgressContainer = document.getElementById(
         "firmware-progress-container"
       );
-      const firmwareProgressBar = document.getElementById("firmware-progress-bar");
+      const firmwareProgressBar = document.getElementById(
+        "firmware-progress-bar"
+      );
       const firmwareProgressPercent = document.getElementById(
         "firmware-progress-percent"
       );
       // NEW: Reference to the sync checkbox
-      const syncUploadCheckbox = document.getElementById("sync-upload-checkbox");
-
+      const syncUploadCheckbox = document.getElementById(
+        "sync-upload-checkbox"
+      );
 
       let firmwareFile = null;
       let isInterrupted = false;
@@ -441,8 +450,8 @@
         };
 
         const CHUNK_SIZE = 8192;
-        const UPLOAD_DELAY_MS = 0;//20;
-        const SYNC_WAIT_MS = 500; // How long to wait before re-checking sync
+        const UPLOAD_DELAY_MS = 100; //20;
+        const SYNC_WAIT_MS = 150; // How long to wait before re-checking sync
 
         function sendNextChunk(fileData, offset) {
           if (!uploadSocket || uploadSocket.readyState !== 1) {
@@ -460,14 +469,17 @@
 
           // *** NEW SYNC LOGIC ***
           if (syncUploadCheckbox.checked) {
-              const browserProgress = uploadProgressBar.value;
-              const firmwareProgress = firmwareProgressBar.value;
-              if (browserProgress - firmwareProgress > 2) {
-                  logMessage(`Sync: Browser is ahead. Pausing to let ESP32 catch up...`, "info");
-                  // Wait for a moment, then try to send the same chunk again.
-                  setTimeout(() => sendNextChunk(fileData, offset), SYNC_WAIT_MS);
-                  return; // Important: Stop here and don't send the chunk yet.
-              }
+            const browserProgress = uploadProgressBar.value;
+            const firmwareProgress = firmwareProgressBar.value;
+            if (browserProgress - firmwareProgress > 15) {
+              logMessage(
+                `Sync: Browser is ahead. Pausing to let ESP32 catch up...`,
+                "info"
+              );
+              // Wait for a moment, then try to send the same chunk again.
+              setTimeout(() => sendNextChunk(fileData, offset), SYNC_WAIT_MS);
+              return; // Important: Stop here and don't send the chunk yet.
+            }
           }
 
           const chunk = fileData.slice(offset, offset + CHUNK_SIZE);
@@ -515,7 +527,10 @@
             setProgressBarsColor("#d93025");
             uploadSocket.close();
           } else {
-             logMessage(`Received unexpected message during upload: ${message}`, "info");
+            logMessage(
+              `Received unexpected message during upload: ${message}`,
+              "info"
+            );
           }
         };
 
@@ -543,14 +558,17 @@
           isInterrupted = false;
         };
       });
-      
+
       getVersionBtn.addEventListener("click", () => {
         const host = hostInput.value.trim();
         const port = portInput.value.trim();
 
         if (!host || !port) {
-            logMessage("Hostname and Port must be provided to get the version.", "error");
-            return;
+          logMessage(
+            "Hostname and Port must be provided to get the version.",
+            "error"
+          );
+          return;
         }
 
         const wsUrl = `ws://${host}:${port}/`;
@@ -560,40 +578,53 @@
         const versionSocket = new WebSocket(wsUrl);
 
         versionSocket.onopen = () => {
-            logMessage("Connection for version check established.", "success");
-            const command = "GET_VER_1\n";
-            logMessage(`Sending command: ${command.trim()}`, "info");
-            versionSocket.send(command);
+          logMessage("Connection for version check established.", "success");
+          const command = "GET_VER_1\n";
+          logMessage(`Sending command: ${command.trim()}`, "info");
+          versionSocket.send(command);
         };
 
         versionSocket.onmessage = (event) => {
-            const message = typeof event.data === "string" ? event.data.trim() : "";
-            logMessage(`[RAW] Version check response: "${message}"`, "raw");
+          const message =
+            typeof event.data === "string" ? event.data.trim() : "";
+          logMessage(`[RAW] Version check response: "${message}"`, "raw");
 
-            if (message.startsWith("Version=")) {
-                const parts = message.split("=");
-                if (parts.length === 2) {
-                    const version = parts[1];
-                    versionLabel.textContent = `Version: ${version}`;
-                    logMessage(`Successfully retrieved version: ${version}`, "success");
-                } else {
-                    versionLabel.textContent = "Version: Invalid format";
-                    logMessage(`Received malformed version string: ${message}`, "error");
-                }
+          if (message.startsWith("Version=")) {
+            const parts = message.split("=");
+            if (parts.length === 2) {
+              const version = parts[1];
+              versionLabel.textContent = `Version: ${version}`;
+              logMessage(
+                `Successfully retrieved version: ${version}`,
+                "success"
+              );
             } else {
-                 logMessage(`Unexpected response during version check: ${message}`, "info");
+              versionLabel.textContent = "Version: Invalid format";
+              logMessage(
+                `Received malformed version string: ${message}`,
+                "error"
+              );
             }
-            versionSocket.close();
+          } else {
+            logMessage(
+              `Unexpected response during version check: ${message}`,
+              "info"
+            );
+          }
+          versionSocket.close();
         };
 
         versionSocket.onerror = (error) => {
-            logMessage("Failed to connect for version check. Is the device online?", "error");
-            versionLabel.textContent = "Version: Connection Failed";
-            console.error("Version Check WebSocket Error:", error);
+          logMessage(
+            "Failed to connect for version check. Is the device online?",
+            "error"
+          );
+          versionLabel.textContent = "Version: Connection Failed";
+          console.error("Version Check WebSocket Error:", error);
         };
 
         versionSocket.onclose = () => {
-            logMessage("Connection for version check closed.", "info");
+          logMessage("Connection for version check closed.", "info");
         };
       });
     </script>

@@ -30,7 +30,7 @@
 #include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
-String Version = "0.2.0";
+String Version = "0.2.4";
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
 // userInfo
@@ -653,7 +653,6 @@ int dimShortNum = 0;
 MyBle myBle(false); // i need to use this object in other files
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
-
 void Reg_Uptime_Task(void *parameters)
 {
   if (!xrtLcns->openLog())
@@ -958,14 +957,12 @@ void updateTask(void *parameters)
 {
   UDP_buffer = (uint8_t *)malloc(OTA_BUFFER_SIZE);
   UDP_bufferBussy = false;
-
   Update.begin(UDP_len);
   float progressPercent = 0;
   float lastProgressPercent = 0;
   uint32_t progress;
   uint64_t start = millis();
   uint TIME_OUT = 15000;
-
   for (;;)
   {
     while (UDP_dataReady == false)
@@ -3256,63 +3253,63 @@ void setup()
         "MeasurmentTask",
         2300, // ✔️
         NULL,
-        2,
+        1,
         &MeasurmentTaskHandle);
     xTaskCreate(
         DimerTask,
         "DimerTask",
         2.5 * 1024, // ✔️
         NULL,
-        3,
+        2,
         &DimerTask_Handle);
     xTaskCreate(
         adcReadingTask,
         "ADC READING TASK",
         1.5 * 1024, // ✔️
         NULL,
-        2,
+        1,
         &adcReadingTask_Handle);
     xTaskCreate(
         led_indicator_task,
         "led_indicator_task",
         1.2 * 1024, // ✔️
         NULL,
-        2,
+        1,
         &led_indicator_task_Handle);
     xTaskCreate(
         OVR_CRNT_PRTCT_TASK,
         "OVR_CRNT_PRTCT_TASK",
         1.5 * 1024, // ✔️
         NULL,
-        2,
+        1,
         &OVR_CRNT_PRTCT_TASK_Handle);
     xTaskCreate(
         I2C_SENSORS_TASK, //-------------STACK optimized up to here
         "I2C_SENSORS_TASK",
         3 * 1024, // ❌
         NULL,
-        2,
+        1,
         &I2C_SENSORS_TASK_Handle);
     xTaskCreate(
         BatteryTask,
         "BatteryTask",
         1.5 * 1024, // ✔️
         NULL,
-        2,
+        1,
         &BatteryTask_Handle);
     xTaskCreate(
         ConditionsTask,
         "ConditionsTask",
         5 * 1024, // ❌
         NULL,
-        2,
+        1,
         &ConditionsTask_Handle);
     xTaskCreate(
         Reg_Uptime_Task,
         "regControlTask",
-        3 * 1024, // ✔️
+        4 * 1024, // ✔️
         NULL,
-        3,
+        1,
         &Reg_Uptime_Task_Handle);
     // CPU
     // xTaskCreate(
