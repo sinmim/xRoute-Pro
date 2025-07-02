@@ -701,7 +701,7 @@ void Reg_Uptime_Task(void *parameters)
         String str = "XrouteAlarm=No active license! Please check your license status!!\n";
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
-        vTaskDelay(pdTICKS_TO_MS(1000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
       }
     }
     vTaskDelay(pdMS_TO_TICKS(1000)); // for 10 min it should be 1000ms
@@ -969,7 +969,7 @@ void updateTask(void *parameters)
     {
       if (millis() - start > TIME_OUT)
         break;
-      vTaskDelay(pdTICKS_TO_MS(10));
+      vTaskDelay(pdMS_TO_TICKS(10));
     }
     if (millis() - start > TIME_OUT)
     {
@@ -1005,7 +1005,7 @@ void updateTask(void *parameters)
       {
         ws.sendToThisClient("UPD_COMPLETED\n");
         Serial.println("UPD_COMPLETED\n");
-        vTaskDelay(pdTICKS_TO_MS(3000));
+        vTaskDelay(pdMS_TO_TICKS(3000));
         ESP.restart();
       }
       else
@@ -1406,7 +1406,7 @@ void takeConditionFileTask(void *pvParameters)
       }
       break;
     }
-    vTaskDelay(pdTICKS_TO_MS(1));
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
   vTaskDelete(NULL);
 }
@@ -1437,7 +1437,7 @@ void takeUiConfigFileTask(void *pvParameters)
       myBle.stopDirectRead();
       break;
     }
-    vTaskDelay(pdTICKS_TO_MS(1));
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
   vTaskDelete(NULL);
 }
@@ -2957,7 +2957,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     {
       Serial.println("[PARSING ERROR] : " + command + " : " + String(RES));
     }
-    vTaskDelay(pdTICKS_TO_MS(10));
+    vTaskDelay(pdMS_TO_TICKS(10));
     MeasurmentTaskPause = false;
   }
   // if there is missing '\n' print error
