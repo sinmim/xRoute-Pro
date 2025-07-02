@@ -74,8 +74,10 @@ public:
 
   void printWiFiDetails();
   AsyncWebSocketClient *getClient() { return LastClient; }
+  void setMaxCmdPkgSize(int size) { maxCmdPkgSize = size; }
 
 private:
+  int maxCmdPkgSize=128;
   SemaphoreHandle_t _sendNotify;
   static wifi_mode_t currentMode;
   std::atomic<size_t> _clientCount{0};

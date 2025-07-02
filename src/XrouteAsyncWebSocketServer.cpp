@@ -365,7 +365,7 @@ void XrouteAsyncWebSocketServer::registerEvents()
         {
           if (updatingFlg)
           {
-            if (updatingClient != nullptr && updatingClient == client)//preventing other cliants to curropt incomming update data
+            if (updatingClient != nullptr && updatingClient == client) // preventing other cliants to curropt incomming update data
             {
               _updateCb((const char *)data, len);
               updateProgress += len;
@@ -377,6 +377,13 @@ void XrouteAsyncWebSocketServer::registerEvents()
               return;
             }
           }
+          // command validation
+          if (len > maxCmdPkgSize)
+          {
+            Serial.println("Dropping : TOO BIG FOR COMMAND BUFFER!");
+            return;
+          }
+
           auto *info = reinterpret_cast<AwsFrameInfo *>(arg);
           // only consider text / continuation frames
           if ((info->opcode == WS_TEXT || info->opcode == WS_CONTINUATION) && data && len)
@@ -475,8 +482,8 @@ void XrouteAsyncWebSocketServer::begin(wifi_mode_t mode)
   if (_sendNotify == nullptr)
     _sendNotify = xSemaphoreCreateBinary();
 
-  xTaskCreate([](void *arg)
-              {
+  xTaskCreatePinnedToCore([](void *arg)
+                          {
     auto self = (XrouteAsyncWebSocketServer*)arg;
     for (;;)
     {
@@ -514,7 +521,7 @@ void XrouteAsyncWebSocketServer::begin(wifi_mode_t mode)
                 }
             }
         }
-    } }, "WS_SEND_TASK", 4096, this, 1, nullptr);
+    } }, "WS_SEND_TASK", 4096, this, 3, nullptr, 1);
 }
 
 wifi_mode_t XrouteAsyncWebSocketServer::switchMode(wifi_mode_t mode)

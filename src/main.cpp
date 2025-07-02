@@ -3218,10 +3218,11 @@ void setup()
 
     wsCmdQueueMutex = xSemaphoreCreateMutex();
     xTaskCreate(wsCmdQueTask, "wsCmdQueTask", 4 * 1024, NULL, 1, NULL);
+    ws.setMaxCmdPkgSize(128);
     ws.onCommand([](const char *msg)
                  {
-                  uint32_t time=micros();
-                   if (wsCmdQueue.size() < 8)  // Optional limit to prevent unbounded growth
+                   // uint32_t time=micros();
+                   if (wsCmdQueue.size() < 8) // Optional limit to prevent unbounded growth
                    {
                      wsCmdQueue.push_back(String(msg));
                    }
@@ -3229,7 +3230,8 @@ void setup()
                    {
                      Serial.println("⚠ Command queue full, dropping incoming message");
                    }
-                   Serial.println("time="+String(micros()-time)); });
+                   // Serial.println("time="+String(micros()-time));
+                 });
 
     ws.onUpdate([](const char *msg, size_t length)
                 {
@@ -3238,10 +3240,12 @@ void setup()
                   {
                     vTaskDelay(pdMS_TO_TICKS(1));
                   }
-                  UDP_bufferBussy=true;
-                  UDP_buffLen=length;                  
-                  memcpy(UDP_buffer,msg,length);
-                  UDP_dataReady=true; });
+                  UDP_bufferBussy = true;
+                  UDP_buffLen = length;
+                  memcpy(UDP_buffer, msg, length);
+                  UDP_dataReady = true;
+                  //
+                });
     ws.begin(mode);
   }
 
