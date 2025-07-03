@@ -397,7 +397,9 @@ void XrouteAsyncWebSocketServer::registerEvents()
                 // if _cmdCb is "ping" answer pong
                 if (strcmp(cmd, "ping") == 0)
                 {
-                  client->text("pong");
+                  // ❗WARNING: Never call client->text() directly here. Always use sendToClient()
+                  // because this runs in core system thread, not a FreeRTOS task.
+                  sendToClient("pong", client);
                   Serial.println("pong=>socket");
                   return;
                 }

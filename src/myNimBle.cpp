@@ -938,7 +938,7 @@ void MyBle::authenticate(NimBLEConnInfo &connInfo, uint8_t *pData, size_t length
         }
         else
         {
-            Serial.printf("Unknown command: %s\n", command.c_str());
+            Serial.printf("[NimBle]Unknown command: %s\n", command.c_str());
         }
     }
 }

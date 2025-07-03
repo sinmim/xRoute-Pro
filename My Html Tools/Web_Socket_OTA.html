@@ -4,214 +4,304 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ESP32 OTA Firmware Uploader</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
+      :root {
+        --bg-color: #121212;
+        --surface-color: #1e1e1e;
+        --primary-text-color: #e0e0e0;
+        --secondary-text-color: #a0a0a0;
+        --border-color: #3a3a3a;
+        --accent-color: #3ea6ff;
+        --accent-hover-color: #66baff;
+        --success-color: #4caf50;
+        --error-color: #f44336;
+        --warning-color: #ff9800;
+      }
+
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Helvetica, Arial, sans-serif;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Helvetica, Arial, sans-serif;
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh;
+        min-height: 100vh;
         margin: 0;
-        background-color: #f0f2f5;
-        color: #333;
+        padding: 1rem 0;
+        background-color: var(--bg-color);
+        color: var(--primary-text-color);
       }
+
       .container {
-        background: #fff;
-        padding: 2rem;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        background: var(--surface-color);
+        padding: 2.5rem;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         text-align: center;
         width: 90%;
-        max-width: 500px;
+        max-width: 550px;
+        border: 1px solid var(--border-color);
       }
+
       h1 {
         margin-top: 0;
-        color: #1a73e8;
+        margin-bottom: 2rem;
+        color: var(--primary-text-color);
+        font-weight: 600;
       }
+
+      /* --- Configuration Section --- */
       #config-section {
-        border: 1px solid #ccc;
+        border: 1px solid var(--border-color);
         border-radius: 8px;
-        padding: 1rem;
+        padding: 1.5rem;
         margin-bottom: 1.5rem;
         text-align: left;
       }
+
       #config-section legend {
         padding: 0 0.5rem;
-        font-weight: bold;
-        color: #5f6368;
+        font-weight: 500;
+        color: var(--secondary-text-color);
       }
+
       .config-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin: 0.5rem 0;
+        margin: 1rem 0;
       }
-      /* Style for the checkbox to align it nicely */
+
+      .config-item label {
+        color: var(--secondary-text-color);
+        font-size: 0.9rem;
+      }
+
+      .config-item input[type="text"] {
+        padding: 0.6rem 0.8rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background-color: var(--bg-color);
+        color: var(--primary-text-color);
+        width: 60%;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+
+      .config-item input[type="text"]:focus {
+        outline: none;
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 3px rgba(62, 166, 255, 0.2);
+      }
+
       .config-item.checkbox-item {
         justify-content: flex-start;
         gap: 10px;
       }
-      .config-item label {
-        margin-right: 1rem;
-      }
-      .config-item input[type="text"] {
-        padding: 0.4rem;
-        border-radius: 4px;
-        border: 1px solid #ccc;
-        width: 60%;
-      }
+
       .config-item input[type="checkbox"] {
         width: 1.3em;
         height: 1.3em;
         cursor: pointer;
+        accent-color: var(--accent-color);
       }
+
       .version-display {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-top: 1rem;
-      }
-      #version-label {
-        font-weight: bold;
-        color: #333;
-      }
-      #getVersion-btn {
-        background-color: #5f6368;
-        color: white;
-        border: none;
-        padding: 0.6rem 1rem;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        transition: background-color 0.3s;
-      }
-      #getVersion-btn:hover {
-        background-color: #3c4043;
-      }
-      #drop-zone {
-        border: 2px dashed #ccc;
-        border-radius: 8px;
-        padding: 3rem;
-        height: 10vh;
-        cursor: pointer;
-        transition: border-color 0.3s, background-color 0.3s;
-      }
-      #drop-zone.drag-over {
-        border-color: #1a73e8;
-        background-color: #e8f0fe;
-      }
-      #file-input {
-        display: none;
-      }
-      #file-info {
         margin-top: 1.5rem;
-        font-size: 0.9rem;
-        color: #5f6368;
       }
+
+      #version-label {
+        font-weight: 500;
+        color: var(--primary-text-color);
+      }
+
+      /* --- Buttons --- */
+      .btn {
+        border: none;
+        padding: 0.7rem 1.2rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s ease-in-out;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      .btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      }
+
+      .btn:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: none;
+      }
+
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background-color: var(--accent-color);
+        color: #000;
+      }
+      .btn-primary:hover:not(:disabled) {
+        background-color: var(--accent-hover-color);
+      }
+
+      .btn-secondary {
+        background-color: #3a3a3a;
+        color: var(--primary-text-color);
+      }
+      .btn-secondary:hover:not(:disabled) {
+        background-color: #4a4a4a;
+      }
+
+      .btn-danger {
+        background-color: var(--error-color);
+        color: white;
+      }
+      .btn-danger:hover:not(:disabled) {
+        background-color: #e53935;
+      }
+
       .button-container {
         display: flex;
         justify-content: center;
         gap: 1rem;
-        margin-top: 1rem;
+        margin-top: 1.5rem;
       }
-      #upload-btn,
-      #interrupt-btn {
-        color: white;
-        border: none;
-        padding: 0.8rem 1.5rem;
-        border-radius: 4px;
+
+      /* --- Drop Zone --- */
+      #drop-zone {
+        border: 2px dashed var(--border-color);
+        border-radius: 8px;
+        padding: 2rem;
+        margin-top: 1.5rem;
         cursor: pointer;
-        font-size: 1rem;
-        transition: background-color 0.3s, opacity 0.3s;
+        transition: border-color 0.3s, background-color 0.3s;
+        background-color: rgba(0, 0, 0, 0.1);
       }
-      #upload-btn {
-        background-color: #1a73e8;
-        opacity: 0.5;
-        pointer-events: none;
+
+      #drop-zone.drag-over {
+        border-color: var(--accent-color);
+        background-color: rgba(62, 166, 255, 0.1);
       }
-      #upload-btn:not(:disabled) {
-        opacity: 1;
-        pointer-events: auto;
+
+      #drop-zone p {
+        margin: 0 0 1rem 0;
+        color: var(--secondary-text-color);
       }
-      #upload-btn:hover:not(:disabled) {
-        background-color: #185abc;
+
+      #file-input {
+        display: none;
       }
-      #interrupt-btn {
-        background-color: #e57373;
-        opacity: 0.5;
-        pointer-events: none;
+
+      #file-info {
+        margin-top: 1rem;
+        font-size: 0.9rem;
+        color: var(--secondary-text-color);
+        min-height: 1.2em;
       }
-      #interrupt-btn:not(:disabled) {
-        opacity: 1;
-        pointer-events: auto;
-      }
-      #interrupt-btn:hover:not(:disabled) {
-        background-color: #d32f2f;
-      }
+
+      /* --- Progress Bars --- */
       .progress-wrapper {
         margin-top: 1.5rem;
         display: none;
       }
-      .progress-bar {
-        width: 100%;
-        height: 12px;
-        accent-color: #1a73e8;
-        border-radius: 6px;
-      }
+
       .progress-label {
         display: block;
         margin-bottom: 0.5rem;
         font-size: 0.9rem;
-        color: #5f6368;
+        color: var(--secondary-text-color);
         text-align: left;
       }
-      .progress-percent {
-        font-weight: bold;
-        margin-left: 10px;
-        color: #1a73e8;
+
+      progress.progress-bar {
+        width: 100%;
+        height: 10px;
+        border-radius: 5px;
+        border: none;
+        -webkit-appearance: none;
+        appearance: none;
       }
+
+      progress.progress-bar::-webkit-progress-bar {
+        background-color: #333;
+        border-radius: 5px;
+      }
+
+      progress.progress-bar::-webkit-progress-value {
+        background-color: var(--accent-color);
+        border-radius: 5px;
+        transition: background-color 0.3s;
+      }
+
+      .progress-percent {
+        font-weight: 500;
+        margin-left: 10px;
+        color: var(--primary-text-color);
+      }
+
+      /* --- Log Area --- */
       #log-area {
         margin-top: 1.5rem;
-        background-color: #f8f9fa;
-        border: 1px solid #e0e0e0;
-        border-radius: 4px;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
         padding: 1rem;
-        height: 10vh;
+        height: 150px;
         overflow-y: auto;
         text-align: left;
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
           Courier, monospace;
         font-size: 0.85rem;
-        line-height: 1.5;
-        color: #202124;
+        line-height: 1.6;
+        color: var(--primary-text-color);
       }
-      .log-entry {
-        white-space: pre-wrap;
-        word-break: break-all;
+
+      #log-area-title {
+        margin-bottom: 0.5rem;
+        text-align: left;
+        font-weight: 500;
+        color: var(--secondary-text-color);
       }
+
       .log-entry.error {
-        color: #d93025;
+        color: var(--error-color);
       }
       .log-entry.success {
-        color: #1e8e3e;
+        color: var(--success-color);
       }
       .log-entry.info {
-        color: #1a73e8;
+        color: var(--accent-color);
       }
       .log-entry.raw {
-        color: #5f6368;
+        color: #888;
         font-style: italic;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <div style="height: 10px"></div>
+      <h1>ESP32 OTA Uploader</h1>
 
-      <h1>xRoute-Pro OTA</h1>
       <fieldset id="config-section">
-        <legend>Connection Settings</legend>
+        <legend>Connection</legend>
         <div class="config-item">
           <label for="host-input">Hostname:</label>
           <input type="text" id="host-input" value="xroute.local" />
@@ -230,17 +320,26 @@
           />
         </div>
         <div class="version-display">
-          <button id="getVersion-btn">Get Version</button>
+          <button id="getVersion-btn" class="btn btn-secondary">
+            Get Version
+          </button>
           <span id="version-label">Version: N/A</span>
         </div>
       </fieldset>
-      <button id="reset-btn">Restart ESP32</button>
+
+      <button
+        id="reset-btn"
+        class="btn btn-secondary"
+        style="width: 100%; margin-bottom: 1.5rem"
+      >
+        ⟳ Restart ESP32
+      </button>
 
       <div id="drop-zone">
-        <p>Drag & Drop your `.bin` file here or</p>
+        <p>Drag & Drop firmware.bin or</p>
         <button
           onclick="event.stopPropagation(); document.getElementById('file-input').click();"
-          class="select-btn"
+          class="btn btn-secondary"
         >
           Select File
         </button>
@@ -250,13 +349,17 @@
       <div id="file-info">No file selected.</div>
 
       <div class="button-container">
-        <button id="upload-btn" disabled>Upload Firmware</button>
-        <button id="interrupt-btn" disabled>Hold to Interrupt</button>
+        <button id="upload-btn" class="btn btn-primary" disabled>
+          🚀 Upload
+        </button>
+        <button id="interrupt-btn" class="btn btn-danger" disabled>
+          🛑 Interrupt
+        </button>
       </div>
 
       <div id="upload-progress-container" class="progress-wrapper">
         <label class="progress-label" for="upload-progress-bar"
-          >Browser Upload Progress</label
+          >Browser Upload</label
         >
         <div style="display: flex; align-items: center">
           <progress
@@ -271,7 +374,7 @@
 
       <div id="firmware-progress-container" class="progress-wrapper">
         <label class="progress-label" for="firmware-progress-bar"
-          >ESP32 Firmware Progress</label
+          >ESP32 Flash</label
         >
         <div style="display: flex; align-items: center">
           <progress
@@ -286,21 +389,25 @@
         </div>
       </div>
 
-      <h3>Logs</h3>
+      <h3 id="log-area-title" style="margin-top: 2rem">Logs</h3>
       <div id="log-area"></div>
     </div>
 
     <script>
+      // All element selectors
       const hostInput = document.getElementById("host-input");
       const portInput = document.getElementById("port-input");
+      const syncUploadCheckbox = document.getElementById(
+        "sync-upload-checkbox"
+      );
+      const getVersionBtn = document.getElementById("getVersion-btn");
+      const versionLabel = document.getElementById("version-label");
+      const resetBtn = document.getElementById("reset-btn");
       const dropZone = document.getElementById("drop-zone");
       const fileInput = document.getElementById("file-input");
       const fileInfo = document.getElementById("file-info");
       const uploadBtn = document.getElementById("upload-btn");
       const interruptBtn = document.getElementById("interrupt-btn");
-      const logArea = document.getElementById("log-area");
-      const getVersionBtn = document.getElementById("getVersion-btn");
-      const versionLabel = document.getElementById("version-label");
       const uploadProgressContainer = document.getElementById(
         "upload-progress-container"
       );
@@ -317,26 +424,32 @@
       const firmwareProgressPercent = document.getElementById(
         "firmware-progress-percent"
       );
-      // NEW: Reference to the sync checkbox
-      const syncUploadCheckbox = document.getElementById(
-        "sync-upload-checkbox"
-      );
+      const logArea = document.getElementById("log-area");
 
+      // State variables
       let firmwareFile = null;
       let isInterrupted = false;
       let uploadSocket = null;
 
+      // --- Utility Functions ---
+
       function logMessage(message, type = "info") {
         const entry = document.createElement("div");
         entry.className = `log-entry ${type}`;
-        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        // Sanitize message to prevent HTML injection
+        const timestamp = `[${new Date().toLocaleTimeString()}] `;
+        entry.textContent = timestamp + message;
         logArea.appendChild(entry);
         logArea.scrollTop = logArea.scrollHeight;
       }
 
       function setProgressBarsColor(color) {
-        uploadProgressBar.style.accentColor = color;
-        firmwareProgressBar.style.accentColor = color;
+        const style = document.createElement("style");
+        style.innerHTML = `
+                progress.progress-bar::-webkit-progress-value { background-color: ${color}; }
+                progress.progress-bar::-moz-progress-bar { background-color: ${color}; }
+            `;
+        document.head.appendChild(style);
       }
 
       function handleFileSelect(file) {
@@ -344,74 +457,128 @@
           firmwareFile = file;
           const fileSize = (firmwareFile.size / 1024).toFixed(2);
           fileInfo.textContent = `File: ${firmwareFile.name} (${fileSize} KB)`;
+          fileInfo.style.color = "var(--success-color)";
           uploadBtn.disabled = false;
           logMessage(`File selected: ${firmwareFile.name}`, "success");
         } else {
           firmwareFile = null;
           fileInfo.textContent = "Please select a valid .bin file.";
+          fileInfo.style.color = "var(--error-color)";
           uploadBtn.disabled = true;
-          logMessage("Invalid file type. Please select a .bin file.", "error");
+          if (file) {
+            // only log if a file was actually selected
+            logMessage(
+              "Invalid file type. Please select a .bin file.",
+              "error"
+            );
+          }
         }
       }
 
-      fileInput.addEventListener("change", (e) =>
-        handleFileSelect(e.target.files[0])
-      );
-      ["dragenter", "dragover", "dragleave", "drop"].forEach((eName) =>
-        dropZone.addEventListener(
-          eName,
-          (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          },
-          !1
-        )
-      );
-      dropZone.addEventListener("dragover", () =>
-        dropZone.classList.add("drag-over")
-      );
-      ["dragleave", "drop"].forEach((eName) =>
-        dropZone.addEventListener(eName, () =>
-          dropZone.classList.remove("drag-over")
-        )
-      );
-      dropZone.addEventListener("drop", (e) =>
-        handleFileSelect(e.dataTransfer.files[0])
-      );
-      dropZone.addEventListener("click", () => fileInput.click());
+      // --- WebSocket Functions ---
 
-      interruptBtn.addEventListener("mousedown", () => {
-        if (uploadSocket && uploadSocket.readyState === 1) {
-          isInterrupted = true;
-          logMessage("Upload paused by user.", "error");
+      function sendResetCommand() {
+        const host = hostInput.value.trim();
+        const port = portInput.value.trim();
+        if (!host || !port) {
+          logMessage("Hostname and Port must be provided.", "error");
+          return;
         }
-      });
-      interruptBtn.addEventListener("mouseup", () => {
-        if (isInterrupted) {
-          isInterrupted = false;
-          logMessage("Upload resumed by user.", "info");
-        }
-      });
-      interruptBtn.addEventListener("mouseleave", () => {
-        if (isInterrupted) {
-          isInterrupted = false;
-          logMessage("Upload resumed as mouse left button.", "info");
-        }
-      });
+        const wsUrl = `ws://${host}:${port}/`;
+        logMessage(`Sending restart command to ${wsUrl}...`, "info");
 
-      uploadBtn.addEventListener("click", () => {
+        const resetSocket = new WebSocket(wsUrl);
+
+        resetSocket.onopen = () => {
+          logMessage("Connection for restart established.", "success");
+          const command = "SET_DEV_RESET_1\n";
+          resetSocket.send(command);
+          // The ESP will restart, causing the connection to close abruptly.
+          // We can close it from the client side as well.
+          resetSocket.close();
+        };
+
+        resetSocket.onerror = (error) => {
+          logMessage(
+            "Failed to connect for restart. Is the device online?",
+            "error"
+          );
+          console.error("Restart WebSocket Error:", error);
+        };
+
+        resetSocket.onclose = () => {
+          logMessage(
+            "Connection for restart closed. Device should be restarting.",
+            "info"
+          );
+        };
+      }
+
+      function getVersion() {
+        const host = hostInput.value.trim();
+        const port = portInput.value.trim();
+        if (!host || !port) {
+          logMessage("Hostname and Port must be provided.", "error");
+          return;
+        }
+        const wsUrl = `ws://${host}:${port}/`;
+        logMessage(`Requesting version from ${wsUrl}...`, "info");
+        versionLabel.textContent = "Version: Fetching...";
+
+        const versionSocket = new WebSocket(wsUrl);
+        let versionReceived = false; // Flag to track if we got the version
+
+        versionSocket.onopen = () => {
+          logMessage("Connection for version check established.", "success");
+          versionSocket.send("GET_VER_1\n");
+        };
+
+        versionSocket.onmessage = (event) => {
+          versionReceived = true; // Set flag to true on success
+          const message =
+            typeof event.data === "string" ? event.data.trim() : "";
+          logMessage(`[RAW] Version response: "${message}"`, "raw");
+
+          if (message.startsWith("Version=")) {
+            const version = message.split("=")[1];
+            versionLabel.textContent = `Version: ${version}`;
+            logMessage(`Successfully retrieved version: ${version}`, "success");
+          } else {
+            versionLabel.textContent = "Version: Invalid";
+            logMessage(`Unexpected version response: ${message}`, "error");
+          }
+          // Close the socket after a short delay to ensure clean closure
+          setTimeout(() => versionSocket.close(), 200);
+        };
+
+        versionSocket.onerror = (error) => {
+          // Only show error if we haven't already received the version
+          if (!versionReceived) {
+            logMessage("Failed to connect for version check.", "error");
+            versionLabel.textContent = "Version: Failed";
+            console.error("Version Check WebSocket Error:", error);
+          }
+        };
+
+        versionSocket.onclose = () => {
+          logMessage("Connection for version check closed.", "info");
+        };
+      }
+
+      function startUpload() {
         if (!firmwareFile) {
           logMessage("No file to upload.", "error");
           return;
         }
 
+        // Reset UI
         uploadProgressContainer.style.display = "block";
         uploadProgressBar.value = 0;
         uploadProgressPercent.textContent = "0%";
         firmwareProgressContainer.style.display = "block";
         firmwareProgressBar.value = 0;
         firmwareProgressPercent.textContent = "0%";
-        setProgressBarsColor("#1a73e8");
+        setProgressBarsColor("var(--accent-color)");
 
         uploadBtn.disabled = true;
         interruptBtn.disabled = false;
@@ -421,24 +588,20 @@
         const port = portInput.value.trim();
         const wsUrl = `ws://${host}:${port}/`;
 
-        logMessage(`Attempting to connect to ${wsUrl} for upload...`, "info");
+        logMessage(`Connecting to ${wsUrl} for upload...`, "info");
         uploadSocket = new WebSocket(wsUrl);
         uploadSocket.binaryType = "arraybuffer";
 
         uploadSocket.onopen = () => {
-          logMessage("WebSocket connection established for upload.", "success");
+          logMessage("WebSocket connection established.", "success");
           const startCommand = `SET_START_UPDATE_1=${firmwareFile.size}\n`;
-          logMessage(`Sending command: ${startCommand.trim()}`, "info");
           uploadSocket.send(startCommand);
-          //dedlay 1 sec
 
+          // Small delay to allow ESP32 to process the command
           setTimeout(() => {
             const reader = new FileReader();
             reader.onload = (e) => {
-              logMessage(
-                `File read successfully. Starting chunked upload...`,
-                "info"
-              );
+              logMessage(`File read. Starting chunked upload...`, "info");
               sendNextChunk(e.target.result, 0);
             };
             reader.onerror = () => {
@@ -446,16 +609,17 @@
               uploadSocket.close();
             };
             reader.readAsArrayBuffer(firmwareFile);
-          }, 1000);
+          }, 500);
         };
-
-        const CHUNK_SIZE = 8192;
-        const UPLOAD_DELAY_MS = 100; //20;
-        const SYNC_WAIT_MS = 150; // How long to wait before re-checking sync
+        const FIRMWAIRE_SIZE = firmwareFile.size;
+        const LEADING_PERCENT = 100;
+        const CHUNK_SIZE = (FIRMWAIRE_SIZE * LEADING_PERCENT) / 100;
+        const UPLOAD_DELAY_MS = 100;
+        const SYNC_WAIT_MS = 0;
 
         function sendNextChunk(fileData, offset) {
           if (!uploadSocket || uploadSocket.readyState !== 1) {
-            logMessage("Cannot send chunk, socket is not open.", "error");
+            logMessage("Cannot send chunk, socket not open.", "error");
             return;
           }
           if (isInterrupted) {
@@ -467,18 +631,12 @@
             return;
           }
 
-          // *** NEW SYNC LOGIC ***
           if (syncUploadCheckbox.checked) {
             const browserProgress = uploadProgressBar.value;
             const firmwareProgress = firmwareProgressBar.value;
-            if (browserProgress - firmwareProgress > 15) {
-              logMessage(
-                `Sync: Browser is ahead. Pausing to let ESP32 catch up...`,
-                "info"
-              );
-              // Wait for a moment, then try to send the same chunk again.
+            if (browserProgress - firmwareProgress > LEADING_PERCENT) {
               setTimeout(() => sendNextChunk(fileData, offset), SYNC_WAIT_MS);
-              return; // Important: Stop here and don't send the chunk yet.
+              return;
             }
           }
 
@@ -497,135 +655,108 @@
         }
 
         uploadSocket.onmessage = (event) => {
-          const rawMessage = event.data;
-          logMessage(`[RAW] Received: "${rawMessage}"`, "raw");
-          const message =
-            typeof rawMessage === "string" ? rawMessage.trim() : rawMessage;
+          const message = String(event.data).trim();
+          logMessage(`[RAW] Received: "${message}"`, "raw");
 
           if (message.startsWith("UPD_PRC_1=")) {
-            const parts = message.split("=");
-            if (parts.length === 2) {
-              const percent = parseFloat(parts[1]);
-              if (!isNaN(percent)) {
-                firmwareProgressBar.value = percent;
-                firmwareProgressPercent.textContent = `${Math.floor(percent)}%`;
-              }
+            const percent = parseFloat(message.split("=")[1]);
+            if (!isNaN(percent)) {
+              firmwareProgressBar.value = percent;
+              firmwareProgressPercent.textContent = `${Math.floor(percent)}%`;
             }
           } else if (message === "UPD_COMPLETED") {
-            logMessage(
-              "Interpreted as: Update completed successfully!",
-              "success"
-            );
-            uploadProgressBar.value = 100;
-            uploadProgressPercent.textContent = "100%";
+            logMessage("Update completed successfully!", "success");
             firmwareProgressBar.value = 100;
             firmwareProgressPercent.textContent = "100%";
-            setProgressBarsColor("#1e8e3e");
+            setProgressBarsColor("var(--success-color)");
             uploadSocket.close();
           } else if (message === "UPD_FAILED") {
-            logMessage("Interpreted as: Update FAILED.", "error");
-            setProgressBarsColor("#d93025");
+            logMessage("Update FAILED on ESP32.", "error");
+            setProgressBarsColor("var(--error-color)");
             uploadSocket.close();
-          } else {
-            logMessage(
-              `Received unexpected message during upload: ${message}`,
-              "info"
-            );
           }
         };
 
         uploadSocket.onerror = (error) => {
-          logMessage("WebSocket error occurred. Check the console.", "error");
-          setProgressBarsColor("#d93025");
+          logMessage("WebSocket error occurred.", "error");
+          setProgressBarsColor("var(--error-color)");
           console.error("WebSocket Error:", error);
         };
 
-        uploadSocket.onclose = (event) => {
-          let reason = event.wasClean
-            ? "Normal closure"
-            : "Connection closed abnormally";
-          logMessage(`WebSocket connection closed. Reason: ${reason}`, "info");
-
-          if (firmwareProgressBar.value < 100) {
-            if (firmwareProgressBar.style.accentColor !== "rgb(217, 48, 37)") {
-              logMessage(`Connection closed prematurely.`, "error");
-              setProgressBarsColor("#d93025");
-            }
-          }
-
+        uploadSocket.onclose = () => {
+          logMessage("Upload connection closed.", "info");
           uploadBtn.disabled = false;
           interruptBtn.disabled = true;
           isInterrupted = false;
         };
+      }
+
+      // --- Event Listeners ---
+
+      // File selection
+      fileInput.addEventListener("change", (e) =>
+        handleFileSelect(e.target.files[0])
+      );
+      dropZone.addEventListener("click", () => fileInput.click());
+
+      // Drag and drop
+      ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(
+          eventName,
+          (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          },
+          false
+        );
       });
+      dropZone.addEventListener("dragenter", () =>
+        dropZone.classList.add("drag-over")
+      );
+      dropZone.addEventListener("dragover", () =>
+        dropZone.classList.add("drag-over")
+      );
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, () =>
+          dropZone.classList.remove("drag-over")
+        );
+      });
+      dropZone.addEventListener("drop", (e) =>
+        handleFileSelect(e.dataTransfer.files[0])
+      );
 
-      getVersionBtn.addEventListener("click", () => {
-        const host = hostInput.value.trim();
-        const port = portInput.value.trim();
+      // Buttons
+      resetBtn.addEventListener("click", sendResetCommand);
+      getVersionBtn.addEventListener("click", getVersion);
+      uploadBtn.addEventListener("click", startUpload);
 
-        if (!host || !port) {
-          logMessage(
-            "Hostname and Port must be provided to get the version.",
-            "error"
-          );
-          return;
+      // Interrupt button logic (hold to pause)
+      interruptBtn.addEventListener("mousedown", () => {
+        if (uploadSocket && uploadSocket.readyState === 1) {
+          isInterrupted = true;
+          logMessage("Upload paused by user.", "warning");
         }
-
-        const wsUrl = `ws://${host}:${port}/`;
-        logMessage(`Requesting version from ${wsUrl}...`, "info");
-        versionLabel.textContent = "Version: Fetching...";
-
-        const versionSocket = new WebSocket(wsUrl);
-
-        versionSocket.onopen = () => {
-          logMessage("Connection for version check established.", "success");
-          const command = "GET_VER_1\n";
-          logMessage(`Sending command: ${command.trim()}`, "info");
-          versionSocket.send(command);
-        };
-
-        versionSocket.onmessage = (event) => {
-          const message =
-            typeof event.data === "string" ? event.data.trim() : "";
-          logMessage(`[RAW] Version check response: "${message}"`, "raw");
-
-          if (message.startsWith("Version=")) {
-            const parts = message.split("=");
-            if (parts.length === 2) {
-              const version = parts[1];
-              versionLabel.textContent = `Version: ${version}`;
-              logMessage(
-                `Successfully retrieved version: ${version}`,
-                "success"
-              );
-            } else {
-              versionLabel.textContent = "Version: Invalid format";
-              logMessage(
-                `Received malformed version string: ${message}`,
-                "error"
-              );
-            }
-          } else {
-            logMessage(
-              `Unexpected response during version check: ${message}`,
-              "info"
-            );
-          }
-          versionSocket.close();
-        };
-
-        versionSocket.onerror = (error) => {
-          logMessage(
-            "Failed to connect for version check. Is the device online?",
-            "error"
-          );
-          versionLabel.textContent = "Version: Connection Failed";
-          console.error("Version Check WebSocket Error:", error);
-        };
-
-        versionSocket.onclose = () => {
-          logMessage("Connection for version check closed.", "info");
-        };
+      });
+      interruptBtn.addEventListener("mouseup", () => {
+        if (isInterrupted) {
+          isInterrupted = false;
+          logMessage("Upload resumed.", "info");
+        }
+      });
+      interruptBtn.addEventListener("mouseleave", () => {
+        if (isInterrupted) {
+          isInterrupted = false;
+          logMessage("Upload resumed.", "info");
+        }
+      });
+      // Also add touch events for mobile
+      interruptBtn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        interruptBtn.dispatchEvent(new Event("mousedown"));
+      });
+      interruptBtn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        interruptBtn.dispatchEvent(new Event("mouseup"));
       });
     </script>
   </body>

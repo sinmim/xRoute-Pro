@@ -30,7 +30,7 @@
 #include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
-String Version = "0.2.7";
+String Version = "0.8.7";
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
 // userInfo
@@ -971,6 +971,8 @@ void updateTask(void *parameters)
         break;
       vTaskDelay(pdMS_TO_TICKS(10));
     }
+    
+
     if (millis() - start > TIME_OUT)
     {
       Serial.println("UPD_TIMEOUT");
@@ -994,10 +996,9 @@ void updateTask(void *parameters)
     {
       lastProgressPercent = progressPercent;
       ws.sendToThisClient(String("UPD_PRC_1=" + String(progressPercent, 1) + "\n").c_str());
-      start = millis(); // reset timer
+      start = millis(); // reset timer 
     }
-
-    Serial.println("UPD_PRC_1=" + String(progressPercent, 1));
+    Serial.println(String(progressPercent, 1));
     if (progress == UDP_len)
     {
       bool state = Update.end();
@@ -1151,14 +1152,13 @@ void led_indicator_task(void *parameters)
       ws2812Blink(COLOR_BLUE, 1, 3, 1);
     if (myBle.isConnected() == false)
       ws2812Blink(COLOR_RED, 1, 3, 1);
-
     int clients = ws.clientCount();
     if (clients > 0)
     {
       if (ws.isUpdating())
-        ws2812Blink(COLOR_WHITE, clients, 1, 0.5);
+        ws2812Blink(COLOR_WHITE, clients, 1, 0.8);
       else
-        ws2812Blink(COLOR_GREEN, clients, 1, 0.5);
+        ws2812Blink(COLOR_GREEN, clients, 2, 0.5);
     }
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
@@ -2379,6 +2379,11 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       }
       else if (command.startsWith("DEV_RESET_1")) // Restart xRoute
       {
+        Serial.println("[PARSER]:Restarting ESP32");
+        //pauseUnnessesaryTasks();
+        vTaskSuspend(led_indicator_task_Handle);
+        ws2812Blink(COLOR_WHITE, 10, 1, 1);
+        vTaskDelay(pdMS_TO_TICKS(2000));
         ESP.restart();
       }
       else
@@ -2436,6 +2441,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         // Serial.println(response.c_str());
         myBle.sendString(response.c_str());
         ws.sendToThisClient(response.c_str());
+        Serial.println(response.c_str());
       }
       else if (command.startsWith("CONDITION_CONFIG"))
       {
@@ -2876,8 +2882,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String str = "WIFI_PASS_CHANGED=OK\n";
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-        ESP.restart();
       }
       else if (command.startsWith("WIFI_MODE_")) // WIFI_MODE_1=STA /
       {
@@ -2898,8 +2902,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String str = "WIFI_MODE_CHANGED_OK\n";
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-        ESP.restart();
       }
       else if (command.startsWith("HOST_NAME_"))
       {
@@ -2908,8 +2910,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String str = "HOST_NAME_CHANGED_OK\n";
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-        ESP.restart();
       }
       else if (command.startsWith("WIFI_AP_PASS_"))
       {
@@ -2918,8 +2918,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String str = "WIFI_AP_PASS_CHANGED_OK\n";
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-        ESP.restart();
       }
       else if (command.startsWith("BLE_PASS_")) // example : BLE_PASS_1=123456,654321
       {
