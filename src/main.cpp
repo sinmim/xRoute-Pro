@@ -701,7 +701,7 @@ void Reg_Uptime_Task(void *parameters)
         String str = "XrouteAlarm=No active license! Please check your license status!!\n";
         myBle.sendString(str);
         ws.sendToAll(str.c_str());
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdTICKS_TO_MS(1000));
       }
     }
     vTaskDelay(pdMS_TO_TICKS(1000)); // for 10 min it should be 1000ms
@@ -889,7 +889,7 @@ void MeasurmentTask(void *parameters)
     myBle.sendString(data);
     ws.sendToAll(data.c_str());
     // Serial.println(data);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 // websocket OTA
@@ -2269,16 +2269,16 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         {
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("sw" + String(index) + "=ON\n");
-          ws.sendToAll(String("sw" + String(index) + "=ON\n").c_str());
+          // myBle.sendString("sw" + String(index) + "=ON\n");
+          ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
           // vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         else if (command.lastIndexOf("OFF") > 0)
         {
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("sw" + String(index) + "=OFF\n");
-          ws.sendToAll(String("sw" + String(index) + "=OFF\n").c_str());
+          // myBle.sendString("sw" + String(index) + "=OFF\n");
+          ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
           // vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         else
@@ -2966,9 +2966,10 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     String errorMessage = "Missing[\\n]:" + String(accumulatedData.c_str());
     Serial.println(errorMessage);
     myBle.sendString(errorMessage);
+    ws.sendToThisClient(errorMessage.c_str());
     // add a '\n' and send it tp process again
-    accumulatedData += "\n";
-    processReceivedCommandData(pCharacteristic, (uint8_t *)accumulatedData.c_str(), accumulatedData.length());
+    // accumulatedData += "\n";
+    // processReceivedCommandData(pCharacteristic, (uint8_t *)accumulatedData.c_str(), accumulatedData.length());
     accumulatedData.clear();
   }
 }
@@ -3252,87 +3253,97 @@ void setup()
   // Tasks
   if (true)
   {
-    xTaskCreate(
+    xTaskCreatePinnedToCore(
         MeasurmentTask,
         "MeasurmentTask",
         2300, // ✔️
         NULL,
         1,
-        &MeasurmentTaskHandle);
-    xTaskCreate(
+        &MeasurmentTaskHandle,
+        1);
+    xTaskCreatePinnedToCore(
         DimerTask,
         "DimerTask",
         2.5 * 1024, // ✔️
         NULL,
         2,
-        &DimerTask_Handle);
-    xTaskCreate(
+        &DimerTask_Handle,
+        1);
+    xTaskCreatePinnedToCore(
         adcReadingTask,
         "ADC READING TASK",
         1.5 * 1024, // ✔️
         NULL,
         1,
-        &adcReadingTask_Handle);
-    xTaskCreate(
+        &adcReadingTask_Handle,
+        1);
+    xTaskCreatePinnedToCore(
         led_indicator_task,
         "led_indicator_task",
         1.2 * 1024, // ✔️
         NULL,
         1,
-        &led_indicator_task_Handle);
-    xTaskCreate(
+        &led_indicator_task_Handle,
+        0);
+    xTaskCreatePinnedToCore(
         OVR_CRNT_PRTCT_TASK,
         "OVR_CRNT_PRTCT_TASK",
         1.5 * 1024, // ✔️
         NULL,
         1,
-        &OVR_CRNT_PRTCT_TASK_Handle);
-    xTaskCreate(
+        &OVR_CRNT_PRTCT_TASK_Handle,
+        0);
+    xTaskCreatePinnedToCore(
         I2C_SENSORS_TASK, //-------------STACK optimized up to here
         "I2C_SENSORS_TASK",
         3 * 1024, // ❌
         NULL,
         1,
-        &I2C_SENSORS_TASK_Handle);
-    xTaskCreate(
+        &I2C_SENSORS_TASK_Handle,
+        1);
+    xTaskCreatePinnedToCore(
         BatteryTask,
         "BatteryTask",
         1.5 * 1024, // ✔️
         NULL,
         1,
-        &BatteryTask_Handle);
-    xTaskCreate(
+        &BatteryTask_Handle,
+        1);
+    xTaskCreatePinnedToCore(
         ConditionsTask,
         "ConditionsTask",
         5 * 1024, // ❌
         NULL,
         1,
-        &ConditionsTask_Handle);
-    xTaskCreate(
-        Reg_Uptime_Task,
-        "regControlTask",
-        4 * 1024, // ✔️
-        NULL,
-        1,
-        &Reg_Uptime_Task_Handle);
+        &ConditionsTask_Handle,
+        1);
+    // xTaskCreatePinnedToCore(
+    //     Reg_Uptime_Task,
+    //     "regControlTask",
+    //     4 * 1024, // ✔️
+    //     NULL,
+    //     1,
+    //     &Reg_Uptime_Task_Handle,
+    //     1);
     // CPU
-    // xTaskCreate(
+    // xTaskCreatePinnedToCore(
     //     cpuMonitoringTask,
     //     "cpuMonitoringTask",
     //     3 * 1024,
     //     NULL,
     //     1,
-    //     NULL);
+    //     NULL,
+    // 0);
     // RAM
-    // xTaskCreate(
+    // xTaskCreatePinnedToCore(
     //     ramMonitorTask,
     //     "ramMonitorTask",
     //     1024, // stack size
     //     NULL,
     //     1,
-    //     NULL);
+    //     NULL,0);
     // WIFI
-    //  xTaskCreate(
+    //  xTaskCreatePinnedToCore(
     //      WifiTask,
     //      "WifiTask",
     //      8 * 1024, // stack size

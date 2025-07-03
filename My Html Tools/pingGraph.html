@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -61,51 +62,51 @@
 <body class="bg-gray-900 text-gray-200 antialiased">
 
     <div class="min-h-screen flex flex-col p-4 sm:p-6 lg:p-8">
-        <!-- Header -->
         <header class="mb-6">
             <h1 class="text-2xl sm:text-3xl font-bold text-white">Network Ping & Latency Plotter</h1>
-            <p class="text-gray-400 mt-1">Visualize network latency to a local IP address in real-time.</p>
+            <p class="text-gray-400 mt-1">Visualize network latency in real-time. Scroll on the chart to zoom, drag to pan.</p>
         </header>
 
-        <!-- Controls -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-            <!-- IP Address Input -->
-            <div class="lg:col-span-2">
-                <label for="ipAddress" class="block text-sm font-medium text-gray-300 mb-1">Target IP Address</label>
-                <input type="text" id="ipAddress" value="192.168.1.1" class="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Ping Type</label>
+                <div class="flex items-center space-x-4">
+                    <label for="http" class="flex items-center">
+                        <input type="radio" id="http" name="pingType" value="http" class="form-radio h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500" checked>
+                        <span class="ml-2 text-sm text-gray-300">HTTP</span>
+                    </label>
+                    <label for="ws" class="flex items-center">
+                        <input type="radio" id="ws" name="pingType" value="ws" class="form-radio h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-300">WebSocket</span>
+                    </label>
+                </div>
             </div>
-            <!-- Ping Interval Input -->
+            <div class="lg:col-span-2">
+                <label for="targetAddress" class="block text-sm font-medium text-gray-300 mb-1">Target Address</label>
+                <input type="text" id="targetAddress" value="192.168.1.1" class="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
             <div>
                 <label for="pingInterval" class="block text-sm font-medium text-gray-300 mb-1">Interval (s)</label>
                 <input type="number" id="pingInterval" value="2" min="1" class="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
             </div>
-            <!-- Ping Timeout Input -->
-            <div>
-                <label for="pingTimeout" class="block text-sm font-medium text-gray-300 mb-1">Timeout (ms)</label>
-                <input type="number" id="pingTimeout" value="2000" min="100" class="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-            </div>
-            <!-- Time Axis Length Input -->
             <div>
                 <label for="timeAxis" class="block text-sm font-medium text-gray-300 mb-1">Time Axis (min)</label>
                 <input type="number" id="timeAxis" value="10" min="1" class="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
             </div>
-            <!-- Action Buttons -->
-            <div class="flex items-end space-x-2">
+            <div class="flex items-end space-x-2 lg:col-start-5">
                 <button id="toggleButton" class="w-full flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">Start</button>
                 <button id="resetButton" class="w-full flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">Reset</button>
             </div>
         </div>
 
-        <!-- Status & Info -->
         <div id="status-container" class="mb-4 text-sm flex items-center justify-between p-3 bg-gray-800 rounded-lg min-h-[44px]">
              <span id="status-text" class="text-gray-400">Status: Idle</span>
              <div class="flex items-center space-x-4">
-                <span id="last-ping-text" class="text-gray-400">Last Ping: N/A</span>
-                <span id="timeout-count-text" class="text-gray-400">Timeouts: 0</span>
+                 <span id="last-ping-text" class="text-gray-400">Last Ping: N/A</span>
+                 <span id="timeout-count-text" class="text-gray-400">Timeouts: 0</span>
              </div>
         </div>
 
-        <!-- Statistics Section -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div class="stat-card">
                 <div class="stat-label">Min Latency</div>
@@ -120,8 +121,7 @@
                 <div class="stat-value" id="max-latency">N/A</div>
             </div>
         </div>
-        
-        <!-- Chart Container -->
+
         <main class="flex-grow bg-gray-800/50 rounded-lg p-4 border border-gray-700 relative">
             <canvas id="pingChart"></canvas>
             <div id="tooltip" class="tooltip-custom"></div>
@@ -130,10 +130,9 @@
 
     <script>
         // --- DOM Element References ---
-        const ipAddressInput = document.getElementById('ipAddress');
+        const targetAddressInput = document.getElementById('targetAddress');
         const pingIntervalInput = document.getElementById('pingInterval');
         const timeAxisInput = document.getElementById('timeAxis');
-        const pingTimeoutInput = document.getElementById('pingTimeout');
         const toggleButton = document.getElementById('toggleButton');
         const resetButton = document.getElementById('resetButton');
         const statusText = document.getElementById('status-text');
@@ -144,6 +143,8 @@
         const maxLatencyEl = document.getElementById('max-latency');
         const chartCanvas = document.getElementById('pingChart');
         const tooltipEl = document.getElementById('tooltip');
+        const httpRadio = document.getElementById('http');
+        const wsRadio = document.getElementById('ws');
 
         // --- State Management ---
         let pingIntervalId = null;
@@ -151,6 +152,8 @@
         let timeoutCount = 0;
         let chart;
         let latencyData = []; // Array to store successful ping times for stats
+        let ws; // WebSocket instance
+        let pendingWsPing = null; // Holds the promise handlers for the current ping
 
         // --- Chart Configuration ---
         const chartConfig = {
@@ -167,7 +170,7 @@
                     pointRadius: 0, // Points are hidden by default
                     pointHoverRadius: 5,
                     fill: true,
-                    spanGaps: false // This creates a break in the line for null data points (timeouts)
+                    spanGaps: false
                 }]
             },
             options: {
@@ -193,12 +196,8 @@
                             text: 'Time',
                             color: '#9ca3af'
                         },
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
-                        },
-                        ticks: {
-                            color: '#9ca3af'
-                        }
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#9ca3af' }
                     },
                     y: {
                         beginAtZero: true,
@@ -207,29 +206,39 @@
                             text: 'Latency (ms)',
                             color: '#9ca3af'
                         },
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
-                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
                         ticks: {
                             color: '#9ca3af',
-                            callback: function(value) {
-                                return value + ' ms';
-                            }
+                            callback: function(value) { return value + ' ms'; }
                         }
                     }
                 },
                 plugins: {
-                    legend: {
-                        display: false
-                    },
+                    legend: { display: false },
                     tooltip: {
-                        enabled: false, // Disable default tooltip
+                        enabled: false,
                         external: customTooltip
+                    },
+                    // ADDED: Zoom plugin configuration
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x', // Allow panning on the X-axis
+                        },
+                        zoom: {
+                            wheel: {
+                                enabled: true, // Allow zooming with the mouse wheel
+                            },
+                            pinch: {
+                                enabled: true // Allow pinch-to-zoom for touch devices
+                            },
+                            mode: 'x', // Only zoom on the X-axis
+                        }
                     }
                 }
             }
         };
-        
+
         // --- Custom Tooltip Handler ---
         function customTooltip(context) {
             const { chart, tooltip } = context;
@@ -237,69 +246,63 @@
                 tooltipEl.style.opacity = 0;
                 return;
             }
-
             const bodyLines = tooltip.body.map(b => b.lines);
             if (bodyLines.length > 0) {
                 const tableRoot = document.createElement('div');
-                
                 const dataPoint = bodyLines[0][0];
                 const parts = dataPoint.split(': ');
                 const timeStr = parts[0];
                 const valueStr = parts[1];
-                
-                let valueHtml;
-                if (valueStr === 'null') {
-                    valueHtml = `<span class="font-bold text-red-400">Timeout</span>`;
-                } else {
-                    valueHtml = `<span class="font-bold text-blue-300">${valueStr}</span>`;
-                }
-
+                let valueHtml = (valueStr === 'null')
+                    ? `<span class="font-bold text-red-400">Timeout</span>`
+                    : `<span class="font-bold text-blue-300">${valueStr}</span>`;
                 tableRoot.innerHTML = `<div>Time: ${timeStr}</div><div>Latency: ${valueHtml}</div>`;
-
                 tooltipEl.innerHTML = '';
                 tooltipEl.appendChild(tableRoot);
-
-                const {
-                    offsetLeft: positionX,
-                    offsetTop: positionY
-                } = chart.canvas;
+                const { offsetLeft: positionX, offsetTop: positionY } = chart.canvas;
                 tooltipEl.style.opacity = 1;
                 tooltipEl.style.left = positionX + tooltip.caretX + 'px';
                 tooltipEl.style.top = positionY + tooltip.caretY + 'px';
             }
         }
 
-        // --- Core Ping Function ---
-        async function performPing(ip) {
+        // --- Core Ping Functions ---
+        async function performHttpPing(ip) {
             const controller = new AbortController();
-            const timeoutValue = parseInt(pingTimeoutInput.value, 10);
-            const timeoutId = setTimeout(() => controller.abort(), timeoutValue);
+            const timeoutId = setTimeout(() => controller.abort(), pingIntervalInput.value * 1000 - 100);
             const startTime = performance.now();
-
             try {
-                await fetch(`http://${ip}/ping?t=${Date.now()}`, {
-                    method: 'GET',
-                    mode: 'no-cors',
-                    signal: controller.signal
-                });
+                await fetch(`http://${ip}/ping?t=${Date.now()}`, { method: 'GET', mode: 'no-cors', signal: controller.signal });
             } catch (error) {
-                if (error.name === 'AbortError') {
-                    // This is the only case we consider a timeout.
-                    return { time: null, error: 'Timeout' };
-                }
-                // Any other error is treated as a successful 'no-cors' ping.
-                // The time is still measured and handled below.
+                if (error.name === 'AbortError') return { time: null, error: 'Timeout' };
             } finally {
                 clearTimeout(timeoutId);
+                const endTime = performance.now();
+                const duration = Math.round(endTime - startTime);
+                if (duration >= (pingIntervalInput.value * 1000 - 150)) return { time: null, error: 'Timeout' };
+                return { time: duration, error: null };
             }
-            
-            // This code is reached on 'no-cors' success (which throws a TypeError)
-            // or a true success (unlikely with no-cors).
-            const duration = Math.round(performance.now() - startTime);
-            return { time: duration, error: null };
         }
-        
-        // --- Statistics Update Function ---
+
+        function performWsPing() {
+            return new Promise((resolve) => {
+                const timeoutId = setTimeout(() => {
+                    resolve({ time: null, error: 'Timeout' });
+                    pendingWsPing = null;
+                }, pingIntervalInput.value * 1000 - 100);
+                pendingWsPing = { resolve, timeoutId };
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.startTime = performance.now();
+                    ws.send('ping');
+                } else {
+                    clearTimeout(timeoutId);
+                    resolve({ time: null, error: 'Not Connected' });
+                    pendingWsPing = null;
+                }
+            });
+        }
+
+        // --- Statistics & Chart Update Functions ---
         function updateStatistics() {
             if (latencyData.length === 0) {
                 minLatencyEl.textContent = 'N/A';
@@ -307,43 +310,25 @@
                 maxLatencyEl.textContent = 'N/A';
                 return;
             }
-
             const min = Math.min(...latencyData);
             const max = Math.max(...latencyData);
             const sum = latencyData.reduce((a, b) => a + b, 0);
             const avg = Math.round(sum / latencyData.length);
-
             minLatencyEl.textContent = `${min} ms`;
             avgLatencyEl.textContent = `${avg} ms`;
             maxLatencyEl.textContent = `${max} ms`;
         }
 
-        // --- Chart Update Function ---
         function addDataToChart(time, latency) {
             const timeAxisMinutes = parseInt(timeAxisInput.value, 10);
             const pingIntervalSeconds = parseInt(pingIntervalInput.value, 10);
             const maxDataPoints = (timeAxisMinutes * 60) / pingIntervalSeconds;
-
-            if (chart.data.datasets[0].data.length >= maxDataPoints) {
-                const removedData = chart.data.datasets[0].data.shift();
+            if (chart.data.datasets[0].data.length >= maxDataPoints && !chart.isZoomedOrPanned()) {
                 chart.data.labels.shift();
-                // Also remove the corresponding data from our stats array
-                if (removedData !== null) {
-                    const index = latencyData.indexOf(removedData);
-                    if (index > -1) {
-                        latencyData.splice(index, 1);
-                    }
-                }
+                chart.data.datasets[0].data.shift();
             }
-
             chart.data.labels.push(time);
             chart.data.datasets[0].data.push(latency);
-
-            if (chart.data.labels.length > 1) {
-                chart.options.scales.x.min = chart.data.labels[0];
-                chart.options.scales.x.max = chart.data.labels[chart.data.labels.length - 1];
-            }
-            
             chart.update('none');
         }
 
@@ -351,39 +336,68 @@
         function startPinging() {
             if (isPinging) return;
             isPinging = true;
+            // UI Updates
             toggleButton.textContent = 'Stop';
             toggleButton.classList.replace('bg-blue-600', 'bg-red-600');
             toggleButton.classList.replace('hover:bg-blue-700', 'hover:bg-red-700');
-            statusText.textContent = `Status: Pinging ${ipAddressInput.value}...`;
+            statusText.textContent = `Status: Pinging ${targetAddressInput.value}...`;
             statusText.classList.add('text-green-400');
+            [targetAddressInput, pingIntervalInput, timeAxisInput, httpRadio, wsRadio].forEach(el => el.disabled = true);
 
-            ipAddressInput.disabled = true;
-            pingIntervalInput.disabled = true;
-            timeAxisInput.disabled = true;
-            pingTimeoutInput.disabled = true;
-
+            const pingType = document.querySelector('input[name="pingType"]:checked').value;
             const intervalMs = pingIntervalInput.value * 1000;
-            pingIntervalId = setInterval(async () => {
-                const result = await performPing(ipAddressInput.value);
+
+            const executePing = async () => {
+                const result = (pingType === 'http') ? await performHttpPing(targetAddressInput.value) : await performWsPing();
+                if (!result) return;
                 const now = new Date();
-                
                 if (result.error) {
                     timeoutCount++;
                     addDataToChart(now, null);
-                    lastPingText.textContent = `Last Ping: Timeout`;
+                    lastPingText.textContent = `Last Ping: ${result.error}`;
                     lastPingText.classList.add('text-red-400');
                 } else {
-                    if (result.time !== null) {
-                       latencyData.push(result.time);
-                    }
+                    latencyData.push(result.time);
                     addDataToChart(now, result.time);
                     lastPingText.textContent = `Last Ping: ${result.time} ms`;
                     lastPingText.classList.remove('text-red-400');
-                    updateStatistics(); // Update stats on successful ping
+                    updateStatistics();
                 }
                 timeoutCountText.textContent = `Timeouts: ${timeoutCount}`;
+            };
 
-            }, intervalMs);
+            if (pingType === 'http') {
+                executePing();
+                pingIntervalId = setInterval(executePing, intervalMs);
+            } else {
+                statusText.textContent = 'Status: Connecting...';
+                ws = new WebSocket(targetAddressInput.value);
+                ws.onopen = () => {
+                    statusText.textContent = `Status: Pinging ${targetAddressInput.value}...`;
+                    executePing();
+                    pingIntervalId = setInterval(executePing, intervalMs);
+                };
+                ws.onmessage = (event) => {
+                    if (event.data === 'pong' && pendingWsPing) {
+                        const endTime = performance.now();
+                        const latency = Math.round(endTime - ws.startTime);
+                        clearTimeout(pendingWsPing.timeoutId);
+                        pendingWsPing.resolve({ time: latency, error: null });
+                        pendingWsPing = null;
+                    }
+                };
+                ws.onerror = () => {
+                    lastPingText.textContent = `Last Ping: WS Error`;
+                    lastPingText.classList.add('text-red-400');
+                    stopPinging();
+                };
+                ws.onclose = () => {
+                    if (isPinging) {
+                        statusText.textContent = 'Status: Disconnected';
+                        stopPinging();
+                    }
+                };
+            }
         }
 
         function stopPinging() {
@@ -391,51 +405,55 @@
             isPinging = false;
             clearInterval(pingIntervalId);
             pingIntervalId = null;
+            if (ws) {
+                ws.onclose = null;
+                ws.close();
+                ws = null;
+            }
+            if (pendingWsPing) {
+                clearTimeout(pendingWsPing.timeoutId);
+                pendingWsPing.resolve({ time: null, error: 'Stopped' });
+                pendingWsPing = null;
+            }
+            // UI Updates
             toggleButton.textContent = 'Start';
             toggleButton.classList.replace('bg-red-600', 'bg-blue-600');
             toggleButton.classList.replace('hover:bg-red-700', 'hover:bg-blue-700');
             statusText.textContent = 'Status: Stopped';
             statusText.classList.remove('text-green-400');
-
-            ipAddressInput.disabled = false;
-            pingIntervalInput.disabled = false;
-            timeAxisInput.disabled = false;
-            pingTimeoutInput.disabled = false;
+            [targetAddressInput, pingIntervalInput, timeAxisInput, httpRadio, wsRadio].forEach(el => el.disabled = false);
         }
 
         function resetChart() {
             stopPinging();
             chart.data.labels = [];
             chart.data.datasets[0].data = [];
-            chart.options.scales.x.min = null;
-            chart.options.scales.x.max = null;
-            chart.update();
             timeoutCount = 0;
-            latencyData = []; // Reset stats data
-            updateStatistics(); // Update display to N/A
+            latencyData = [];
+            updateStatistics();
             timeoutCountText.textContent = 'Timeouts: 0';
             lastPingText.textContent = 'Last Ping: N/A';
             lastPingText.classList.remove('text-red-400');
             statusText.textContent = 'Status: Idle';
+            // ADDED: Reset zoom level
+            chart.resetZoom();
+            chart.update();
         }
 
         // --- Event Listeners ---
         toggleButton.addEventListener('click', () => {
-            if (isPinging) {
-                stopPinging();
-            } else {
-                startPinging();
-            }
+            if (isPinging) stopPinging();
+            else startPinging();
         });
-
         resetButton.addEventListener('click', resetChart);
+        httpRadio.addEventListener('change', () => { if (httpRadio.checked) targetAddressInput.value = '192.168.1.1'; });
+        wsRadio.addEventListener('change', () => { if (wsRadio.checked) targetAddressInput.value = 'ws://xroute.local:81'; });
 
         // --- Initialization ---
         window.onload = () => {
             const ctx = chartCanvas.getContext('2d');
             chart = new Chart(ctx, chartConfig);
         };
-
     </script>
 </body>
 </html>

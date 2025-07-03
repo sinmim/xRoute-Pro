@@ -146,7 +146,7 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
     _server = new AsyncWebServer(_port);
     _server->addHandler(_ws);
     _server->begin();
-    Serial.println("✔ WebSocket server listening on port 81");
+    Serial.println("✔ WebSocket server listening on port : " + String(_port));
     currentMode = WIFI_MODE_STA;
     return true;
   }
@@ -377,13 +377,6 @@ void XrouteAsyncWebSocketServer::registerEvents()
               return;
             }
           }
-          // command validation
-          if (len > maxCmdPkgSize)
-          {
-            Serial.println("Dropping : TOO BIG FOR COMMAND BUFFER!");
-            return;
-          }
-
           auto *info = reinterpret_cast<AwsFrameInfo *>(arg);
           // only consider text / continuation frames
           if ((info->opcode == WS_TEXT || info->opcode == WS_CONTINUATION) && data && len)
@@ -401,6 +394,19 @@ void XrouteAsyncWebSocketServer::registerEvents()
               // invoke your command callback
               if (_cmdCb)
               {
+                // if _cmdCb is "ping" answer pong
+                if (strcmp(cmd, "ping") == 0)
+                {
+                  client->text("pong");
+                  Serial.println("pong=>socket");
+                  return;
+                }
+                // command validation
+                if (len > maxCmdPkgSize)
+                {
+                  Serial.println("Dropping : TOO BIG FOR COMMAND BUFFER!");
+                  return;
+                }
                 _cmdCb(cmd);
               }
             }
