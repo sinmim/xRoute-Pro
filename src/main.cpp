@@ -1030,7 +1030,8 @@ void sendUiConfigTask(void *parameters)
   String str = readStringFromFile(ConfigFile);
   wrapJson(str.c_str(), jsonKeys::UI_CONFIG, str);
   Serial.println("SENDING UI CONFIG");
-  ws.sendToAll(str.c_str());
+  //ws.sendToAll(str.c_str());
+  ws.sendToThisClient(str.c_str());
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
 }

@@ -1,6 +1,7 @@
 #include "XrouteAsyncWebSocketServer.h"
 #include <ESPmDNS.h>
 #include "freertos/semphr.h"
+
 #define ME Serial.print("[XrouteAsyncWebSocketServer]:")
 
 wifi_mode_t XrouteAsyncWebSocketServer ::currentMode = WIFI_MODE_STA;
@@ -56,59 +57,42 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
   delay(100);
   // 1) set the mode
 
-  if (mode == WIFI_MODE_APSTA)
+  if (mode == WIFI_MODE_STA)
   {
-
-    WiFi.mode(WIFI_MODE_APSTA);
-    // 2) start the AP
-    WiFi.softAP(_apSsid, _apPass);
-    Serial.println("▶WIFI_MODE_APSTA");
-    // 3) start the STA
-    Serial.printf("▶ Connecting to %s\n", _staSsid);
-    Serial.printf("▶ Connecting to %s\n", _staPass);
-
-    WiFi.begin(_staSsid, _staPass);
-    // start a timer
-    unsigned long currentMillis = millis();
-
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      if (millis() - currentMillis > timeout)
-      {
-        ME;
-        Serial.println("Time oute");
-        return false;
-      }
-      delay(500);
-      Serial.print('.');
-    }
-    Serial.println();
-    Serial.print("✔ STA IP: ");
-    Serial.println(WiFi.localIP());
-
-    // 4) mDNS responder
-    if (!MDNS.begin(_host))
-    {
-      Serial.println("✖ mDNS init failed");
-      return false;
-    }
-    else
-    {
-      MDNS.addService("ws", "tcp", _port);
-      Serial.println("✔ mDNS responder started:" + String(_host) + ".local");
-    }
-    // 5) WebSocket setup
-    _ws = new AsyncWebSocket("/");
-    registerEvents();
-    _server = new AsyncWebServer(_port);
-    _server->addHandler(_ws);
-    _server->begin();
-    Serial.println("✔ WebSocket server listening on port 81");
-    currentMode = WIFI_MODE_APSTA;
-    return true;
-  }
-  else if (mode == WIFI_MODE_STA)
-  {
+    // set my wifi name to LCD
+    // wifiManager.begin(_staSsid, _staPass, "XroutePro-Todo");
+    // wifiManager.onConnected([&]()
+    //                         {
+    //                           Serial.println("🔌 WiFi Connected");
+    //                           if (!MDNS.begin(_host))
+    //                           {
+    //                             Serial.println("✖ mDNS init failed");
+    //                             return false;
+    //                           }
+    //                           else
+    //                           {
+    //                             MDNS.addService("ws", "tcp", _port);
+    //                             Serial.println("✔ mDNS responder started:" + String(_host) + ".local");
+    //                           }
+    //                           // 5) WebSocket setup
+    //                           _ws = new AsyncWebSocket("/");
+    //                           registerEvents();
+    //                           _server = new AsyncWebServer(_port);
+    //                           _server->addHandler(_ws);
+    //                           _server->begin();
+    //                           Serial.println("✔ WebSocket server listening on port : " + String(_port));
+    //                           currentMode = WIFI_MODE_STA;
+    //                           return true;
+    //                           //
+    //                         });
+    // wifiManager.onDisconnected([&](int reason)
+    //                            {
+    //                              Serial.println("⚠️ WiFi Disconnected. Reason: " + String(reason));
+    //                              //ws.end();
+    //                              //
+    //                            });
+    
+    // old code
     Serial.println("▶WIFI_MODE_STA");
     Serial.println("✔ Connecting to SSID: " + String(_staSsid) + "  PASS: " + String(_staPass));
     WiFi.mode(WIFI_MODE_STA);
@@ -128,7 +112,6 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
     Serial.println();
     Serial.print("✔ WIFI_MODE_STA IP: ");
     Serial.println(WiFi.localIP());
-
     // 4) mDNS responder
     if (!MDNS.begin(_host))
     {
@@ -183,6 +166,55 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
     _server->begin();
     Serial.println("✔ WebSocket server listening on port 81");
     currentMode = WIFI_MODE_AP;
+    return true;
+  }
+  else if (mode == WIFI_MODE_APSTA)
+  {
+    WiFi.mode(WIFI_MODE_APSTA);
+    // 2) start the AP
+    WiFi.softAP(_apSsid, _apPass);
+    Serial.println("▶WIFI_MODE_APSTA");
+    // 3) start the STA
+    Serial.printf("▶ Connecting to %s\n", _staSsid);
+    Serial.printf("▶ Connecting to %s\n", _staPass);
+    WiFi.begin(_staSsid, _staPass);
+    // start a timer
+    unsigned long currentMillis = millis();
+
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      if (millis() - currentMillis > timeout)
+      {
+        ME;
+        Serial.println("Time oute");
+        return false;
+      }
+      delay(500);
+      Serial.print('.');
+    }
+    Serial.println();
+    Serial.print("✔ STA IP: ");
+    Serial.println(WiFi.localIP());
+
+    // 4) mDNS responder
+    if (!MDNS.begin(_host))
+    {
+      Serial.println("✖ mDNS init failed");
+      return false;
+    }
+    else
+    {
+      MDNS.addService("ws", "tcp", _port);
+      Serial.println("✔ mDNS responder started:" + String(_host) + ".local");
+    }
+    // 5) WebSocket setup
+    _ws = new AsyncWebSocket("/");
+    registerEvents();
+    _server = new AsyncWebServer(_port);
+    _server->addHandler(_ws);
+    _server->begin();
+    Serial.println("✔ WebSocket server listening on port 81");
+    currentMode = WIFI_MODE_APSTA;
     return true;
   }
   else
@@ -400,7 +432,7 @@ void XrouteAsyncWebSocketServer::registerEvents()
                   // ❗WARNING: Never call client->text() directly here. Always use sendToClient()
                   // because this runs in core system thread, not a FreeRTOS task.
                   sendToClient("pong", client);
-                  Serial.println("pong=>socket");
+                  // WS_LOG("pong=>socket");
                   return;
                 }
                 // command validation

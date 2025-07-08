@@ -1,5 +1,11 @@
 #ifndef XROUTE_ASYNC_WS_SERVER_H
 #define XROUTE_ASYNC_WS_SERVER_H
+#define ENABLE_WS_DEBUG
+#ifdef ENABLE_WS_DEBUG
+#define WS_LOG(format, ...) printf("[WS_DEBUG] " format "\n", ##__VA_ARGS__)
+#else
+#define WS_LOG(format, ...)
+#endif
 
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -8,6 +14,7 @@
 #include <atomic>
 #include <queue>
 #include <mutex>
+#include "XrouteWiFiManager.h"
 
 enum WS_WHO
 {
@@ -77,7 +84,8 @@ public:
   void setMaxCmdPkgSize(int size) { maxCmdPkgSize = size; }
 
 private:
-  int maxCmdPkgSize=128;
+  XrouteWiFiManager wifiManager;
+  int maxCmdPkgSize = 128;
   SemaphoreHandle_t _sendNotify;
   static wifi_mode_t currentMode;
   std::atomic<size_t> _clientCount{0};
