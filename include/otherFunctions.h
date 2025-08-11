@@ -25,4 +25,18 @@ struct RGB_VALS
   uint8_t brightness;
 };
 
+#include "esp_core_dump.h"
+class MyCoreDump
+{
+public:
+  MyCoreDump();
+  void delete_core_dump();
+  esp_err_t load_core_dump();
+  bool print_core_dump_summary_to_string(char *str);
+  void print_core_dump();
+
+private:
+  esp_core_dump_summary_t summary;
+};
+
 #endif

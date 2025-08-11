@@ -91,7 +91,7 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
     //                              //ws.end();
     //                              //
     //                            });
-    
+
     // old code
     Serial.println("▶WIFI_MODE_STA");
     Serial.println("✔ Connecting to SSID: " + String(_staSsid) + "  PASS: " + String(_staPass));
@@ -405,7 +405,7 @@ void XrouteAsyncWebSocketServer::registerEvents()
             }
             else
             {
-              Serial.println("Droping other incomming data");
+              Serial.println("Droping other incomming data : " + String(reinterpret_cast<char *>(data), len) + "\n");
               return;
             }
           }
@@ -427,12 +427,14 @@ void XrouteAsyncWebSocketServer::registerEvents()
               if (_cmdCb)
               {
                 // if _cmdCb is "ping" answer pong
-                if (strcmp(cmd, "ping") == 0)
+                if (strcmp(cmd, "PING") == 0)
                 {
                   // ❗WARNING: Never call client->text() directly here. Always use sendToClient()
                   // because this runs in core system thread, not a FreeRTOS task.
-                  sendToClient("pong", client);
+                  sendToClient("PONG", client);
+                  //client.
                   // WS_LOG("pong=>socket");
+                  Serial.printf("[WS_DEBUG] PONG client:%d\n", client->id());
                   return;
                 }
                 // command validation
@@ -524,44 +526,49 @@ void XrouteAsyncWebSocketServer::begin(wifi_mode_t mode)
 
   xTaskCreatePinnedToCore([](void *arg)
                           {
-    auto self = (XrouteAsyncWebSocketServer*)arg;
-    for (;;)
-    {
-        // ✅ Use self->_sendNotify here instead of raw _sendNotify
-        if (xSemaphoreTake(self->_sendNotify, pdMS_TO_TICKS(500)) == pdTRUE)
-        {
-            while (true)
-            {
-                QueuedWebSocketCmd cmd;
-                {
-                    std::lock_guard<std::mutex> lock(self->_sendQueueLock);
-                    if (self->_wsSendQueue.empty())
-                        break;
-                    cmd = self->_wsSendQueue.front();
-                    self->_wsSendQueue.pop();
-                }
-                if (cmd.who == THIS_CLIENT && cmd.client)
-                {
-                    if (self->_ws->availableForWrite(cmd.client->id()))
-                        cmd.client->text(cmd.message.c_str());
-                }
-                else if (cmd.who == ALL_CLIENTS)
-                {
-                    if (self->_ws->availableForWriteAll())
-                        self->_ws->textAll(cmd.message.c_str());
-                }
-                else if (cmd.who == EXCLUDE_CLIENT && cmd.client)
-                {
-                    std::lock_guard<std::mutex> lock(self->_clientsLock);
-                    for (AsyncWebSocketClient *c : self->_clients)
-                    {
-                        if (c && c != cmd.client && self->_ws->availableForWrite(c->id()))
-                            c->text(cmd.message.c_str());
-                    }
-                }
-            }
-        }
-    } }, "WS_SEND_TASK", 4096, this, 3, nullptr, 1);
+                            auto self = (XrouteAsyncWebSocketServer *)arg;
+                            for (;;)
+                            {
+                              // ✅ Use self->_sendNotify here instead of raw _sendNotify
+                              if (xSemaphoreTake(self->_sendNotify, pdMS_TO_TICKS(50)) == pdTRUE)
+                              {
+                                while (true)
+                                {
+                                  QueuedWebSocketCmd cmd;
+                                  {
+                                    std::lock_guard<std::mutex> lock(self->_sendQueueLock);
+                                    if (self->_wsSendQueue.empty())
+                                      break;
+                                    cmd = self->_wsSendQueue.front();
+                                    self->_wsSendQueue.pop();
+                                  }
+                                  if (cmd.who == THIS_CLIENT && cmd.client)
+                                  {
+                                    if (self->_ws->availableForWrite(cmd.client->id()))
+                                      cmd.client->text(cmd.message.c_str());
+                                  }
+                                  else if (cmd.who == ALL_CLIENTS)
+                                  {
+                                    if (self->_ws->availableForWriteAll())
+                                    {
+                                      self->_ws->textAll(cmd.message.c_str());
+                                    }
+                                  }
+                                  else if (cmd.who == EXCLUDE_CLIENT && cmd.client)
+                                  {
+                                    std::lock_guard<std::mutex> lock(self->_clientsLock);
+                                    for (AsyncWebSocketClient *c : self->_clients)
+                                    {
+                                      if (c && c != cmd.client && self->_ws->availableForWrite(c->id()))
+                                        c->text(cmd.message.c_str());
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            //
+                          },
+                          "WS_SEND_TASK", 4096, this, 3, nullptr, 1);
 }
 
 wifi_mode_t XrouteAsyncWebSocketServer::switchMode(wifi_mode_t mode)

@@ -1,7 +1,7 @@
 #pragma once
 
 /************************************************
- *   Safe Custom NimBLE Configuration
+ * Safe Custom NimBLE Configuration
  ************************************************/
 
 // ---- Basic ----
@@ -66,7 +66,7 @@
 
 // ---- Host/Stack ----
 #ifndef CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE
-#define CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE 8192 //TODO chon jsonharo tooye parseram estefade mikonam fek konam baese stack ovf mishe bekhatere in az 4k be 8k bordam bala . badan bayad dorostesh konama ba ye taske jodagoone va gheyre
+#define CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE 8192
 #endif
 
 #ifndef CONFIG_BT_NIMBLE_USE_ESP_TIMER
@@ -83,21 +83,11 @@
 #endif
 
 // ---- Optional (Speed Optimizations) ----
+// REMOVED redefined macros to prevent warnings
 #ifndef CONFIG_BT_NIMBLE_HS_FLOW_CTRL
 #define CONFIG_BT_NIMBLE_HS_FLOW_CTRL           1
-#endif
-
-#ifndef CONFIG_BT_NIMBLE_HS_FLOW_CTRL_ITVL
-#define CONFIG_BT_NIMBLE_HS_FLOW_CTRL_ITVL      500
-#endif
-
-#ifndef CONFIG_BT_NIMBLE_HS_FLOW_CTRL_THRESH
-#define CONFIG_BT_NIMBLE_HS_FLOW_CTRL_THRESH    1
 #endif
 
 #ifndef CONFIG_BT_NIMBLE_HS_FLOW_CTRL_TX_ON_DISCONNECT
 #define CONFIG_BT_NIMBLE_HS_FLOW_CTRL_TX_ON_DISCONNECT 1
 #endif
-
-// ---- Important Note ----
-// NOT enabling Extended Advertising because ESP32 WROOM chips DO NOT support it.

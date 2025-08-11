@@ -4,6 +4,7 @@
 #include <SHA256.h>
 #include "otherFunctions.h"
 #include "relay.h"
+#include "esp_core_dump.h"
 // BLE//#include "BLESerial.h"
 #include "BluetoothSerial.h"
 #include "main.h"
@@ -245,4 +246,80 @@ bool unwrapJson(const char *inputJson, const char *wrapperKey, String &outputJso
   outputJson = "";
   serializeJson(outDoc, outputJson);
   return true;
+}
+
+// ___ Class coreDump___
+MyCoreDump::MyCoreDump()
+{
+  esp_core_dump_init();
+}
+void MyCoreDump::delete_core_dump()
+{
+  esp_core_dump_image_erase();
+}
+esp_err_t MyCoreDump::load_core_dump()
+{
+  return esp_core_dump_get_summary(&summary);
+}
+bool MyCoreDump::print_core_dump_summary_to_string(char *str)
+{
+  esp_err_t err = load_core_dump();
+  if (err != ESP_OK)
+  {
+    str = "Failed to get core dump summary! Error code: 0x%X\n";
+    return false;
+  }
+  else
+  {
+    // neccesary information that is inough for decoding later on
+    sprintf(str, "Task Name: %s\nTask TCB Address: 0x%08X\nException PC: 0x%08X\nDepth: %u\nCorrupted: %s\n",
+            summary.exc_task, summary.exc_tcb, summary.exc_pc, summary.exc_bt_info.depth, summary.exc_bt_info.corrupted ? "YES" : "NO");
+    return true;
+  }
+}
+void MyCoreDump::print_core_dump()
+{
+  esp_err_t err = load_core_dump();
+  if (err != ESP_OK)
+  {
+    Serial.printf("Failed to get core dump summary! Error code: 0x%X\n", err);
+    return;
+  }
+  Serial.println("\n========== Core Dump Summary ==========");
+  Serial.printf("🧵 Task Name         : %s\n", summary.exc_task);
+  Serial.printf("🔗 Task TCB Address  : 0x%08X\n", summary.exc_tcb);
+  Serial.printf("💥 Exception PC      : 0x%08X\n", summary.exc_pc);
+  Serial.println("\n--- 🔙 Backtrace ---");
+  Serial.printf("Depth                : %u frames\n", summary.exc_bt_info.depth);
+  Serial.printf("Corrupted            : %s\n", summary.exc_bt_info.corrupted ? "YES" : "NO");
+  for (uint32_t i = 0; i < summary.exc_bt_info.depth; i++)
+  {
+    Serial.printf("  #%02d: 0x%08X\n", i, summary.exc_bt_info.bt[i]);
+  }
+  Serial.println("\n--- 🧬 App ELF SHA256 ---");
+  Serial.print("Hash                 : ");
+  for (int i = 0; i < APP_ELF_SHA256_SZ; i++)
+  {
+    Serial.printf("%02X", summary.app_elf_sha256[i]);
+  }
+  Serial.println();
+  Serial.println("\n--- 🧠 Extra Exception Info ---");
+  Serial.printf("Exception Cause      : 0x%08X\n", summary.ex_info.exc_cause);
+  Serial.printf("Virtual Address      : 0x%08X\n", summary.ex_info.exc_vaddr);
+  Serial.println("\nRegisters (A0–A15):");
+  for (int i = 0; i < 16; i++)
+  {
+    Serial.printf("  A%-2d: 0x%08X\n", i, summary.ex_info.exc_a[i]);
+  }
+  Serial.println("\nEPCx Registers:");
+  for (int i = 0; i < EPCx_REGISTER_COUNT; i++)
+  {
+    if (summary.ex_info.epcx_reg_bits & (1 << i))
+    {
+      Serial.printf("  EPC%-2d: 0x%08X\n", i + 1, summary.ex_info.epcx[i]);
+    }
+  }
+  Serial.println("\n--- ⚙️  System Info ---");
+  Serial.printf("Core Dump Version    : %u\n", summary.core_dump_version);
+  Serial.println("=========================================\n");
 }

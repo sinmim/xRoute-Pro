@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Final Automated PIO Decoder</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #1c1e21; display: flex; justify-content: center; align-items: flex-start; padding: 20px; }
+        .container { background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); width: 100%; max-width: 800px; }
+        h1, h2 { color: #0056b3; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        textarea { width: 98%; height: 150px; padding: 10px; border-radius: 6px; border: 1px solid #ddd; font-family: "Courier New", Courier, monospace; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-right: 10px; }
+        button#fetchButton { background-color: #6c757d; }
+        #status { color: #28a745; font-weight: bold; margin-top: 10px; }
+        #result { background-color: #282c34; color: #abb2bf; padding: 15px; border-radius: 6px; font-family: "Courier New", Courier, monospace; white-space: pre-wrap; margin-top: 20px; min-height: 100px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Final Automated PIO Decoder</h1>
+        <p><b>Step 1:</b> Paste your report and click "Start Decoding". Check your terminal to see the results printed there.
+        <br><b>Step 2:</b> Click "Show Last Result" to display the output here.</p>
+        <textarea id="reportInput" placeholder="Paste your minimal report here..."></textarea>
+        <div style="margin-top:10px;">
+            <button id="decodeButton">Start Decoding</button>
+            <button id="fetchButton">Show Last Result</button>
+        </div>
+        <div id="status"></div>
+        <h2>Result</h2>
+        <div id="result">Waiting for decoding...</div>
+    </div>
+
+    <script>
+        const decodeButton = document.getElementById('decodeButton');
+        const fetchButton = document.getElementById('fetchButton');
+        const reportInput = document.getElementById('reportInput');
+        const resultDiv = document.getElementById('result');
+        const statusDiv = document.getElementById('status');
+
+        decodeButton.addEventListener('click', async () => {
+            const reportText = reportInput.value;
+            if (!reportText) {
+                statusDiv.textContent = 'Please paste a report first.';
+                return;
+            }
+
+            statusDiv.textContent = 'Sending report to server to start decoding... Check your terminal!';
+            decodeButton.disabled = true;
+
+            try {
+                const response = await fetch('http://localhost:9999/decode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ report: reportText })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with error: ${response.status}`);
+                }
+                const data = await response.json();
+                statusDiv.textContent = `✅ ${data.message} You can now fetch the result.`;
+
+            } catch (error) {
+                statusDiv.textContent = `❌ Error starting decode process: ${error.message}`;
+            } finally {
+                decodeButton.disabled = false;
+            }
+        });
+
+        fetchButton.addEventListener('click', async () => {
+            resultDiv.textContent = 'Fetching latest result from server...';
+            try {
+                const response = await fetch('http://localhost:9999/get-result');
+                if (!response.ok) {
+                    throw new Error(`Server responded with error: ${response.status}`);
+                }
+                const data = await response.json();
+                resultDiv.textContent = data.decoded_text;
+                statusDiv.textContent = 'Result loaded successfully.';
+            } catch (error) {
+                resultDiv.textContent = `Could not fetch result: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>

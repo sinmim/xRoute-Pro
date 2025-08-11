@@ -1,4 +1,8 @@
 //====================================================libraries
+#include "xRouteDefs.h"
+// defiene as XROUTE_PRO
+String Version = "0.9.0";
+MyController MyBoard(MyController::XROUTE_PRO);
 #define __________________________________________INCLUDES
 #ifdef __________________________________________INCLUDES
 #include <sdkconfig.h>
@@ -30,7 +34,6 @@
 #include <MyWifi.h>
 #endif
 #define __________________________________________VAR_DEF
-String Version = "0.8.7";
 #ifdef __________________________________________VAR_DEF
 //*******************VERSION CONTROLS
 // userInfo
@@ -166,6 +169,8 @@ extern relConfig RELAYS;
 int blePass;
 // END-----------------------DATA's
 #endif
+// coreDump
+MyCoreDump *coreDump;
 //===========================CPU
 #include "CPU_Usage.h"
 CPU_Usage cpu_monitor;
@@ -886,7 +891,7 @@ void MeasurmentTask(void *parameters)
     data += str;
     // Serial.println(String(">X:" + String(len * cos(alpha), 3) + ",Y:" + String(len * sin(alpha), 3)));
     data += "RELS=" + getRelsStatStr() + "\n";
-    myBle.sendString(data);
+    // myBle.sendString(data);
     ws.sendToAll(data.c_str());
     // Serial.println(data);
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -911,8 +916,6 @@ TaskHandle_t adcReadingTask_Handle;
 TaskHandle_t led_indicator_task_Handle;
 TaskHandle_t OVR_CRNT_PRTCT_TASK_Handle;
 TaskHandle_t BatteryTask_Handle;
-TaskHandle_t takeConditionFileTaskHandle;
-TaskHandle_t takeUiConfigFileTaskHandle;
 void pauseUnnessesaryTasks()
 {
   TaskHandle_t th[9] =
@@ -971,7 +974,6 @@ void updateTask(void *parameters)
         break;
       vTaskDelay(pdMS_TO_TICKS(10));
     }
-    
 
     if (millis() - start > TIME_OUT)
     {
@@ -996,7 +998,7 @@ void updateTask(void *parameters)
     {
       lastProgressPercent = progressPercent;
       ws.sendToThisClient(String("UPD_PRC_1=" + String(progressPercent, 1) + "\n").c_str());
-      start = millis(); // reset timer 
+      start = millis(); // reset timer
     }
     Serial.println(String(progressPercent, 1));
     if (progress == UDP_len)
@@ -1030,7 +1032,7 @@ void sendUiConfigTask(void *parameters)
   String str = readStringFromFile(ConfigFile);
   wrapJson(str.c_str(), jsonKeys::UI_CONFIG, str);
   Serial.println("SENDING UI CONFIG");
-  //ws.sendToAll(str.c_str());
+  // ws.sendToAll(str.c_str());
   ws.sendToThisClient(str.c_str());
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
@@ -1042,7 +1044,7 @@ void sendConditionsTask(void *parameters)
   wrapJson(str.c_str(), jsonKeys::CONDITON_CONFIG, str);
   Serial.println("SENDING CONDITON CONFIG");
   ws.sendToAll(str.c_str());
-  myBle.sendString(str.c_str());
+  // myBle.sendString(str.c_str());
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
 }
@@ -1294,7 +1296,7 @@ void BatteryTask(void *parameters)
     {
       if (ampSenisConnected)
       {
-        sendToAll("XrouteAlarm=Amp Meter Disconnected !\xFF\xFF\xFF");
+        sendToAll("XrouteAlarm=Amp Meter Disconnected !\n");
         ampSenisConnected = false;
       }
       b = constrain(myBattery.btPerV, 0, 1) * 100;
@@ -1342,7 +1344,7 @@ void defaultCalibrations()
   }
   if (EEPROM.commit())
   {
-    sprintf(str, "XrouteAlarm=Default Saved OK !\xFF\xFF\xFF");
+    sprintf(str, "XrouteAlarm=Default Saved OK !\n");
     sendToAll(str);
     loadSavedValue();
     for (int i = 0; i < 7; i++) // load dimmer defaults
@@ -1352,14 +1354,14 @@ void defaultCalibrations()
     for (int i = 0; i < 7; i++) // show dimmer defaults
     {
       float val = dimLimit[i] * 128;
-      sprintf(str, "dimMax%d.val=%d\xFF\xFF\xFF", i + 1, (int)val);
+      sprintf(str, "dimMax%d.val=%d\n", i + 1, (int)val);
       sendToAll(str);
       vTaskDelay(10 / portTICK_PERIOD_MS);
     }
   }
   else
   {
-    sprintf(str, "XrouteAlarm=SAVE ERROR !\xFF\xFF\xFF");
+    sprintf(str, "XrouteAlarm=SAVE ERROR !\n");
     sendToAll(str);
   }
 }
@@ -1373,194 +1375,12 @@ void createTimerCondition(String _outputType, int _motorPort, int _upTimeMs, int
 {
   cndtions.push_back(Conditions(_outputType, _motorPort, _upTimeMs, downTimeMs)); // 0
 }
-//--------------------EVENTS
-// Callback function to handle data received from the client
-void takeConditionFileTask(void *pvParameters)
-{
-  while (true)
-  {
-    String str = myBle.directRead(); // Example placeholder for BLE read function
-    confAndCondStrBuffer += str;
-    if (str.indexOf(";") != -1)
-    {
-      MeasurmentTaskPause = false; // change to mutex in the future
-                                   // destroy all other taskes and generate it again in the near future in this function you must do that if the json is ok
-      myBle.stopDirectRead();
-      jsonCon.saveConditionsFileFromString(CondFile, confAndCondStrBuffer);
-      Serial.println("Condition Received Successfully");
-      Serial.println("Checking file....");
-      if (jsonCon.isJsonFileOk(CondFile))
-      {
-        myBle.sendString("ConditionSevadSuccessful\n");
-        Serial.println("Condition File is ok");
-        Serial.println("deleting old conditions vector");
-        cndtions.clear(); // it will automatically call all the destroyers
-        // there was a problem with destructor and vector that it executes destructor unwanted time and i got negative numbers so i comment destructer --
-        Conditions::ConditionCount = 0;
-        Serial.println("jsonCon.readJsonConditionsFromFile(CondFile)");
-        jsonCon.readJsonConditionsFromFile(CondFile);
-        break;
-      }
-      else
-      {
-        myBle.sendString("ConditionSevadError\n");
-      }
-      break;
-    }
-    vTaskDelay(pdMS_TO_TICKS(1));
-  }
-  vTaskDelete(NULL);
-}
-void takeUiConfigFileTask(void *pvParameters)
-{
-  // time out should be added
-
-  while (true)
-  {
-
-    String str = myBle.directRead(); // Example placeholder for BLE read function
-    confAndCondStrBuffer += str;
-    if (str.indexOf(";") != -1)
-    {
-      MeasurmentTaskPause = false; // change to mutex in the future
-      bool status = SaveStringToFile(confAndCondStrBuffer, ConfigFile);
-      if (status == true)
-      {
-        myBle.sendString("UiSevadSuccessful\n");
-      }
-      else
-      {
-        myBle.sendString("UiSevadError\n");
-      }
-
-      confAndCondStrBuffer.clear();
-      // send it to lcd in the future
-      myBle.stopDirectRead();
-      break;
-    }
-    vTaskDelay(pdMS_TO_TICKS(1));
-  }
-  vTaskDelete(NULL);
-}
-class bleUpdate
-{
-private:
-  bool WdFlg = false;
-  bool timeoutFlg = false;
-  bool isUpdating = false;
-  NimBLECharacteristic *pCharacteristic;
-  uint32_t updateSize = 0;
-  uint32_t writenBytes = 0;
-  uint32_t updateProg = 0;
-  uint32_t lastUpdateProg = 0;
-  uint32_t startTime = 0;
-  uint32_t interval = 0;
-  TaskHandle_t taskHandle = NULL; // Handle for the task to be deleted
-
-  void watchDog()
-  {
-    while (1)
-    {
-      WdFlg = true;
-      vTaskDelay(pdMS_TO_TICKS(1000));
-      if (WdFlg)
-      {
-        timeoutFlg = true;
-        Update.end();
-        MeasurmentTaskPause = false;
-        vTaskDelete(taskHandle);
-      }
-    }
-  }
-
-  static void supervisorTask(void *parameters)
-  {
-    bleUpdate *updateObj = static_cast<bleUpdate *>(parameters);
-    updateObj->watchDog();
-  }
-
-public:
-  bleUpdate(NimBLECharacteristic *_pCharacteristic, uint32_t _size)
-  {
-    Serial.println("----------Start Update (" + String(_size) + ") Bytes---------");
-    pCharacteristic = _pCharacteristic;
-    updateSize = _size;
-    Update.begin(_size);
-    writenBytes = 0;
-    startTime = millis();
-    xTaskCreate(supervisorTask, "Update supervisor", 3 * 1024, this, 1, &taskHandle);
-  }
-
-  int continueUpdate()
-  {
-    WdFlg = false;
-    std::string dataStr = pCharacteristic->getValue();
-    uint8_t *data = (uint8_t *)dataStr.c_str();
-    uint32_t len = dataStr.length();
-    Update.write(data, len);
-    writenBytes += len;
-
-    updateProg = Update.progress();
-    if (lastUpdateProg != updateProg)
-    {
-      static uint32_t last = millis();
-      static uint32_t now = last;
-      now = millis();
-      interval = now - last;
-      last = now;
-      String msg = "UpdatePrc=" + String(updateProg * 100 / updateSize);
-      Serial.println(msg);
-      myBle.sendString(msg);
-      lastUpdateProg = updateProg;
-    }
-
-    if (writenBytes == updateSize)
-    {
-      bool status = Update.end();
-      if (status)
-      {
-        String msg = "UpdateMsg=Updated Successfully";
-        Serial.println(msg);
-        myBle.sendString(msg);
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        ESP.restart();
-      }
-      else
-      {
-        String msg = "UpMsg=Updated Error!";
-        Serial.println(msg);
-        myBle.sendString(msg);
-      }
-    }
-    return len;
-  }
-  bool isTimeOut()
-  {
-    return timeoutFlg;
-  }
-};
-bleUpdate *myUpdate;
 //_______________________PARSER
 void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
 {
   char str[128];
   static RGB_VALS RGB1;
   static String accumulatedData;
-  if (myUpdate != nullptr)
-  {
-    if (!myUpdate->isTimeOut())
-    {
-      myUpdate->continueUpdate(); // Pass pCharacteristic if needed by continueUpdate
-      return;
-    }
-    else
-    {
-      // Handle timeout? Maybe delete myUpdate?
-      // delete myUpdate;
-      // myUpdate = nullptr;
-      // MeasurmentTaskPause = false; // Resume task if paused
-    }
-  }
   String receivedData(reinterpret_cast<char *>(pData), length);
   accumulatedData += receivedData;
   int endPos;
@@ -1574,655 +1394,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       command.remove(command.length() - 1);
     }
     accumulatedData.remove(0, endPos + 1);
-    /*
-    else if (command.startsWith("Motor1=Up"))
-    {
-      motorWay = MOTOR_UP;
-      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
-      setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("Motor1=Up\n");
-    }
-    else if (command.startsWith("Motor1=Down"))
-    {
-      motorWay = MOTOR_DOWN;
-      RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[8 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
-      setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("Motor1=Down\n");
-    }
-    else if (command.startsWith("Motor1=Stop"))
-    {
-      motorWay = MOTOR_STOP;
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
-      RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
-      setRelay(RELAYS.relPos, v / 10);
-      myBle.sendString("Motor1=Stop\n");
-    }
-    else if (command.startsWith("DIMER"))
-    { // DIMER4=25
-      int dimNumber = command.substring(5, command.indexOf("=")).toInt() - 1;
-      if (dimNumber > 1 || dimNumber < 6) // handling unwanted value from app
-      {
-        String valStr = command.substring(command.indexOf("=") + 1);
-        float val = valStr.toFloat() / 255;
-
-        dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
-        DimValChanged = true;
-        char str[128];
-        sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
-        myBle.sendString(str);
-        // Serial.printf("in:%s | out:%s\n", command, str);
-      }
-    }
-    else if (command.startsWith("DefaultAllCalibrations"))
-    {
-      defaultCalibrations();
-    }
-    else if (command.startsWith("VCalTo="))
-    {
-      VcalCo = static_cast<float>(atoi(command.c_str() + 7)) / volt;
-      EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCo);
-      EEPROM.commit();
-      NegVoltOffset = ADC_LPF(NEG_VOLT_MUX_IN, 5, negv, 0.99);
-      EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffset);
-      EEPROM.commit();
-      char str[128];
-      sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
-      myBle.sendString(str);
-    }
-    else if (command.startsWith("SetSolar1"))//=12.35;
-    {
-
-    }
-    else if (command.startsWith("AmperOffset"))
-    {
-      if (ampSenisConnected)
-      {
-        amp1Offset = amp1;
-        EEPROM.writeFloat(E2ADD.ampOffsetSave, amp1Offset);
-        EEPROM.commit();
-        char str[128];
-        sprintf(str, "show.txt=\"amp1Offset=%f\"\n", amp1Offset);
-        myBle.sendString(str);
-      }
-      else
-      {
-        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
-      }
-    }
-    else if (command.startsWith("ACalTo="))
-    {
-      if (ampSenisConnected)
-      {
-        Serial.println(command.c_str());
-        A1calCo = static_cast<float>(atoi(command.c_str() + 7)) / (amp1Offset - amp1);
-        EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
-        EEPROM.commit();
-        char str[128];
-        sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
-        myBle.sendString(str);
-      }
-      else
-      {
-        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
-      }
-    }
-    else if (command.startsWith("AmperCalibrate"))
-    {
-      if (ampSenisConnected)
-      {
-        A1calCo = static_cast<float>(DFLT_A_CAL) / (amp1Offset - amp1);
-        EEPROM.writeFloat(E2ADD.AcalCoSave, A1calCo);
-        EEPROM.commit();
-        char str[128];
-        sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
-        myBle.sendString(str);
-      }
-      else
-      {
-        myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
-      }
-    }
-    else if (command.startsWith("Amper0Offset"))
-    {
-      amp0Offset = amp0;
-      EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0Offset);
-      EEPROM.commit();
-      char str[128];
-      sprintf(str, "show.txt=\"amp0Offset=%f\"\n", amp0Offset);
-      myBle.sendString(str);
-    }
-    else if (command.startsWith("A0CalTo="))
-    {
-      A0calCo = static_cast<float>(atoi(command.c_str() + 8)) / (amp0Offset - amp0);
-      EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
-      EEPROM.commit();
-      char str[128];
-      sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
-      myBle.sendString(str);
-    }
-    else if (command.startsWith("Amper2Offset"))
-    {
-      amp2Offset = amp2;
-      EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2Offset);
-      EEPROM.commit();
-      String str = "show.txt=\"amp2Offset=" + String(amp2Offset) + "\"\n";
-      myBle.sendString(str);
-    }
-    else if (command.startsWith("A2CalTo="))
-    { // original A2calCo = static_cast<float>(command.substring(8).toInt()) / (amp2Offset - amp2);
-      A2calCo = static_cast<float>(command.substring(8).toFloat()) / (amp2Offset - amp2);
-      EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
-      EEPROM.commit();
-      String str = "show.txt=\"A2calCo=" + String(A2calCo) + "\"\n";
-      myBle.sendString(str);
-    }
-    else if (command.startsWith("BattCapCalTo="))
-    {
-      float battCap = command.substring(13).toFloat();
-      DFLT_BATT_CAP = battCap;
-      EEPROM.writeFloat(E2ADD.batteryCapSave, DFLT_BATT_CAP);
-      EEPROM.commit();
-      batteryCap = DFLT_BATT_CAP;
-      myBle.sendString("BattCapTxt.val=" + String(static_cast<int>(batteryCap)) + "\n");
-    }
-    else if (command.startsWith("PTCalTo="))
-    {
-      // float aimTemp = command.substring(8).toInt() / 10.0;
-      float aimTemp = command.substring(8).toFloat() / 10.0;
-
-      float temp = ReadPT100_Temp(pt100mv, 510);
-      while (temp < aimTemp && fabs(temp - aimTemp) > 0.1)
-      {
-        PT_mvCal = ++DFLT_PT_MV_CAL / pt100;
-        vTaskDelay(200);
-        temp = ReadPT100_Temp(pt100mv, 510);
-      }
-      vTaskDelay(1000);
-      while (temp > aimTemp && fabs(temp - aimTemp) > 0.1)
-      {
-        PT_mvCal = --DFLT_PT_MV_CAL / pt100;
-        vTaskDelay(200);
-        temp = ReadPT100_Temp(pt100mv, 510);
-      }
-
-      EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
-      EEPROM.commit();
-      myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
-    }
-    else if (command.startsWith("BattFull+"))
-    {
-      DFLT_BATT_FULL_VOLT++;
-      DFLT_BATT_FULL_VOLT = constrain(DFLT_BATT_FULL_VOLT, DFLT_BATT_EMPTY_VOLT, 280);
-      if (DFLT_BATT_FULL_VOLT > 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_12V)
-      {
-        myBattery.setBatteryArrangment(BATTERY_CONFIG_24V);
-        myBle.sendString("XrouteAlarm=You are using 2 Battery in Series = 24v config !\n");
-      }
-      battFullVoltage = DFLT_BATT_FULL_VOLT;
-      myBle.sendString("BattFullVolt.val=" + String(DFLT_BATT_FULL_VOLT) + "\n");
-      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
-      if (myBattery.batteryType != BATTERY_TYPE_NON)
-      {
-        DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
-        myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
-      }
-    }
-    else if (command.startsWith("BattFull-"))
-    {
-      DFLT_BATT_FULL_VOLT--;
-      DFLT_BATT_FULL_VOLT = constrain(DFLT_BATT_FULL_VOLT, DFLT_BATT_EMPTY_VOLT + 10, 280);
-      if (DFLT_BATT_FULL_VOLT < 180 && myBattery.getBatteryArrangment() == BATTERY_CONFIG_24V)
-      {
-        myBattery.setBatteryArrangment(BATTERY_CONFIG_12V);
-        myBle.sendString("XrouteAlarm=You are using 1 Battery = 12v config !\n");
-      }
-      battFullVoltage = DFLT_BATT_FULL_VOLT;
-      myBle.sendString("BattFullVolt.val=" + String(DFLT_BATT_FULL_VOLT) + "\n");
-      myBattery.SelectBatteryAcordingToFullVoltage(DFLT_BATT_FULL_VOLT, sendToAll);
-      if (myBattery.batteryType != BATTERY_TYPE_NON)
-      {
-        DFLT_BATT_EMPTY_VOLT = myBattery.getBatteryEmptyVoltage() * 10 * myBattery.getBatteryArrangment();
-        myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
-      }
-    }
-    else if (command.startsWith("BattfullVoltageCalibrate"))
-    {
-      EEPROM.writeFloat(E2ADD.battFullVoltageSave, DFLT_BATT_FULL_VOLT);
-      EEPROM.commit();
-      battFullVoltage = EEPROM.readFloat(E2ADD.battFullVoltageSave);
-    }
-    else if (command.startsWith("BattEmpty-"))
-    {
-      DFLT_BATT_EMPTY_VOLT--;
-      DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
-      battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
-      myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
-    }
-    else if (command.startsWith("BattEmpty+"))
-    {
-      DFLT_BATT_EMPTY_VOLT++;
-      DFLT_BATT_EMPTY_VOLT = constrain(DFLT_BATT_EMPTY_VOLT, 90, DFLT_BATT_FULL_VOLT - 10);
-      battEmptyVoltage = DFLT_BATT_EMPTY_VOLT;
-      myBle.sendString("BattEmptyVolt.val=" + String(DFLT_BATT_EMPTY_VOLT) + "\n");
-    }
-    else if (command.startsWith("BattEmptyVoltageCalibrate"))
-    {
-      EEPROM.writeFloat(E2ADD.battEmptyVoltageSave, DFLT_BATT_EMPTY_VOLT);
-      EEPROM.commit();
-      battEmptyVoltage = EEPROM.readFloat(E2ADD.battEmptyVoltageSave);
-    }
-    else if (command.startsWith("BatteryType="))
-    {
-      char batteryType = command[12];
-      switch (batteryType)
-      {
-      case '1':
-        myBattery.setBatType(BATTERY_TYPE_AGM);
-        myBle.sendString("XrouteAlarm= AGM BATTERY \n");
-        break;
-      case '2':
-        myBattery.setBatType(BATTERY_TYPE_GEL);
-        myBle.sendString("XrouteAlarm= GEL BATTERY \n");
-        break;
-      case '3':
-        myBattery.setBatType(BATTERY_TYPE_ACID);
-        myBle.sendString("XrouteAlarm= ACID BATTERY \n");
-        break;
-      case '4':
-        myBattery.setBatType(BATTERY_TYPE_LITIUM);
-        myBle.sendString("XrouteAlarm= LITHIUM BATTERY \n");
-        break;
-      case '5':
-        myBattery.setBatType(BATTERY_TYPE_LIFEPO4);
-        myBle.sendString("XrouteAlarm= LIFEPO4 BATTERY \n");
-        break;
-      default:
-        // Handle unknown battery type if necessary
-        break;
-      }
-      battFullVoltage = floor(myBattery.getBatteryFullVoltage() * 10);
-      EEPROM.writeFloat(E2ADD.battFullVoltageSave, battFullVoltage);
-      EEPROM.commit();
-      Serial.println("battFullVoltage(X10) =" + String(battFullVoltage));
-    }
-    else if (command.startsWith("SetMinFloater1"))
-    {
-      clnWtrMin = clnWtr;
-
-      EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMin);
-      EEPROM.commit();
-      String response = "show.txt=\"clnWtrMin=" + String(clnWtrMin) + "\"\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("SetMaxFloater1"))
-    {
-      clnWtrMax = clnWtr;
-
-      EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMax);
-      EEPROM.commit();
-      String response = "show.txt=\"clnWtrMax=" + String(clnWtrMax) + "\"\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("RevFloater1"))
-    {
-    }
-    else if (command.startsWith("SetMinFloater2"))
-    {
-      drtWtrMin = drtWtr;
-
-      EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMin);
-      EEPROM.commit();
-    }
-    else if (command.startsWith("SetMaxFloater2"))
-    {
-      drtWtrMax = drtWtr;
-
-      EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMax);
-      EEPROM.commit();
-    }
-    else if (command.startsWith("RevFloater2"))
-    {
-    }
-    else if (command.startsWith("SetMinFloater3"))
-    {
-      gryWtrMin = gryWtr;
-
-      EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMin);
-      EEPROM.commit();
-    }
-    else if (command.startsWith("SetMaxFloater3"))
-    {
-      gryWtrMax = gryWtr;
-
-      EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMax);
-      EEPROM.commit();
-    }
-    else if (command.startsWith("RevFloater3"))
-    {
-    }
-    else if (command.startsWith("LimitDim"))
-    {
-      unsigned int dimNum = command[8] - '1';
-      float val = command[10] * 2;
-      dimLimit[dimNum] = val / 255;
-      dimTmp[dimNum] = static_cast<double>(32767) * dimLimit[dimNum];
-      DimValChanged = true;
-      String response = "show.txt=\"Dim" + String(dimNum + 1) + " MaxLimit=" + String(static_cast<int>(32768 * dimLimit[dimNum])) + "\"\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("LoadDimLimits"))
-    {
-      for (int i = 0; i < 7; i++)
-      {
-        float val = dimLimit[i] * 128;
-        String response = "dimMax" + String(i + 1) + ".val=" + String(static_cast<int>(val)) + "\n";
-        myBle.sendString(response.c_str());
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-      }
-    }
-    else if (command.startsWith("SaveDimerLimits"))
-    {
-      for (int i = 0; i < 7; i++)
-      {
-        EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimit[i]);
-        EEPROM.commit();
-      }
-      String response = "XrouteAlarm=Limit Saved OK! \n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("GiveMeBalance="))
-    {
-      float ofsetlesX = (accXValue - accXValueOffset) * revX;
-      float ofsetlesY = (accYValue - accYValueOffset) * revY;
-
-      alpha = atan(ofsetlesY / ofsetlesX);
-
-      if (ofsetlesX < 0 && ofsetlesY > 0)
-        alpha += PI;
-      if (ofsetlesX < 0 && ofsetlesY < 0)
-        alpha += PI;
-      if (ofsetlesX > 0 && ofsetlesY < 0)
-        alpha += (2 * PI);
-      len = sqrt(ofsetlesX * ofsetlesX + ofsetlesY * ofsetlesY) * accSensitivity;
-
-      if (len > 1)
-        len = 1;
-      accSensitivity = command[14] - '0'; // to prevent \n i add '0' to slider
-      accSensitivity *= 2;
-
-      String response = "Accx.val=" + String(static_cast<int>(roundf(len * cos(alpha) * 100))) + "\n";
-      myBle.sendString(response.c_str());
-      response = "Accy.val=" + String(static_cast<int>(roundf(len * sin(alpha) * 100))) + "\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("AccelZeroOffset"))
-    {
-      GyroOffsetingFlg = true;
-      while (GyroOffsetingFlg)
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-      EEPROM.writeFloat(E2ADD.accXValueOffsetSave, accXValue);
-      EEPROM.writeFloat(E2ADD.accYValueOffsetSave, accYValue);
-      EEPROM.commit();
-      accXValueOffset = EEPROM.readFloat(E2ADD.accXValueOffsetSave);
-      accYValueOffset = EEPROM.readFloat(E2ADD.accYValueOffsetSave);
-
-      String response = "XrouteAlarm=accXValueOffset=" + String(accXValueOffset) + ",accYValueOffset=" + String(accYValueOffset) + "\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("GiveMeSysInfo")) // its going to be deprecated
-    {
-      uint64_t chipid = ESP.getEfuseMac();
-      String response = "MacAddress:" + String(chipid) + "," + GeneralLisence + ",Version:" + Version + "\n";
-      Serial.println(response.c_str());
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("GiveMeVersion"))
-    {
-      String response = "Version=" + Version + "\n";
-      Serial.println(response.c_str());
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("GiveMeChipId"))
-    {
-      uint64_t chipid = ESP.getEfuseMac();
-      String response = "ChipId=" + String(chipid) + "\n";
-      Serial.println(response.c_str());
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("GyroPass:deactive"))
-    {
-      GyroLicense->deactivate();
-    }
-    else if (command.startsWith("GyroPass:"))
-    {
-
-      String tmp = String(command.substring(9, 16).c_str());
-      String response = "ReceivedPass:" + tmp;
-      Serial.println(response.c_str());
-      response = "InternalPass:" + String(GyroLicense->realSerial);
-      Serial.println(response.c_str());
-
-      if (String(GyroLicense->realSerial) == tmp)
-      {
-        GyroLicense->activate();
-      }
-    }
-    else if (command.startsWith("GyroOrientation="))
-    {
-      GyroOriantation = String(command.substring(16, 5).c_str());
-      EEPROM.writeString(E2ADD.GyroOriantationSave, GyroOriantation);
-      EEPROM.commit();
-      String strTmp = EEPROM.readString(E2ADD.GyroOriantationSave);
-      GyroOriantation = strTmp;
-    }
-    else if (command.startsWith("GiveMeOrientation"))
-    {
-      String response = "Orientation=" + GyroOriantation + "\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("PreCalTo="))
-    {
-      float aimAlt = command.substring(9).toInt(); // altitude in meters
-      float tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffset);
-      float error = 1; // to get into the loop
-      float pressurCalOffsetTemp = pressurCalOffset;
-      String response = "show.txt=\"Calibrating=\"\n";
-      myBle.sendString(response.c_str());
-
-      while (fabs(error) > 0.1)
-      {
-        if (isnan(pressurCalOffsetTemp)) // for sometimes crashes
-        {
-          pressurCalOffsetTemp = 0;
-          Serial.println("ERROR");
-        }
-        error = aimAlt - tempAlt;
-        pressurCalOffsetTemp += (error / 5000);
-        tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffsetTemp);
-        Serial.println("PrOffset=" + String(pressurCalOffsetTemp));
-        response = "M.Pre.val=" + String(static_cast<int>(tempAlt)) + "\n";
-        myBle.sendString(response.c_str());
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-      }
-
-      if (!isnan(pressurCalOffsetTemp)) // for sometimes crashes
-      {
-        pressurCalOffset = pressurCalOffsetTemp;
-        EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffset);
-        EEPROM.commit();
-      }
-      response = "show.txt=\"pressurCalOffset=" + String(pressurCalOffset) + "\"\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("BLEPASSWORD=")) // example : BLEPASSWORD=123456,654321
-    {
-      // extract 6 digit oldPass from = to ,
-      int eq = command.indexOf('=');
-      int comma = command.indexOf(',');
-      String oldPassStr = command.substring(eq + 1, comma);
-      uint32_t oldPass = atoi(oldPassStr.c_str());
-      // extract 6 digit newPass from , to end
-      String newPassStr = command.substring(comma + 1);
-      uint32_t newPass = atoi(newPassStr.c_str());
-      // check if oldPass is correct
-      if (oldPass == myBle.getPassKey())
-      {
-        EEPROM.writeUInt(E2ADD.blePassSave, newPass);
-        EEPROM.commit();
-        // set new passkey and wipe bonds
-        Serial.println("PassKey: " + String(myBle.getPassKey()));
-        myBle.sendString("BLE_PASSWORD_CHANGED_OK\n");
-
-        Serial.println("Changing pass\n");
-        myBle.setPassKey(newPass, true);
-        Serial.println("Pass changed OK\n");
-      }
-      else
-      {
-        myBle.sendString("BLE_PASSWORD_CHANGED_ERROR\n");
-      }
-    }
-    else if (command.startsWith("GETBLEPASSWORD"))
-    {
-      // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n";
-      String response = "BLEPASSWORD=" + String(myBle.getPassKey()) + "\n";
-      myBle.sendString(response.c_str());
-      Serial.println(response.c_str());
-    }
-    else if (command.startsWith("DEF="))
-    {
-      String defType = command.substring(4);
-      if (defType == "UiConfig")
-      {
-        SaveStringToFile(String(defaultConfig), ConfigFile);
-      }
-      else if (defType == "Conditions")
-      {
-        SaveStringToFile(String(defaultCondition), CondFile);
-        jsonCon.readJsonConditionsFromFile(CondFile);
-      }
-
-      else if (defType == "VOLTAGE")
-      {
-        EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCoDeflt);
-        EEPROM.writeFloat(E2ADD.NegVoltOffsetSave, NegVoltOffsetDeflt);
-      }
-      else if (defType == "A0")
-      {
-        EEPROM.writeFloat(E2ADD.amp0OffsetSave, amp0OffsetDeflt);
-        EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCoDeflt);
-      }
-      else if (defType == "A")
-      {
-        EEPROM.writeFloat(E2ADD.ampOffsetSave, ampOffsetDeflt);
-        EEPROM.writeFloat(E2ADD.AcalCoSave, AcalCoDeflt);
-      }
-      else if (defType == "A2")
-      {
-        EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCoDeflt);
-        EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2OffsetDeflt);
-      }
-      else if (defType == "PT")
-      {
-        EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal_Deflt);
-      }
-      else if (defType == "CW_MIN")
-      {
-        EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMinDeflt);
-        EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMaxDeflt);
-      }
-      else if (defType == "CW_MAX")
-      {
-        EEPROM.writeFloat(E2ADD.clnWtrMinSave, clnWtrMinDeflt);
-        EEPROM.writeFloat(E2ADD.clnWtrMaxSave, clnWtrMaxDeflt);
-      }
-      else if (defType == "DW_MIN")
-      {
-        EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMinDeflt);
-        EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
-      }
-      else if (defType == "DW_MAX")
-      {
-        EEPROM.writeFloat(E2ADD.drtWtrMinSave, drtWtrMinDeflt);
-        EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
-      }
-      else if (defType == "GW_MIN")
-      {
-        EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
-        EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
-      }
-      else if (defType == "GW_MAX")
-      {
-        EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
-        EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
-      }
-      else if (defType == "DIMMER")
-      {
-        for (int i = 0; i < 7; i++) // save dimmer defaults
-        {
-          EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimitDeflt); // limit dimmers to %60
-        }
-      }
-      else if (defType == "ALTITUDE")
-      {
-        EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffsetDeflt);
-      }
-      else if (defType == "GAS_MIN" || defType == "GAS_MAX")
-      {
-        // Placeholder for future implementation
-      }
-      EEPROM.commit();
-      loadSavedValue();
-      String response = "XrouteAlarm=Default OK\n";
-      myBle.sendString(response.c_str());
-    }
-    else if (command.startsWith("StartUpdate="))
-    {
-      MeasurmentTaskPause = true;
-      uint32_t binSize = command.substring(command.indexOf("=") + 1, command.indexOf(",")).toInt();
-      myUpdate = new bleUpdate(pCharacteristic, binSize);
-    }
-    else if (command.startsWith("TakeUiConfig="))
-    {
-      confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
-      MeasurmentTaskPause = true;                                                     // change to mutex in the future
-      myBle.startDirectRead();
-      if (eTaskGetState(&takeUiConfigFileTaskHandle) != eRunning)
-        xTaskCreate(takeUiConfigFileTask, "takeUiConfigFileTask", 4 * 1024, NULL, 1, &takeUiConfigFileTaskHandle);
-      break; // breake for preventing forthure processing the accumulated string
-    }
-    else if (command.startsWith("GiveMeUiConfigFile"))
-    {
-      if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
-      {
-        xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 4, NULL, 2, &sendUiConfigTaskHandle);
-      }
-    }
-    else if (command.startsWith("GiveMeConditionsFile"))
-    {
-      if (eTaskGetState(&sendConditionsTaskHandle) != eRunning)
-      {
-        xTaskCreate(sendConditionsTask, "sendConditionsTask", 1024 * 4, NULL, 2, &sendConditionsTaskHandle);
-      }
-    }
-    else if (command.startsWith("TakeConditions="))
-    {
-      confAndCondStrBuffer = accumulatedData.substring(accumulatedData.indexOf("{")); // json starts with '{'
-      MeasurmentTaskPause = true;                                                     // change to mutex in the future
-      myBle.startDirectRead();
-      if (eTaskGetState(&takeConditionFileTaskHandle) != eRunning)
-        xTaskCreate(takeConditionFileTask, "takeConditionTask", 4 * 1024, NULL, 1, &takeConditionFileTaskHandle);
-      break; // breake for preventing forthure processing the accumulated string
-    }
-    else
-    {
-      String errorMessage = "Errorparsing:" + String(command.c_str());
-      Serial.println(errorMessage);
-      myBle.sendString(errorMessage);
-    }
-    */
     int RES = 0;
     /**/ if (command.startsWith("SET_"))
     {
@@ -2230,15 +1401,15 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       /**/ if (command.startsWith("DIM_")) // DIM_12=34
       {
         int dimNumber = command.substring(command.indexOf("_") + 1, command.indexOf("=")).toInt() - 1;
-        if (dimNumber > 1 || dimNumber < 6) // handling unwanted value from app
+        if (dimNumber > 1 || dimNumber <= MyBoard.dimCount) // todo : it was (dimNumber<6) and im not sure about this walue now
         {
           String valStr = command.substring(command.indexOf("=") + 1);
           float val = valStr.toFloat() / 255;
           dimTmp[dimNumber] = 32768 * val * dimLimit[dimNumber];
           DimValChanged = true;
           sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
-          myBle.sendString(str);
-          //  ws.sendToAll(str);
+          // myBle.sendString(str);
+          //   ws.sendToAll(str);
           ws.SendToAllExcludeClient(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
           // Serial.printf("in:%s | out:%s\n", command, str);
         }
@@ -2271,7 +1442,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
           // myBle.sendString("sw" + String(index) + "=ON\n");
-          ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
+          // ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
+          ws.sendToAll(String("sw" + String(index) + "=ON\n").c_str());
           // vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         else if (command.lastIndexOf("OFF") > 0)
@@ -2279,7 +1451,9 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
           // myBle.sendString("sw" + String(index) + "=OFF\n");
-          ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
+          // ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
+          ws.sendToAll(String("sw" + String(index) + "=OFF\n").c_str());
+
           // vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         else
@@ -2299,8 +1473,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           DimValChanged = true;
           char str[128];
           sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
-          myBle.sendString(str);
-          // ws.sendToAll(str);
+          // myBle.sendString(str);
+          //  ws.sendToAll(str);
           ws.SendToAllExcludeClient(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
           // Serial.printf("in:%s | out:%s\n", command, str);
         }
@@ -2318,7 +1492,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("Motor1=Up\n");
+          // myBle.sendString("Motor1=Up\n");
           ws.sendToAll(String("Motor1=Up\n").c_str());
         }
         else if (command.indexOf("DOWN") > 0)
@@ -2327,7 +1501,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[8 - 1]);
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("Motor1=Down\n");
+          // myBle.sendString("Motor1=Down\n");
           ws.sendToAll(String("Motor1=Down\n").c_str());
         }
         else if (command.indexOf("STOP") > 0)
@@ -2336,7 +1510,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          myBle.sendString("Motor1=Stop\n");
+          // myBle.sendString("Motor1=Stop\n");
           ws.sendToAll(String("Motor1=Stop\n").c_str());
         }
       }
@@ -2353,13 +1527,14 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         accYValueOffset = EEPROM.readFloat(E2ADD.accYValueOffsetSave);
         if (timeout)
         {
-          sprintf(str, "XrouteAlarm=accXValueOffset=%f,accYValueOffset=%f\xFF\xFF\xFF", accXValueOffset, accYValueOffset);
+          sprintf(str, "XrouteAlarm=accXValueOffset=%f,accYValueOffset=%f\n", accXValueOffset, accYValueOffset);
         }
         else
         {
-          sprintf(str, "XrouteAlarm=Try again please!\xFF\xFF\xFF");
+          sprintf(str, "XrouteAlarm=Try again please!\n");
         }
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("START_UPDATE_")) // START_UPDATE_1=5789 byte
       {
@@ -2381,11 +1556,15 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       else if (command.startsWith("DEV_RESET_1")) // Restart xRoute
       {
         Serial.println("[PARSER]:Restarting ESP32");
-        //pauseUnnessesaryTasks();
+        // pauseUnnessesaryTasks();
         vTaskSuspend(led_indicator_task_Handle);
         ws2812Blink(COLOR_WHITE, 10, 1, 1);
         vTaskDelay(pdMS_TO_TICKS(2000));
         ESP.restart();
+      }
+      else if (command.startsWith("DEL_CORE_DUMP_")) // delete coredump
+      {
+        coreDump->delete_core_dump();
       }
       else
       {
@@ -2400,7 +1579,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         int index = atoi(command.substring(command.lastIndexOf("_") + 1).c_str());
 
         String str = "";
-        for (int index = 1; index <= 8; index++)
+        for (int index = 1; index <= MyBoard.relCount; index++)
         {
           if (relState_0_15(index - 1) == true)
           {
@@ -2411,12 +1590,12 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
             str += "sw" + String(index) + "=OFF\n";
           }
         }
-        for (int i = 1; i <= 5; i++)
+        for (int i = 1; i <= MyBoard.dimCount; i++)
         {
           float val = (dimTmp[i - 1] / (32768 * dimLimit[i - 1])) * 255;
           str += "DIMER" + String(i) + "=" + String((int)val) + "\n";
         }
-        myBle.sendString(str);
+        // myBle.sendString(str);
         ws.sendToAll(str.c_str());
       }
       else if (command.startsWith("DIM_LIM_")) // GET_DIM_LIM_1
@@ -2429,7 +1608,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           float val = dimLimit[i] * 255;
           str += "DIM_LIM" + String(i + 1) + "=" + String((int)val) + "\n";
         }
-        myBle.sendString(str);
+        // myBle.sendString(str);
         ws.sendToAll(str.c_str());
       }
       else if (command.startsWith("RGB_")) // GET_RGB_1
@@ -2440,9 +1619,9 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       {
         String response = "Version=" + Version + "\n";
         // Serial.println(response.c_str());
-        myBle.sendString(response.c_str());
+        // myBle.sendString(response.c_str());
         ws.sendToThisClient(response.c_str());
-        Serial.println(response.c_str());
+        Serial.println("🆚" + String(response.c_str()));
       }
       else if (command.startsWith("CONDITION_CONFIG"))
       {
@@ -2461,30 +1640,15 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       else if (command.startsWith("GYRO_ORI_")) // gyro oriantation
       {
         String response = "Orientation=" + GyroOriantation + "\n";
-        myBle.sendString(response.c_str());
+        // myBle.sendString(response.c_str());
         ws.sendToThisClient(response.c_str());
       }
       else if (command.startsWith("DIM_LIM_")) // dimer limit DIM_LIM_123
       {
         int index = atoi(command.substring(command.indexOf("_") + 1).c_str());
         float val = dimLimit[index] * 255;
-        sprintf(str, "dimMax%d.val=%d\xFF\xFF\xFF", index + 1, (int)val);
-        myBle.sendString(str);
-        ws.sendToThisClient(str);
-      }
-      else if (command.startsWith("SYS_INFO")) // system informations
-      {
-        uint64_t chipid = ESP.getEfuseMac();
-        String LisenceStr = "";
-        // LisenceStr += "Gyro:" + String(xrtLcns->isActive(xrtLcns->gyroLcns) ? "True" : "False");
-        // LisenceStr += ",Hum:" + String(xrtLcns->isActive(xrtLcns->humLcns) ? "True" : "False");
-        // LisenceStr += ",Current:" + String(xrtLcns->isActive(xrtLcns->crntLcns) ? "True" : "False");
-        // LisenceStr += ",Work:" + String(xrtLcns->isActive(xrtLcns->wrkLcns) ? "True" : "False");
-        // LisenceStr += ",Gas:" + String(xrtLcns->isActive(xrtLcns->gasLcns) ? "True" : "False"); // Removed extra space
-        char str[256];
-        sprintf(str, "MacAddress:%012llX,%s,Version:%s\xFF\xFF\xFF", chipid, LisenceStr.c_str(), Version);
-        Serial.println(str);
-        myBle.sendString(str);
+        sprintf(str, "dimMax%d.val=%d\n", index + 1, (int)val);
+        // myBle.sendString(str);
         ws.sendToThisClient(str);
       }
       else if (command.startsWith("WIFI_INFO_JSON_"))
@@ -2500,13 +1664,16 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         msg += "\"LOCAL_IP\" : \"" + WiFi.localIP().toString() + "\",";
         msg += "\"RSSI\" : " + String(WiFi.RSSI()) + ",";
         msg += "\"port\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::Port)) + "}]}";
-        myBle.sendString(msg.c_str());
+        // myBle.sendString(msg.c_str());
         ws.sendToThisClient(msg.c_str());
       }
       else if (command.startsWith("DEVICE_INFO_JSON_"))
       {
+        uint64_t chipid = ESP.getEfuseMac();
+        char UIDstr[16];
+        sprintf(UIDstr, "%012llX", chipid);
         int index = (command.substring(command.lastIndexOf("_") + 1)).toInt();
-        StaticJsonDocument<512> doc;
+        StaticJsonDocument<1024> doc;
 
         JsonObject root = doc.createNestedObject("DEVICE_INFO");
         JsonObject licenses = root.createNestedObject("licenses");
@@ -2517,12 +1684,20 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         licenses["Gas"] = xrtLcns->isActive(xrtLcns->gasLcns) ? "True" : "False";
 
         JsonObject info = root.createNestedObject("info");
-        info["MAC_ADDRESS"] = 123456789;
+        info["MAC_ADDRESS"] = UIDstr;
         info["DEVICE_NAME"] = "xRoute-pro";
+        info["VERSION"] = Version;
+        info["REL_COUNT"] = MyBoard.relCount;
+        info["DIM_COUNT"] = MyBoard.dimCount;
+        info["FLT_COUNT"] = MyBoard.fltCount;
+        info["MOTOR_COUNT"] = MyBoard.motorCount;
+        info["BOARD_TYPE"] = MyBoard.Name;
 
         String msg;
         serializeJson(doc, msg);
-        myBle.sendString(msg.c_str());
+        // Serial.println(msg);
+        //  myBle.sendString(msg.c_str());
+        myBle.sendLongString(msg.c_str()); // testing for crash . it was crashing on normal senString beqause of length
         ws.sendToThisClient(msg.c_str());
       }
       else if (command.startsWith("WIFI_IP_"))
@@ -2546,7 +1721,12 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n"; TODO:
         String response = "BLE_PASS_1=" + String(myBle.getPassKey()) + "\n";
         myBle.sendString(response.c_str());
+        ws.sendToThisClient(response.c_str());
         Serial.println(response.c_str());
+      }
+      else if (command.startsWith("CORE_DUMP_"))
+      {
+        coreDump->print_core_dump();
       }
       else
       {
@@ -2634,16 +1814,17 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       EEPROM.commit();
       loadSavedValue();
       String response = "XrouteAlarm=Default OK\n";
-      myBle.sendString(response.c_str());
+      // myBle.sendString(response.c_str());
+      ws.sendToThisClient(response.c_str());
     }
     else if (command.startsWith("CAL_"))
     {
       command = command.substring(4);
       int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt();
-
       /* */ if (command.startsWith("VLT_"))
       {
-        VcalCo = static_cast<float>(atoi(command.substring(command.indexOf("=") + 1).c_str())) / volt;
+        String strVal = command.substring(command.indexOf("=") + 1);
+        VcalCo = strVal.toFloat() / volt;
         EEPROM.writeFloat(E2ADD.VcalCoSave, VcalCo);
         EEPROM.commit();
         NegVoltOffset = ADC_LPF(NEG_VOLT_MUX_IN, 5, negv, 0.99);
@@ -2651,7 +1832,9 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         char str[128];
         sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
-        myBle.sendString(str);
+        Serial.println(str);
+        ws.sendToThisClient(str);
+        // myBle.sendString(str);
       }
       else if (command.startsWith("OTMP_")) // outside temp
       {
@@ -2674,7 +1857,10 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         }
         EEPROM.writeFloat(E2ADD.PT_mvCal_Save, PT_mvCal);
         EEPROM.commit();
-        myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
+        char str[128];
+        sprintf(str, "show.txt=\"PT_mvCal=%f\"\n", PT_mvCal);
+        // myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("INT_CUR_")) // internal current
       {
@@ -2683,7 +1869,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         char str[128];
         sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("ZERO_INT_CUR_")) // internal current offset
       {
@@ -2692,7 +1879,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         char str[128];
         sprintf(str, "show.txt=\"amp0Offset=%f\"\n", amp0Offset);
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("EXT_CUR_")) // external ampermeter
       {
@@ -2706,11 +1894,14 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           EEPROM.commit();
           char str[128];
           sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
-          myBle.sendString(str);
+          // myBle.sendString(str);
+          ws.sendToThisClient(str);
         }
         else
         {
-          myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+          // myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
+          ws.sendToThisClient("XrouteAlarm=No External Ampermeter Detected !\n");
+          RES = 1;
         }
       }
       else if (command.startsWith("ZERO_EXT_CUR_")) // external current offset
@@ -2719,7 +1910,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.writeFloat(E2ADD.ampOffsetSave, amp1Offset);
         EEPROM.commit();
         sprintf(str, "show.txt=\"amp1Offset=%f\"\n", amp1Offset);
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("GAS_")) // GAS_1=123
       {
@@ -2728,7 +1920,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.writeFloat(E2ADD.A2calCoSave, A2calCo);
         EEPROM.commit();
         sprintf(str, "show.txt=\"GAS=%f\"\n", A2calCo);
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("ZERO_GAS_")) // GAS zero
       {
@@ -2736,7 +1929,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.writeFloat(E2ADD.amp2OffsetSave, amp2Offset);
         EEPROM.commit();
         sprintf(str, "show.txt=\"Gas Offset=%f\"\n", amp2Offset);
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("MAX_DIM_")) // maximum Dimmer MAX_DIM_1=123
       {
@@ -2758,7 +1952,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         batteryCap = DFLT_BATT_CAP;
         sprintf(str, "BattCapTxt.val=%d\n", (int)batteryCap);
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("MAX_FLT_")) // MAX_FLT_1
       {
@@ -2777,7 +1972,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           sprintf(str, "show.txt=\"FLT_2_Max=%f\"\n", index, drtWtrMax);
         }
 
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("MIN_FLT_")) // MIN_FLT_1
       {
@@ -2795,14 +1991,16 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           EEPROM.commit();
           sprintf(str, "show.txt=\"FLT_2_Min=%f\"\n", drtWtrMin);
         }
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("DIM_MAXES_"))
       {
         EEPROM.writeFloat(E2ADD.dimLimitSave[index - 1], dimLimit[index - 1]);
         EEPROM.commit();
         sprintf(str, "XrouteAlarm=Dimer%d Limit Saved OK! \n", index);
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("GYRO_ORI_")) // gyro oriantation GYRO_ORI_1=XY01
       {
@@ -2819,7 +2017,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.readString(E2ADD.GyroOriantationSave, strTmp, 16);
         GyroOriantation = String(strTmp);
         sprintf(str, "XrouteAlarm=Gyro Saved Ok! \n");
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
       else if (command.startsWith("ALT_")) // ALTITUTE ALT_1=123
       {
@@ -2828,7 +2027,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         float error = 1; // to get into the loop
         float pressurCalOffsetTemp = pressurCalOffset;
         sprintf(str, "show.txt=\"Calibrating=\"\n");
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
 
         while (fabs(error) > 0.1)
         {
@@ -2842,7 +2042,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           tempAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffsetTemp);
           Serial.println("PrOffset=" + String(pressurCalOffsetTemp, 5));
           sprintf(str, "M.Pre.val=%d\n", (int)tempAlt);
-          myBle.sendString(str);
+          // myBle.sendString(str);
+          ws.sendToThisClient(str);
           vTaskDelay(10 / portTICK_PERIOD_MS);
         }
 
@@ -2853,7 +2054,8 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           EEPROM.commit();
         }
         sprintf(str, "show.txt=\"pressurCalOffset=%f\"n", pressurCalOffset);
-        myBle.sendString(str);
+        // myBle.sendString(str);
+        ws.sendToThisClient(str);
       }
     }
     else if (command.startsWith("SAVE_"))
@@ -2948,6 +2150,11 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         }
       }
     }
+    else if (command.startsWith("PASSKEY")) // normaly its done one the myNimBle.cpp if its being passed here it means its being registered in whitelist already
+    {
+      myBle.sendString("PASSKEY_ACCEPTED\n");
+      Serial.println("🔷🔷🔷This device is already registered in whitelist");
+    }
     else
     {
       RES = 10;
@@ -2955,6 +2162,10 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     if (RES)
     {
       Serial.println("[PARSING ERROR] : " + command + " : " + String(RES));
+      // empty buffer
+      accumulatedData.clear();
+      command.clear();
+      RES = 0;
     }
     vTaskDelay(pdMS_TO_TICKS(10));
     MeasurmentTaskPause = false;
@@ -2974,14 +2185,13 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
 }
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
 {
-  const NimBLEAddress addr = connInfo.getAddress();
-  if (!myBle.isInWhiteList(addr))
-  {
-    myBle.authenticate(connInfo, pData, length);
-    return;
-  }
+  // You no longer need any security checks here.
+  // This function is now ONLY called for data from already-authenticated, whitelisted devices.
+  
+  // Directly process the command from the trusted device.
   processReceivedCommandData(pCharacteristic, pData, length);
 }
+
 void sendCmdToExecute(char *str)
 {
   // Simulate BLE data reception
@@ -3007,6 +2217,39 @@ void wsCmdQueTask(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
+void serialCB()
+{
+  static String serialBuffer;
+  while (Serial.available())
+  {
+    char c = Serial.read();
+
+    // Handle backspace or delete characters
+    if ((c == '\b' || c == 127) && serialBuffer.length() > 0)
+    {
+      serialBuffer.remove(serialBuffer.length() - 1); // Remove last char from buffer
+      Serial.print("\b \b");                          // Erase character on the serial monitor
+    }
+    // Handle newline character (command submission)
+    else if (c == '\n' || c == '\r')
+    {
+      Serial.println(); // Move to the next line in the monitor
+      if (serialBuffer.length() > 0)
+      {
+        serialBuffer += '\n';
+        wsCmdQueue.push_back(String(serialBuffer));
+        // sendCmdToExecute((char *)serialBuffer.c_str());// it will drow all the resources from this event that should be normally an small code , its an event
+        serialBuffer = ""; // Clear the buffer for the next command
+      }
+    }
+    // Handle regular, printable characters
+    else if (isPrintable(c))
+    {
+      serialBuffer += c; // Add character to the buffer
+      Serial.print(c);   // Echo character to the serial monitor
+    }
+  }
+}
 //--------------------
 void setup()
 {
@@ -3016,7 +2259,10 @@ void setup()
     pinMode(34, INPUT_PULLUP); // Dimmer Protection PIN 34
     attachInterrupt(digitalPinToInterrupt(34), dimmerShortCircuitIntrupt, FALLING);
     Serial.begin(115200);
+    coreDump = new MyCoreDump();
     Serial.println("\n//======STARTING=====//");
+    // atach an intrupt for incomming serial data
+    Serial.onReceive(serialCB);
     initRelay();
     initLED_PWM();
     initADC();
@@ -3068,6 +2314,7 @@ void setup()
     xrtLcns = new RegDev(RegFilePath);
     xrtLizing = new Leasing(UpTimeFilePath);
   }
+
   // Config the Conditions
   if (true)
   {
@@ -3115,8 +2362,8 @@ void setup()
   if (true)
   {
     // Configure network
-    String ssid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID, "karavanicin.com_2.4GHz");
-    String pass = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword, "1020304050");
+    String ssid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID, "LabobinX_2.4G");
+    String pass = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword, "102030405060");
     String defApName = "Xroute-AP" + String(myBle.getDeviceCode());
     String apName = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApName, defApName);
     String apPass = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApPassword, "12345678");
@@ -3135,86 +2382,87 @@ void setup()
     ws.setPort(port);
     ws.onJson([](JsonDocument &doc)
               {
-  // 1) Treat the entire doc as a JsonObject
-  JsonObject root = doc.as<JsonObject>();
+                // 1) Treat the entire doc as a JsonObject
+                JsonObject root = doc.as<JsonObject>();
+                // 2) Iterate over its key/value pairs. If you know there’s exactly one wrapper,
+                //    you can just grab the first pair.
+                if (root.size() == 0)
+                {
+                  Serial.println("No keys found in incoming JSON");
+                  return;
+                }
+                // Take the first key/value pair in `root`
+                JsonPair kv = *root.begin();
+                const char *wrapperKey = kv.key().c_str();
+                JsonVariant wrappedValue = kv.value();
+                Serial.print("Detected wrapper key: ");
+                Serial.println(wrapperKey);
+                // Now `wrappedValue` is whatever was under that key. If you know it’s an array:
+                if (!wrappedValue.is<JsonArray>())
+                {
+                  Serial.println("Warning: expected an array under the wrapper key");
+                  return;
+                }
+                JsonArray arr = wrappedValue.as<JsonArray>();
+                Serial.print("Array size under \"");
+                Serial.print(wrapperKey);
+                Serial.print("\": ");
+                Serial.println(arr.size());
+                // Example: if you want to print the first element of that array:
+                if (arr.size() > 0 && arr[0].is<JsonObject>())
+                {
+                  Serial.println("First element:");
+                  String data;
+                  // serializeJsonPretty(arr[0].as<JsonObject>(), data);// it cuases ~2.2X more size
+                  serializeJson(arr[0].as<JsonObject>(), data);
 
-  // 2) Iterate over its key/value pairs. If you know there’s exactly one wrapper,
-  //    you can just grab the first pair.
-  if (root.size() == 0) {
-    Serial.println("No keys found in incoming JSON");
-    return;
-  }
-  // Take the first key/value pair in `root`
-  JsonPair kv = *root.begin();
-  const char *wrapperKey = kv.key().c_str();
-  JsonVariant   wrappedValue = kv.value();
-  Serial.print("Detected wrapper key: ");
-  Serial.println(wrapperKey);
-  // Now `wrappedValue` is whatever was under that key. If you know it’s an array:
-  if (!wrappedValue.is<JsonArray>()) {
-    Serial.println("Warning: expected an array under the wrapper key");
-    return;
-  }
-  JsonArray arr = wrappedValue.as<JsonArray>();
-  Serial.print("Array size under \"");
-  Serial.print(wrapperKey);
-  Serial.print("\": ");
-  Serial.println(arr.size());
-
-  // Example: if you want to print the first element of that array:
-  if (arr.size() > 0 && arr[0].is<JsonObject>()) 
-  {
-    Serial.println("First element:");
-    String data;
-    //serializeJsonPretty(arr[0].as<JsonObject>(), data);// it cuases ~2.2X more size
-    serializeJson(arr[0].as<JsonObject>(), data);
-    
-    //Serial.println("==========="+data+"===========");
-    if (strncmp(wrapperKey,jsonKeys::UI_CONFIG,9) == 0)
-    {
-      bool status = SaveStringToFile(data, ConfigFile);
-      if (status == true)
-      {
-        myBle.sendString("UiSevadSuccessful\n");
-        ws.sendToAll("UiSevadSuccessful\n");
-      }
-      else
-      {
-        myBle.sendString("UiSevadError\n");
-        ws.sendToAll("UiSevadError\n");
-      }
-    }
-    else if (strncmp(wrapperKey,jsonKeys::CONDITON_CONFIG,11) == 0)
-    {
-      jsonCon.saveConditionsFileFromString(CondFile, data);
-      Serial.println("Condition Received Successfully");
-      Serial.println("Checking file....");
-      if (jsonCon.isJsonFileOk(CondFile))
-      {
-        myBle.sendString("ConditionSevadSuccessful\n");
-        ws.sendToAll("ConditionSevadSuccessful\n");
-        Serial.println("Condition File is ok");
-        Serial.println("deleting old conditions vector");
-        cndtions.clear(); // it will automatically call all the destroyers
-        // there was a problem with destructor and vector that it executes destructor unwanted time and i got negative numbers so i comment destructer --
-        Conditions::ConditionCount = 0;
-        Serial.println("jsonCon.readJsonConditionsFromFile(CondFile)");
-        jsonCon.readJsonConditionsFromFile(CondFile);
-      }
-      else
-      {
-        myBle.sendString("ConditionSevadError\n");
-        ws.sendToAll("ConditionSevadError\n");
-      }
-      
-    }
-    else
-    {
-      //message not valid key
-      Serial.println("message not valid key");
-    }
-    
-  } });
+                  // Serial.println("==========="+data+"===========");
+                  if (strncmp(wrapperKey, jsonKeys::UI_CONFIG, 9) == 0)
+                  {
+                    bool status = SaveStringToFile(data, ConfigFile);
+                    if (status == true)
+                    {
+                      myBle.sendString("UiSevadSuccessful\n");
+                      ws.sendToAll("UiSevadSuccessful\n");
+                      // ws.SendToAllExcludeClient("NOTIF_NEW_UI_CONFIG_1\n", ws.getClient());
+                    }
+                    else
+                    {
+                      myBle.sendString("UiSevadError\n");
+                      ws.sendToAll("UiSevadError\n");
+                    }
+                  }
+                  else if (strncmp(wrapperKey, jsonKeys::CONDITON_CONFIG, 11) == 0)
+                  {
+                    jsonCon.saveConditionsFileFromString(CondFile, data);
+                    Serial.println("Condition Received Successfully");
+                    Serial.println("Checking file....");
+                    if (jsonCon.isJsonFileOk(CondFile))
+                    {
+                      // myBle.sendString("ConditionSevadSuccessful\n");
+                      ws.sendToAll("ConditionSevadSuccessful\n");
+                      Serial.println("Condition File is ok");
+                      Serial.println("deleting old conditions vector");
+                      cndtions.clear(); // it will automatically call all the destroyers
+                      // there was a problem with destructor and vector that it executes destructor unwanted time and i got negative numbers so i comment destructer --
+                      Conditions::ConditionCount = 0;
+                      Serial.println("jsonCon.readJsonConditionsFromFile(CondFile)");
+                      jsonCon.readJsonConditionsFromFile(CondFile);
+                    }
+                    else
+                    {
+                      // myBle.sendString("ConditionSevadError\n");
+                      ws.sendToAll("ConditionSevadError\n");
+                    }
+                  }
+                  else
+                  {
+                    // message not valid key
+                    Serial.println("message not valid key");
+                  }
+                }
+                //
+              });
 
     wsCmdQueueMutex = xSemaphoreCreateMutex();
     xTaskCreate(wsCmdQueTask, "wsCmdQueTask", 4 * 1024, NULL, 1, NULL);
@@ -3491,6 +2739,7 @@ void dimmerShortCircuitIntrupt()
 */
 // sendCmdToExecute needs wait for already incomming tasks
 //+++++++++++++++++++++++TO DO
+//   ba ble nemishe JSONE hajme balaye 256B ro ersal kard masalan age GET_DEV_INFO_JSON_1 bezani nesfe miyad
 //   dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
 //   voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone
 //   amper ke eshtebah kalibre beshe eshtebahi mire too ye protection
