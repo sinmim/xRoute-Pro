@@ -171,6 +171,12 @@ int blePass;
 #endif
 // coreDump
 MyCoreDump *coreDump;
+//===========================Network
+#include "XrouteWiFiServerManager.h"
+#include "XrouteWsServer.h"
+// Globally instantiate our new managers
+XrouteWiFiServerManager wifiManager;
+XrouteWsServer ws;
 //===========================CPU
 #include "CPU_Usage.h"
 CPU_Usage cpu_monitor;
@@ -199,8 +205,6 @@ ConditionsReader jsonCon;
 //====motors
 int motorWay = MOTOR_STOP;
 //===========================CLASSES
-#include "XrouteAsyncWebSocketServer.h"
-XrouteAsyncWebSocketServer ws;
 // web sucket
 uint64_t chipid;
 String GeneralLisence;
@@ -649,6 +653,7 @@ void I2C_SENSORS_TASK(void *parameters)
   }
 }
 void sendCmdToExecute(char *str);
+void sendCmdToExecute(char *str, uint32_t clientId );
 void dimmerShortCircuitIntrupt();
 void defaultCalibrations();
 int dimShortFlg = false;
@@ -956,6 +961,7 @@ void resumeUnnessesaryTasks()
     }
   }
 }
+uint32_t updaterClient;
 void updateTask(void *parameters)
 {
   UDP_buffer = (uint8_t *)malloc(OTA_BUFFER_SIZE);
@@ -978,7 +984,7 @@ void updateTask(void *parameters)
     if (millis() - start > TIME_OUT)
     {
       Serial.println("UPD_TIMEOUT");
-      ws.sendToThisClient("UPD_FAILED\n");
+      ws.sendToClient(updaterClient, "UPD_FAILED\n");
       Serial.println("UPD_FAILED");
       Update.end(true);
       ws.endUpdate();
@@ -997,7 +1003,7 @@ void updateTask(void *parameters)
     if ((progressPercent - lastProgressPercent) > 1)
     {
       lastProgressPercent = progressPercent;
-      ws.sendToThisClient(String("UPD_PRC_1=" + String(progressPercent, 1) + "\n").c_str());
+      ws.sendToClient(updaterClient, String("UPD_PRC_1=" + String(progressPercent, 1) + "\n").c_str());
       start = millis(); // reset timer
     }
     Serial.println(String(progressPercent, 1));
@@ -1006,14 +1012,14 @@ void updateTask(void *parameters)
       bool state = Update.end();
       if (state == true)
       {
-        ws.sendToThisClient("UPD_COMPLETED\n");
+        ws.sendToClient(updaterClient, "UPD_COMPLETED\n");
         Serial.println("UPD_COMPLETED\n");
         vTaskDelay(pdMS_TO_TICKS(3000));
         ESP.restart();
       }
       else
       {
-        ws.sendToThisClient("UPD_FAILED\n");
+        ws.sendToClient(updaterClient, "UPD_FAILED\n");
         Serial.println("UPD_FAILED\n");
         ws.endUpdate();
         free(UDP_buffer);
@@ -1026,6 +1032,7 @@ void updateTask(void *parameters)
     }
   }
 }
+uint32_t uiConfigClient;
 void sendUiConfigTask(void *parameters)
 {
   vTaskSuspend(MeasurmentTaskHandle);
@@ -1033,7 +1040,7 @@ void sendUiConfigTask(void *parameters)
   wrapJson(str.c_str(), jsonKeys::UI_CONFIG, str);
   Serial.println("SENDING UI CONFIG");
   // ws.sendToAll(str.c_str());
-  ws.sendToThisClient(str.c_str());
+  ws.sendToClient(uiConfigClient, str.c_str());
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
 }
@@ -1155,7 +1162,7 @@ void led_indicator_task(void *parameters)
       ws2812Blink(COLOR_BLUE, 1, 3, 1);
     if (myBle.isConnected() == false)
       ws2812Blink(COLOR_RED, 1, 3, 1);
-    int clients = ws.clientCount();
+    int clients = ws.getClientCount();
     if (clients > 0)
     {
       if (ws.isUpdating())
@@ -1376,7 +1383,7 @@ void createTimerCondition(String _outputType, int _motorPort, int _upTimeMs, int
   cndtions.push_back(Conditions(_outputType, _motorPort, _upTimeMs, downTimeMs)); // 0
 }
 //_______________________PARSER
-void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
+void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length, uint32_t clientId = 0)
 {
   char str[128];
   static RGB_VALS RGB1;
@@ -1410,7 +1417,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
           // myBle.sendString(str);
           //   ws.sendToAll(str);
-          ws.SendToAllExcludeClient(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
+          ws.sendToAllExcept(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
           // Serial.printf("in:%s | out:%s\n", command, str);
         }
         else
@@ -1442,7 +1449,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
           // myBle.sendString("sw" + String(index) + "=ON\n");
-          // ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
+          // ws.sendToAllExcept(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
           ws.sendToAll(String("sw" + String(index) + "=ON\n").c_str());
           // vTaskDelay(10 / portTICK_PERIOD_MS);
         }
@@ -1451,7 +1458,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
           // myBle.sendString("sw" + String(index) + "=OFF\n");
-          // ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
+          // ws.sendToAllExcept(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
           ws.sendToAll(String("sw" + String(index) + "=OFF\n").c_str());
 
           // vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -1475,7 +1482,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
           // myBle.sendString(str);
           //  ws.sendToAll(str);
-          ws.SendToAllExcludeClient(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
+          ws.sendToAllExcept(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
           // Serial.printf("in:%s | out:%s\n", command, str);
         }
         else
@@ -1534,7 +1541,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           sprintf(str, "XrouteAlarm=Try again please!\n");
         }
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("START_UPDATE_")) // START_UPDATE_1=5789 byte
       {
@@ -1543,11 +1550,14 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         pauseUnnessesaryTasks();
         int index = command.substring(command.lastIndexOf("_") + 1, command.indexOf("=")).toInt() - 1;
         uint32_t binSize = command.substring(command.indexOf("=") + 1).toInt();
-        ws.startUpdate(binSize);
+        ws.startUpdate(clientId, binSize);
         UDP_len = binSize;
         // start updateTask
         if (eTaskGetState(&updateTaskHandle) != eRunning)
+        {
+          updaterClient = clientId;
           xTaskCreate(updateTask, "updateTask", 4 * 1024, NULL, 3, &updateTaskHandle);
+        }
       }
       else if (command.startsWith("STOP_UPDATE_")) // STOP_UPDATE_1
       {
@@ -1620,7 +1630,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String response = "Version=" + Version + "\n";
         // Serial.println(response.c_str());
         // myBle.sendString(response.c_str());
-        ws.sendToThisClient(response.c_str());
+        ws.sendToClient(clientId, response.c_str());
         Serial.println("🆚" + String(response.c_str()));
       }
       else if (command.startsWith("CONDITION_CONFIG"))
@@ -1634,6 +1644,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       {
         if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
         {
+          uiConfigClient = clientId;
           xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 10, NULL, 2, &sendUiConfigTaskHandle);
         }
       }
@@ -1641,7 +1652,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       {
         String response = "Orientation=" + GyroOriantation + "\n";
         // myBle.sendString(response.c_str());
-        ws.sendToThisClient(response.c_str());
+        ws.sendToClient(clientId, response.c_str());
       }
       else if (command.startsWith("DIM_LIM_")) // dimer limit DIM_LIM_123
       {
@@ -1649,7 +1660,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         float val = dimLimit[index] * 255;
         sprintf(str, "dimMax%d.val=%d\n", index + 1, (int)val);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("WIFI_INFO_JSON_"))
       {
@@ -1666,7 +1677,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         msg += "\"port\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::Port)) + "}]}";
         // myBle.sendString(msg.c_str());
         myBle.sendLongString(msg.c_str());
-        ws.sendToThisClient(msg.c_str());
+        ws.sendToClient(clientId, msg.c_str());
       }
       else if (command.startsWith("DEVICE_INFO_JSON_"))
       {
@@ -1699,21 +1710,21 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         // Serial.println(msg);
         //  myBle.sendString(msg.c_str());
         myBle.sendLongString(msg.c_str()); // testing for crash . it was crashing on normal senString beqause of length
-        ws.sendToThisClient(msg.c_str());
+        ws.sendToClient(clientId, msg.c_str());
       }
       else if (command.startsWith("WIFI_IP_"))
       {
         int index = (command.substring(command.lastIndexOf("_") + 1)).toInt(); // unused for now
         String myIp = "WIFI_IP_1=" + WiFi.localIP().toString() + "\n";
         myBle.sendString(myIp.c_str());
-        ws.sendToThisClient(myIp.c_str());
+        ws.sendToClient(clientId, myIp.c_str());
       }
       else if (command.startsWith("HOST_NAME_"))
       {
         int index = command.substring(command.lastIndexOf("_") + 1).toInt();
         String hostName = wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName);
         hostName = "HOST_NAME_1=" + hostName + "\n";
-        ws.sendToThisClient(hostName.c_str());
+        ws.sendToClient(clientId, hostName.c_str());
         myBle.sendString(hostName.c_str());
       }
       else if (command.startsWith("BLE_PASS_"))
@@ -1722,7 +1733,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n"; TODO:
         String response = "BLE_PASS_1=" + String(myBle.getPassKey()) + "\n";
         myBle.sendString(response.c_str());
-        ws.sendToThisClient(response.c_str());
+        ws.sendToClient(clientId, response.c_str());
         Serial.println(response.c_str());
       }
       else if (command.startsWith("CORE_DUMP_"))
@@ -1816,7 +1827,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       loadSavedValue();
       String response = "XrouteAlarm=Default OK\n";
       // myBle.sendString(response.c_str());
-      ws.sendToThisClient(response.c_str());
+      ws.sendToClient(clientId, response.c_str());
     }
     else if (command.startsWith("CAL_"))
     {
@@ -1834,7 +1845,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         char str[128];
         sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
         Serial.println(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
         // myBle.sendString(str);
       }
       else if (command.startsWith("OTMP_")) // outside temp
@@ -1861,7 +1872,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         char str[128];
         sprintf(str, "show.txt=\"PT_mvCal=%f\"\n", PT_mvCal);
         // myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("INT_CUR_")) // internal current
       {
@@ -1871,7 +1882,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         char str[128];
         sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("ZERO_INT_CUR_")) // internal current offset
       {
@@ -1881,7 +1892,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         char str[128];
         sprintf(str, "show.txt=\"amp0Offset=%f\"\n", amp0Offset);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("EXT_CUR_")) // external ampermeter
       {
@@ -1896,12 +1907,12 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           char str[128];
           sprintf(str, "show.txt=\"A1calCo=%f\"\n", A1calCo);
           // myBle.sendString(str);
-          ws.sendToThisClient(str);
+          ws.sendToClient(clientId, str);
         }
         else
         {
           // myBle.sendString("XrouteAlarm=No External Ampermeter Detected !\n");
-          ws.sendToThisClient("XrouteAlarm=No External Ampermeter Detected !\n");
+          ws.sendToClient(clientId, "XrouteAlarm=No External Ampermeter Detected !\n");
           RES = 1;
         }
       }
@@ -1912,7 +1923,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         sprintf(str, "show.txt=\"amp1Offset=%f\"\n", amp1Offset);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("GAS_")) // GAS_1=123
       {
@@ -1922,7 +1933,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         sprintf(str, "show.txt=\"GAS=%f\"\n", A2calCo);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("ZERO_GAS_")) // GAS zero
       {
@@ -1931,7 +1942,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         sprintf(str, "show.txt=\"Gas Offset=%f\"\n", amp2Offset);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("MAX_DIM_")) // maximum Dimmer MAX_DIM_1=123
       {
@@ -1954,7 +1965,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         batteryCap = DFLT_BATT_CAP;
         sprintf(str, "BattCapTxt.val=%d\n", (int)batteryCap);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("MAX_FLT_")) // MAX_FLT_1
       {
@@ -1974,7 +1985,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         }
 
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("MIN_FLT_")) // MIN_FLT_1
       {
@@ -1993,7 +2004,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           sprintf(str, "show.txt=\"FLT_2_Min=%f\"\n", drtWtrMin);
         }
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("DIM_MAXES_"))
       {
@@ -2001,7 +2012,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         EEPROM.commit();
         sprintf(str, "XrouteAlarm=Dimer%d Limit Saved OK! \n", index);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("GYRO_ORI_")) // gyro oriantation GYRO_ORI_1=XY01
       {
@@ -2019,7 +2030,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         GyroOriantation = String(strTmp);
         sprintf(str, "XrouteAlarm=Gyro Saved Ok! \n");
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
       else if (command.startsWith("ALT_")) // ALTITUTE ALT_1=123
       {
@@ -2029,7 +2040,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         float pressurCalOffsetTemp = pressurCalOffset;
         sprintf(str, "show.txt=\"Calibrating=\"\n");
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
 
         while (fabs(error) > 0.1)
         {
@@ -2044,7 +2055,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           Serial.println("PrOffset=" + String(pressurCalOffsetTemp, 5));
           sprintf(str, "M.Pre.val=%d\n", (int)tempAlt);
           // myBle.sendString(str);
-          ws.sendToThisClient(str);
+          ws.sendToClient(clientId, str);
           vTaskDelay(10 / portTICK_PERIOD_MS);
         }
 
@@ -2056,7 +2067,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         }
         sprintf(str, "show.txt=\"pressurCalOffset=%f\"n", pressurCalOffset);
         // myBle.sendString(str);
-        ws.sendToThisClient(str);
+        ws.sendToClient(clientId, str);
       }
     }
     else if (command.startsWith("SAVE_"))
@@ -2177,10 +2188,9 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     String errorMessage = "Missing[\\n]:" + String(accumulatedData.c_str());
     Serial.println(errorMessage);
     myBle.sendString(errorMessage);
-    ws.sendToThisClient(errorMessage.c_str());
+    ws.sendToClient(clientId, errorMessage.c_str());
     // add a '\n' and send it tp process again
     // accumulatedData += "\n";
-    // processReceivedCommandData(pCharacteristic, (uint8_t *)accumulatedData.c_str(), accumulatedData.length());
     accumulatedData.clear();
   }
 }
@@ -2188,7 +2198,7 @@ void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connI
 {
   // You no longer need any security checks here.
   // This function is now ONLY called for data from already-authenticated, whitelisted devices.
-  
+
   // Directly process the command from the trusted device.
   processReceivedCommandData(pCharacteristic, pData, length);
 }
@@ -2199,20 +2209,37 @@ void sendCmdToExecute(char *str)
   uint8_t *pData = reinterpret_cast<uint8_t *>(str); // Removed const_cast - ensure str is mutable if needed, or cast differently
   size_t length = strlen(str);
   NimBLECharacteristic *pServerChar = myBle.getServerCharacteristic();
-  processReceivedCommandData(pServerChar, pData, length);
+  processReceivedCommandData(pServerChar, pData, length, 0);
 }
-std::deque<String> wsCmdQueue;
+
+void sendCmdToExecute(char *str, uint32_t clientId)
+{
+  // Simulate BLE data reception
+  uint8_t *pData = reinterpret_cast<uint8_t *>(str); // Removed const_cast - ensure str is mutable if needed, or cast differently
+  size_t length = strlen(str);
+  NimBLECharacteristic *pServerChar = myBle.getServerCharacteristic();
+  processReceivedCommandData(pServerChar, pData, length, clientId);
+}
+struct CommandQueueItem
+{
+  uint32_t clientId;
+  String command;
+};
+// Now change your queue to use this new struct
+std::deque<CommandQueueItem> wsCmdQueue;
 SemaphoreHandle_t wsCmdQueueMutex;
 void wsCmdQueTask(void *pvParameters)
 {
   while (true)
   {
     String cmd;
+    uint32_t clientId;
     while (!wsCmdQueue.empty())
     {
-      cmd = wsCmdQueue.front();
+      cmd = wsCmdQueue.front().command;
+      clientId = wsCmdQueue.front().clientId;
       wsCmdQueue.pop_front();
-      sendCmdToExecute((char *)cmd.c_str());
+      sendCmdToExecute((char *)cmd.c_str(), clientId);
       vTaskDelay(pdMS_TO_TICKS(10));
     }
     vTaskDelay(pdMS_TO_TICKS(10));
@@ -2238,7 +2265,8 @@ void serialCB()
       if (serialBuffer.length() > 0)
       {
         serialBuffer += '\n';
-        wsCmdQueue.push_back(String(serialBuffer));
+        // wsCmdQueue.push_back(String(serialBuffer));
+        wsCmdQueue.push_back({0, serialBuffer});
         // sendCmdToExecute((char *)serialBuffer.c_str());// it will drow all the resources from this event that should be normally an small code , its an event
         serialBuffer = ""; // Clear the buffer for the next command
       }
@@ -2372,16 +2400,18 @@ void setup()
     wifi_mode_t mode = wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_STA);
     int port = wifi_WebSocket_Settings.get<int>(NetworkKeys::Port, 81);
     wifi_WebSocket_Settings.saveIfChanged();
+    ws.setMaxClients(10);
     //  ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
     //  ws.setSTA("TP-Link_20D8", "83937361");
     //  ws.setSTA("SAMAN POCO", "83601359");
     //  ws.setHostname("xroute-ali");
     //  ws.setPort(81);
-    ws.setAP(apName.c_str(), apPass.c_str());
-    ws.setSTA(ssid.c_str(), pass.c_str());
-    ws.setHostname(hostName.c_str());
-    ws.setPort(port);
-    ws.onJson([](JsonDocument &doc)
+
+    // ws.setAP(apName.c_str(), apPass.c_str());
+    // ws.setSTA(ssid.c_str(), pass.c_str());
+    // ws.setHostname(hostName.c_str());
+    // ws.setPort(port);
+    ws.onJson([](uint32_t id, JsonDocument &doc)
               {
                 // 1) Treat the entire doc as a JsonObject
                 JsonObject root = doc.as<JsonObject>();
@@ -2425,7 +2455,7 @@ void setup()
                     {
                       myBle.sendString("UiSevadSuccessful\n");
                       ws.sendToAll("UiSevadSuccessful\n");
-                      // ws.SendToAllExcludeClient("NOTIF_NEW_UI_CONFIG_1\n", ws.getClient());
+                      // ws.sendToAllExcept("NOTIF_NEW_UI_CONFIG_1\n", ws.getClient());
                     }
                     else
                     {
@@ -2464,15 +2494,19 @@ void setup()
                 }
                 //
               });
+
     wsCmdQueueMutex = xSemaphoreCreateMutex();
     xTaskCreate(wsCmdQueTask, "wsCmdQueTask", 4 * 1024, NULL, 1, NULL);
-    ws.setMaxCmdPkgSize(128);
-    ws.onCommand([](const char *msg)
+    // ws.setMaxCmdPkgSize(128);
+    ws.onCommand([](uint32_t id, const char *msg)
                  {
                    // uint32_t time=micros();
                    if (wsCmdQueue.size() < 8) // Optional limit to prevent unbounded growth
                    {
-                     wsCmdQueue.push_back(String(msg));
+                     CommandQueueItem newItem;
+                     newItem.clientId = id;
+                     newItem.command = String(msg);
+                     wsCmdQueue.push_back(newItem);
                    }
                    else
                    {
@@ -2481,20 +2515,45 @@ void setup()
                    // Serial.println("time="+String(micros()-time));
                  });
 
-    ws.onUpdate([](const char *msg, size_t length)
+    ws.onUpdate([](uint32_t clientId, const uint8_t *data, size_t len, size_t index, size_t total)
                 {
-                  Serial.println(".");
                   while (UDP_bufferBussy)
                   {
                     vTaskDelay(pdMS_TO_TICKS(1));
                   }
                   UDP_bufferBussy = true;
-                  UDP_buffLen = length;
-                  memcpy(UDP_buffer, msg, length);
+                  UDP_buffLen = len;
+                  memcpy(UDP_buffer, data, len);
                   UDP_dataReady = true;
+                  // 4. (Optional but recommended) Use the new parameters for better logging.
+                  // You no longer need to track progress manually outside this function.
+                  float progressPercent = (float)(index + len) / total * 100.0f;
+                  Serial.printf("Update from client %u: Received %u bytes. Total progress: %.1f%%\n", clientId, len, progressPercent);
                   //
                 });
-    ws.begin(mode);
+    // 2. Configure the WiFi manager callbacks (how to manage the connection)
+    wifiManager.onStaConnected([&]()
+                               {
+                                 Serial.println(">>> WiFi is connected, starting WebSocket server!");
+                                 ws.begin(); // Start the WS server
+                               });
+
+    wifiManager.onStaDisconnected([&](int reason)
+                                  {
+                                    Serial.println(">>> WiFi is disconnected, stopping WebSocket server!");
+                                    ws.end(); // Stop the WS server to clean up
+                                  });
+
+    // (Optional) If you run in AP mode, you might want to start the server immediately
+    wifiManager.onApReady([&]()
+                          {
+                            Serial.println(">>> AP is ready, starting WebSocket server!");
+                            ws.begin(); // Start the WS server
+                          });
+
+    // 3. Start the WiFi Manager. It will handle the rest.
+    // Example for STA mode:
+    wifiManager.begin(mode, hostName, ssid, pass, apName, apPass);
   }
 
   // Tasks
@@ -2737,6 +2796,7 @@ void dimmerShortCircuitIntrupt()
 8- ba release dimmer ali behem dastore saveStatesToFile(); ro bedahad / ali mige rooye on crash age betooni bezari aliye / behatresh ine ke ba timer befahmi ke dimer dige change nemishe va oon moghe savestate koni
 9-
 */
+// if update begin fails restart it 
 // sendCmdToExecute needs wait for already incomming tasks
 //+++++++++++++++++++++++TO DO
 //   ba ble nemishe JSONE hajme balaye 256B ro ersal kard masalan age GET_DEV_INFO_JSON_1 bezani nesfe miyad

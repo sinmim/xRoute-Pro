@@ -41,8 +41,8 @@ bool checkPass(uint64_t uid, const char *pass)
 #include "myNimBle.h"
 extern MyBle myBle;
 
-#include "XrouteAsyncWebSocketServer.h"
-extern XrouteAsyncWebSocketServer ws;
+#include "XrouteWsServer.h"
+extern XrouteWsServer ws;
 
 void sendToAll(char *str)
 {
@@ -266,7 +266,7 @@ bool MyCoreDump::print_core_dump_summary_to_string(char *str)
   esp_err_t err = load_core_dump();
   if (err != ESP_OK)
   {
-    str = "Failed to get core dump summary! Error code: 0x%X\n";
+    //str = "Failed to get core dump summary! Error code: 0x%X\n";
     return false;
   }
   else
