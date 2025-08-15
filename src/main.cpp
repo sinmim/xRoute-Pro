@@ -2730,6 +2730,7 @@ void dimmerShortCircuitIntrupt()
   }
 }
 /*  new problems
+// ino haminjoori minevisam ke commit konam bebinam ye shakhe jadid dar miyad ya na
 4- neveshtane scadual condition
 5- timeout vase update
 6- dimere rate ziyad drop beshe
