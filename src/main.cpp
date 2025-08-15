@@ -1665,6 +1665,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         msg += "\"RSSI\" : " + String(WiFi.RSSI()) + ",";
         msg += "\"port\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::Port)) + "}]}";
         // myBle.sendString(msg.c_str());
+        myBle.sendLongString(msg.c_str());
         ws.sendToThisClient(msg.c_str());
       }
       else if (command.startsWith("DEVICE_INFO_JSON_"))
@@ -2463,7 +2464,6 @@ void setup()
                 }
                 //
               });
-
     wsCmdQueueMutex = xSemaphoreCreateMutex();
     xTaskCreate(wsCmdQueTask, "wsCmdQueTask", 4 * 1024, NULL, 1, NULL);
     ws.setMaxCmdPkgSize(128);
