@@ -2796,7 +2796,8 @@ void dimmerShortCircuitIntrupt()
 8- ba release dimmer ali behem dastore saveStatesToFile(); ro bedahad / ali mige rooye on crash age betooni bezari aliye / behatresh ine ke ba timer befahmi ke dimer dige change nemishe va oon moghe savestate koni
 9-
 */
-// if update begin fails restart it 
+// if update begin fails restart it . 
+// BUG after fast WS request on GET_VERSION with html ota file it dosent respons to WS even i can ping the device 
 // sendCmdToExecute needs wait for already incomming tasks
 //+++++++++++++++++++++++TO DO
 //   ba ble nemishe JSONE hajme balaye 256B ro ersal kard masalan age GET_DEV_INFO_JSON_1 bezani nesfe miyad
