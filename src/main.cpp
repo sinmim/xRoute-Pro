@@ -1621,7 +1621,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         // Serial.println(response.c_str());
         // myBle.sendString(response.c_str());
         ws.sendToThisClient(response.c_str());
-        Serial.println("🆚" + String(response.c_str()));
+        // Serial.println("🆚" + String(response.c_str()));
       }
       else if (command.startsWith("CONDITION_CONFIG"))
       {
@@ -2171,24 +2171,24 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     vTaskDelay(pdMS_TO_TICKS(10));
     MeasurmentTaskPause = false;
   }
-  // if there is missing '\n' print error
-  if (accumulatedData.length() > 0)
-  {
-    String errorMessage = "Missing[\\n]:" + String(accumulatedData.c_str());
-    Serial.println(errorMessage);
-    myBle.sendString(errorMessage);
-    ws.sendToThisClient(errorMessage.c_str());
-    // add a '\n' and send it tp process again
-    // accumulatedData += "\n";
-    // processReceivedCommandData(pCharacteristic, (uint8_t *)accumulatedData.c_str(), accumulatedData.length());
-    accumulatedData.clear();
-  }
+ // if there is missing '\n' print error
+  // if (accumulatedData.length() > 0)
+  // {
+  //   String errorMessage = "Missing[\\n]:" + String(accumulatedData.c_str());
+  //   Serial.println(errorMessage);
+  //   myBle.sendString(errorMessage);
+  //   ws.sendToThisClient(errorMessage.c_str());
+  //   // add a '\n' and send it tp process again
+  //   // accumulatedData += "\n";
+  //   // processReceivedCommandData(pCharacteristic, (uint8_t *)accumulatedData.c_str(), accumulatedData.length());
+  //   accumulatedData.clear();
+  // }
 }
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
 {
   // You no longer need any security checks here.
   // This function is now ONLY called for data from already-authenticated, whitelisted devices.
-  
+  // print all the pdata
   // Directly process the command from the trusted device.
   processReceivedCommandData(pCharacteristic, pData, length);
 }
