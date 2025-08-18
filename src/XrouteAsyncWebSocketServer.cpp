@@ -327,6 +327,101 @@ void XrouteAsyncWebSocketServer::sendToThisClient(const char *message)
   if (_sendNotify)
     xSemaphoreGive(_sendNotify);
 }
+/*
+void XrouteAsyncWebSocketServer::streamFile(const char *filename, AsyncWebSocketClient *client, const char *jsonKey)
+{
+  if (!client)
+  {
+    Serial.println("[streamFile] Error: No client provided.");
+    return;
+  }
+
+  File file = SPIFFS.open(filename, "r");
+  if (!file)
+  {
+    String errorMsg = "{\"error\":\"Failed to open file: " + String(filename) + "\"}";
+    client->text(errorMsg.c_str());
+    Serial.println("[streamFile] " + errorMsg);
+    return;
+  }
+
+  // 1. Send the JSON header as text
+  String header = "{\"" + String(jsonKey) + "\":";
+  client->text(header.c_str());
+
+  // 2. Stream the file content in chunks AS TEXT
+  const size_t bufferSize = 1400;
+  uint8_t buffer[bufferSize];
+
+  while (file.available())
+  {
+    size_t len = file.read(buffer, bufferSize);
+    if (len > 0)
+    {
+      // *** THE KEY CHANGE IS HERE ***
+      // Create a temporary String from the buffer and send it as text.
+      String chunk(reinterpret_cast<char *>(buffer), len);
+      client->text(chunk.c_str());
+    }
+  }
+  file.close();
+
+  // 3. Send the JSON footer as text
+  client->text("}");
+  Serial.printf("[streamFile] Successfully streamed '%s' (as text) to client %u\n", filename, client->id());
+}
+*/
+void XrouteAsyncWebSocketServer::streamFile(const char *filename, AsyncWebSocketClient *client, const char *jsonKey)
+{
+  if (!client)
+  {
+    Serial.println("[streamFile] Error: No client provided.");
+    return;
+  }
+
+  File file = SPIFFS.open(filename, "r");
+  if (!file)
+  {
+    String errorMsg = "{\"error\":\"Failed to open file: " + String(filename) + "\"}";
+    client->text(errorMsg);
+    Serial.println("[streamFile] " + errorMsg);
+    return;
+  }
+
+  size_t fileSize = file.size();
+  String header = "{\"" + String(jsonKey) + "\":[";
+
+  String response;
+  // Pre-allocate memory for the String in one go for efficiency.
+  response.reserve(header.length() + fileSize + 2);
+
+  // 1. Add the header
+  response += header;
+
+  // 2. Read the file in chunks and append as text (THE CORRECT WAY)
+  const size_t readBufferSize = 256; // A small, efficient buffer for reading
+  char readBuffer[readBufferSize];
+  while (file.available())
+  {
+    // Read a chunk of the file into the buffer
+    size_t bytesRead = file.readBytes(readBuffer, readBufferSize);
+    if (bytesRead > 0)
+    {
+      // Append the buffer's content to the main response String,
+      // specifying the length to handle any binary data correctly.
+      response += String(readBuffer, bytesRead);
+    }
+  }
+  file.close();
+
+  // 3. Add the footer
+  response += "]}";
+
+  // 4. Send the entire payload in a single, complete WebSocket message
+  client->text(response);
+
+  Serial.printf("[streamFile] Successfully sent '%s' as a single message of %u bytes to client %u\n", filename, response.length(), client->id());
+}
 
 void XrouteAsyncWebSocketServer::SendToAllExcludeClient(const char *message, AsyncWebSocketClient *exClient)
 {
@@ -435,7 +530,7 @@ void XrouteAsyncWebSocketServer::registerEvents()
                   sendToClient("PONG", client);
                   // client.
                   //  WS_LOG("pong=>socket");
-                  Serial.printf("[WS_DEBUG] PONG client:%d\n", client->id());
+                  // Serial.printf("[WS_DEBUG] PONG client:%d\n", client->id());
                   return;
                 }
                 // command validation
@@ -584,3 +679,47 @@ wifi_mode_t XrouteAsyncWebSocketServer::getMode()
 }
 
 #undef ME
+
+
+/*
+To-Do List for Future Improvements
+Here are some key areas to look at later to further improve the robustness and efficiency of your project.
+
+1. (High Priority) Investigate Memory Safety Margin (streamFile) while i did update ui by postman and then lcd ask the ui and it causes crash maybe i need to update index of the ui after a while 
+and also i should prevent creating ui send task in multiple requests and i think i did it already
+The "one time crash" you mentioned suggests that the current "All-in-One" method, while functional, might be operating close to the device's memory limit.
+
+Task: Quantify the memory usage and determine if the system is at risk with larger UI files.
+
+Action Plan:
+
+Temporarily add logging to the streamFile function to print the available heap before and after the response.reserve() call using ESP.getFreeHeap().
+
+Test with the largest UI configuration file you expect to ever use. If the free heap drops to a very low level (e.g., less than 4-5 KB), the system is at risk of crashing again.
+
+Contingency Plan: If memory proves to be too tight, implement the "start/end protocol" we discussed. It is the most memory-safe solution and guarantees stability regardless of file size, at the cost of requiring more logic on the client-side.
+
+2. (Medium Priority) Stabilize the WiFi Connection
+Our very first troubleshooting session was for a crash related to rapid WiFi connect/disconnect cycles. While we fixed the resulting WebSocket bug, the underlying cause of the unstable WiFi was never addressed.
+
+Task: Investigate the root cause of WiFi disconnections (e.g., Reason: 8 - ASSOC_LEAVE, Reason: 15 - 4WAY_HANDSHAKE_TIMEOUT).
+
+Action Plan:
+
+Check the device's power supply for stability, as voltage drops can cause the radio to fail.
+
+Evaluate the WiFi signal strength (RSSI) in its typical operating location.
+
+Add more robust logging to your WiFi connection manager to track the frequency and reasons for disconnects over a longer period.
+
+3. (Medium Priority) Optimize Task Stack Sizes
+We identified that some tasks were allocated very large stacks (e.g., 10KB), which reserves a lot of RAM that the heap could otherwise use. Freeing this memory will make the entire system more stable.
+
+Task: Right-size the stack for all major FreeRTOS tasks.
+
+Action Plan:
+
+For each long-running task in your setup() function, periodically log its "Stack High Water Mark" using uxTaskGetStackHighWaterMark(taskHandle). This tells you the minimum amount of free stack space the task has ever had.
+
+Based on this data, safely reduce the stack sizes in your xTaskCreate calls to be closer to the actual usage (while still leaving a safe buffer of a few hundred bytes). This could free up many kilobytes of RAM for your heap.
+*/

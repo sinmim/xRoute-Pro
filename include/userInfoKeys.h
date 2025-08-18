@@ -24,4 +24,9 @@ namespace jsonKeys
     constexpr char WIFI_INFO[] = "WIFI_INFO";
 }
 
+namespace otherKeys
+{
+    constexpr char UI_CONFIG_INDEX[] = "UI_INDEDX";
+}
+
 #endif // SETTINGS_KEYS_H

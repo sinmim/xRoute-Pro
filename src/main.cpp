@@ -40,6 +40,8 @@ MyController MyBoard(MyController::XROUTE_PRO);
 #include "SettingsStore.h"
 #include "userInfoKeys.h"
 SettingsStore wifi_WebSocket_Settings("/wifi_WebSocket_Settings.json");
+SettingsStore other_Settings("/other_Settings.json");
+int uiConfigIndex = 0;
 //========Update
 #include <Update.h>
 //_#include "AESLib.h"
@@ -891,6 +893,7 @@ void MeasurmentTask(void *parameters)
     data += str;
     // Serial.println(String(">X:" + String(len * cos(alpha), 3) + ",Y:" + String(len * sin(alpha), 3)));
     data += "RELS=" + getRelsStatStr() + "\n";
+    data += "UI_INDEX=" + String(uiConfigIndex) + "\n";
     // myBle.sendString(data);
     ws.sendToAll(data.c_str());
     // Serial.println(data);
@@ -1029,11 +1032,19 @@ void updateTask(void *parameters)
 void sendUiConfigTask(void *parameters)
 {
   vTaskSuspend(MeasurmentTaskHandle);
-  String str = readStringFromFile(ConfigFile);
-  wrapJson(str.c_str(), jsonKeys::UI_CONFIG, str);
-  Serial.println("SENDING UI CONFIG");
-  // ws.sendToAll(str.c_str());
-  ws.sendToThisClient(str.c_str());
+  Serial.println("👁️ 👁️ SENDING UI CONFIG (via streamFile method)...");
+  AsyncWebSocketClient *client = ws.getClient(); // Get the target client
+
+  if (client)
+  {
+    // Call your new, safe, and efficient streaming method
+    ws.streamFile(ConfigFile.c_str(), client, jsonKeys::UI_CONFIG);
+  }
+  else
+  {
+    Serial.println("No client to send UI config to.");
+  }
+
   vTaskResume(MeasurmentTaskHandle);
   vTaskDelete(NULL);
 }
@@ -1386,7 +1397,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
   int endPos;
   while ((endPos = accumulatedData.indexOf('\n')) != -1)
   {
-    // MeasurmentTaskPause = true;
+    MeasurmentTaskPause = true;
     String command = accumulatedData.substring(0, endPos);
     // remove \r if exist at the end beqause in postman it sends \n\r
     if (command.endsWith("\r"))
@@ -1634,7 +1645,7 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
       {
         if (eTaskGetState(&sendUiConfigTaskHandle) != eRunning)
         {
-          xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 10, NULL, 2, &sendUiConfigTaskHandle);
+          xTaskCreate(sendUiConfigTask, "sendUiConfigTask", 1024 * 4, NULL, 2, &sendUiConfigTaskHandle); // TODO : i need streaming otherwise it will crash on big jsons
         }
       }
       else if (command.startsWith("GYRO_ORI_")) // gyro oriantation
@@ -2058,6 +2069,10 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         // myBle.sendString(str);
         ws.sendToThisClient(str);
       }
+      else
+      {
+        RES = 4;
+      }
     }
     else if (command.startsWith("SAVE_"))
     {
@@ -2150,6 +2165,10 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
           myBle.sendString("BLE_PASSWORD_CHANGED_ERROR\n");
         }
       }
+      else
+      {
+        RES = 5;
+      }
     }
     else if (command.startsWith("PASSKEY")) // normaly its done one the myNimBle.cpp if its being passed here it means its being registered in whitelist already
     {
@@ -2171,28 +2190,34 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
     vTaskDelay(pdMS_TO_TICKS(10));
     MeasurmentTaskPause = false;
   }
- // if there is missing '\n' print error
-  // if (accumulatedData.length() > 0)
-  // {
-  //   String errorMessage = "Missing[\\n]:" + String(accumulatedData.c_str());
-  //   Serial.println(errorMessage);
-  //   myBle.sendString(errorMessage);
-  //   ws.sendToThisClient(errorMessage.c_str());
-  //   // add a '\n' and send it tp process again
-  //   // accumulatedData += "\n";
-  //   // processReceivedCommandData(pCharacteristic, (uint8_t *)accumulatedData.c_str(), accumulatedData.length());
-  //   accumulatedData.clear();
-  // }
+  // if there is missing '\n' print error
+  if (accumulatedData.length() > 0)
+  {
+    String errorMessage = "Missing[\\n]:" + String(accumulatedData.c_str());
+    Serial.println(errorMessage);
+    myBle.sendString(errorMessage);
+    ws.sendToThisClient(errorMessage.c_str());
+    accumulatedData.clear();
+  }
 }
+std::deque<String> cmdQueue;
+SemaphoreHandle_t cmdQueueMutex;
 void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
 {
   // You no longer need any security checks here.
   // This function is now ONLY called for data from already-authenticated, whitelisted devices.
-  // print all the pdata
   // Directly process the command from the trusted device.
-  processReceivedCommandData(pCharacteristic, pData, length);
+  // processReceivedCommandData(pCharacteristic, pData, length);
+  String msg = String(reinterpret_cast<char *>(pData), length);
+  if (cmdQueue.size() < 8) // Optional limit to prevent unbounded growth
+  {
+    cmdQueue.push_back(String(msg));
+  }
+  else
+  {
+    Serial.println("🔷⚠️ Command queue full, dropping incoming message");
+  }
 }
-
 void sendCmdToExecute(char *str)
 {
   // Simulate BLE data reception
@@ -2201,17 +2226,15 @@ void sendCmdToExecute(char *str)
   NimBLECharacteristic *pServerChar = myBle.getServerCharacteristic();
   processReceivedCommandData(pServerChar, pData, length);
 }
-std::deque<String> wsCmdQueue;
-SemaphoreHandle_t wsCmdQueueMutex;
-void wsCmdQueTask(void *pvParameters)
+void cmdQueTask(void *pvParameters)
 {
   while (true)
   {
     String cmd;
-    while (!wsCmdQueue.empty())
+    while (!cmdQueue.empty())
     {
-      cmd = wsCmdQueue.front();
-      wsCmdQueue.pop_front();
+      cmd = cmdQueue.front();
+      cmdQueue.pop_front();
       sendCmdToExecute((char *)cmd.c_str());
       vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -2238,7 +2261,7 @@ void serialCB()
       if (serialBuffer.length() > 0)
       {
         serialBuffer += '\n';
-        wsCmdQueue.push_back(String(serialBuffer));
+        cmdQueue.push_back(String(serialBuffer));
         // sendCmdToExecute((char *)serialBuffer.c_str());// it will drow all the resources from this event that should be normally an small code , its an event
         serialBuffer = ""; // Clear the buffer for the next command
       }
@@ -2349,6 +2372,7 @@ void setup()
   // user infos
   if (true)
   {
+    // wifi & WS
     if (!wifi_WebSocket_Settings.begin())
     {
       Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]No valid JSON found, starting fresh.");
@@ -2356,6 +2380,17 @@ void setup()
     else
     {
       Serial.println("[" + wifi_WebSocket_Settings.getPath() + "]==> LOADED OK !");
+    }
+    // other settings
+    if (!other_Settings.begin())
+    {
+      Serial.println("[" + other_Settings.getPath() + "]No valid JSON found, starting fresh.");
+    }
+    else
+    {
+      Serial.println("[" + other_Settings.getPath() + "]==> LOADED OK !");
+      uiConfigIndex = other_Settings.get<uint32_t>(otherKeys::UI_CONFIG_INDEX, 1);
+      other_Settings.saveIfChanged();
     }
   }
 
@@ -2372,11 +2407,6 @@ void setup()
     wifi_mode_t mode = wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP, WIFI_MODE_STA);
     int port = wifi_WebSocket_Settings.get<int>(NetworkKeys::Port, 81);
     wifi_WebSocket_Settings.saveIfChanged();
-    //  ws.setSTA("karavanicin.com_2.4GHz", "1020304050");
-    //  ws.setSTA("TP-Link_20D8", "83937361");
-    //  ws.setSTA("SAMAN POCO", "83601359");
-    //  ws.setHostname("xroute-ali");
-    //  ws.setPort(81);
     ws.setAP(apName.c_str(), apPass.c_str());
     ws.setSTA(ssid.c_str(), pass.c_str());
     ws.setHostname(hostName.c_str());
@@ -2425,6 +2455,8 @@ void setup()
                     {
                       myBle.sendString("UiSevadSuccessful\n");
                       ws.sendToAll("UiSevadSuccessful\n");
+                      uiConfigIndex++;
+                      other_Settings.set<uint32_t>(otherKeys::UI_CONFIG_INDEX, uiConfigIndex);
                       // ws.SendToAllExcludeClient("NOTIF_NEW_UI_CONFIG_1\n", ws.getClient());
                     }
                     else
@@ -2464,19 +2496,19 @@ void setup()
                 }
                 //
               });
-    wsCmdQueueMutex = xSemaphoreCreateMutex();
-    xTaskCreate(wsCmdQueTask, "wsCmdQueTask", 4 * 1024, NULL, 1, NULL);
+    cmdQueueMutex = xSemaphoreCreateMutex();
+    xTaskCreate(cmdQueTask, "CmdQueTask", 4 * 1024, NULL, 1, NULL);
     ws.setMaxCmdPkgSize(128);
     ws.onCommand([](const char *msg)
                  {
                    // uint32_t time=micros();
-                   if (wsCmdQueue.size() < 8) // Optional limit to prevent unbounded growth
+                   if (cmdQueue.size() < 8) // Optional limit to prevent unbounded growth
                    {
-                     wsCmdQueue.push_back(String(msg));
+                     cmdQueue.push_back(String(msg));
                    }
                    else
                    {
-                     Serial.println("⚠ Command queue full, dropping incoming message");
+                     Serial.println("🌐⚠️Command queue full, dropping incoming message");
                    }
                    // Serial.println("time="+String(micros()-time));
                  });

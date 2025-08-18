@@ -266,7 +266,7 @@ bool MyCoreDump::print_core_dump_summary_to_string(char *str)
   esp_err_t err = load_core_dump();
   if (err != ESP_OK)
   {
-    str = "Failed to get core dump summary! Error code: 0x%X\n";
+    // str = "Failed to get core dump summary! Error code: 0x%X\n";
     return false;
   }
   else
@@ -322,4 +322,20 @@ void MyCoreDump::print_core_dump()
   Serial.println("\n--- ⚙️  System Info ---");
   Serial.printf("Core Dump Version    : %u\n", summary.core_dump_version);
   Serial.println("=========================================\n");
+}
+
+void printHex(const char *prefix, const uint8_t *data, size_t len)
+{
+  Serial.printf("%s (%zu bytes): ", prefix, len);
+  for (size_t i = 0; i < len; i++)
+  {
+    Serial.printf("%02X ", data[i]); // Print Hex value
+  }
+  Serial.print(" | '");
+  for (size_t i = 0; i < len; i++)
+  {
+    // Print printable character or '.' for non-printable
+    Serial.print(isprint(data[i]) ? (char)data[i] : '.');
+  }
+  Serial.println("'");
 }

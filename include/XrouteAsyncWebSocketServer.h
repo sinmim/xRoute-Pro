@@ -15,6 +15,7 @@
 #include <queue>
 #include <mutex>
 #include "XrouteWiFiManager.h"
+#include <SPIFFS.h>
 
 enum WS_WHO
 {
@@ -38,7 +39,7 @@ public:
   uint32_t updateLen;
   uint32_t updateProgress;
   AsyncWebSocketClient *updatingClient;
-
+  void streamFile(const char *filename, AsyncWebSocketClient *client, const char *jsonKey);
   AsyncWebSocketClient *getUpdatingClient() { return updatingClient; }
   void startUpdate(uint32_t len)
   {

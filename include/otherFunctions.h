@@ -39,4 +39,6 @@ private:
   esp_core_dump_summary_t summary;
 };
 
+void printHex(const char *prefix, const uint8_t *data, size_t len);
+
 #endif

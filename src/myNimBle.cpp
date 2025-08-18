@@ -381,7 +381,7 @@ void MyBle::sendData(const char *data) { sendString(String(data)); }
 
 void MyBle::sendLongString(String str)
 {
-    return; // Intentionally disabled as in original code
+    //return; // Intentionally disabled as in original code
     const int CHUNKSIZE = 200;
     while (str.length() > 0)
     {
