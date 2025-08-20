@@ -340,3 +340,28 @@ String getDeviceCode()
   snprintf(uniqueID, sizeof(uniqueID), "-%02X%02X", mac[4], mac[5]);
   return String(uniqueID);
 }
+
+int testWifi(String ssid, String pass)
+{
+  int res;
+  WiFi.mode(WIFI_STA);
+  res = WiFi.begin(ssid.c_str(), pass.c_str());
+  Serial.print("🧪🧪 testing WiFi connection to WiFi ..");
+  int counter = 0;
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print('.');
+    vTaskDelay(1000);
+    counter++;
+    if (counter > 10)
+    {
+      Serial.println("🧪🧪 Could not connect to WiFi");
+      return res;
+    }
+  }
+  Serial.println("🧪🧪 Connected to the WiFi network. IP: " + WiFi.localIP().toString());
+  // disconnect
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  return res;
+}

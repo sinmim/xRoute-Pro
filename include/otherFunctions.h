@@ -1,5 +1,6 @@
 #ifndef otherFunctions_h
 #define otherFunctions_h
+#include <WiFiType.h>
 bool checkPass(uint64_t uid, const char *pass);
 void sendToAll(char *str);
 void sendToAll(const char *str);
@@ -36,8 +37,18 @@ public:
 private:
   esp_core_dump_summary_t summary;
 };
-
 void printHex(const char *prefix, const uint8_t *data, size_t len);
 String getDeviceCode();
+int testWifi(String ssid, String pass);
+
+const char *const WL_STATUS_STRING_ARRAY[] = 
+{
+    "WL_IDLE_STATUS",
+    "WL_NO_SSID_AVAIL",
+    "WL_SCAN_COMPLETED",
+    "WL_CONNECTED",
+    "WL_CONNECT_FAILED",
+    "WL_CONNECTION_LOST",
+    "WL_DISCONNECTED"};
 
 #endif

@@ -1663,6 +1663,7 @@ void processReceivedCommandData(uint8_t *pData, size_t length)
         msg += "\"STA_AP\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::STA_AP)) + ",";
         msg += "\"LOCAL_IP\" : \"" + WiFi.localIP().toString() + "\",";
         msg += "\"RSSI\" : " + String(WiFi.RSSI()) + ",";
+        msg += "\"LAST_ATEMP\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::AtempResault)) + ",";
         msg += "\"port\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::Port)) + "}]}";
         ws.sendToThisClient(msg.c_str());
       }
@@ -2065,13 +2066,15 @@ void processReceivedCommandData(uint8_t *pData, size_t length)
       else if (command.startsWith("WIFI_SSID_")) // WIFI_SSID_1=ssid
       {
         String ssid = command.substring(command.indexOf("=") + 1);
-        wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiSSID, ssid);
+        wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiSSID_NEW, ssid);
+        wifi_WebSocket_Settings.set<bool>(NetworkKeys::NewConfigIsAvailble, true);
         Serial.println("Wifi SSID:" + ssid);
       }
       else if (command.startsWith("WIFI_PASS_")) // WIFI_PASS_1=pass\r
       {
         String pass = command.substring(command.indexOf("=") + 1);
-        wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiPassword, pass);
+        wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiPassword_NEW, pass);
+        wifi_WebSocket_Settings.set<bool>(NetworkKeys::NewConfigIsAvailble, true);
         String str = "WIFI_PASS_CHANGED=OK\n";
         ws.sendToAll(str.c_str());
       }
@@ -2326,6 +2329,24 @@ void setup()
   // Network AND websocket
   if (true)
   {
+    // load new Wifi config
+    bool newConfigIsAvailble = wifi_WebSocket_Settings.get<bool>(NetworkKeys::NewConfigIsAvailble, false);
+    String newSsid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID_NEW, "");
+    String newPass = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword_NEW, "");
+    wifi_WebSocket_Settings.get<int>(NetworkKeys::AtempResault, -1); //-1 is default
+    wifi_WebSocket_Settings.saveIfChanged();                         // for absulute first run
+    if (newConfigIsAvailble & newSsid.length() > 0 & newPass.length() > 0)
+    {
+      // try to connect to it if its ok to connect to it
+      int res = testWifi(newSsid, newPass);
+      wifi_WebSocket_Settings.set<int>(NetworkKeys::AtempResault, res);
+      wifi_WebSocket_Settings.set<bool>(NetworkKeys::NewConfigIsAvailble, false);
+      if (res == WL_CONNECTED)
+      {
+        wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiSSID, newSsid);
+        wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiPassword, newPass);
+      }
+    }
     // Configure network
     String ssid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID, "LabobinX_2.4G");
     String pass = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword, "102030405060");
