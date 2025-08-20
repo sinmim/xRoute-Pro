@@ -656,9 +656,7 @@ void defaultCalibrations();
 int dimShortFlg = false;
 int dimShortNum = 0;
 //=======================TEST
-#include "myNimBle.h"
-MyBle myBle(false); // i need to use this object in other files
-void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length);
+void onDataReceived(uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
 void Reg_Uptime_Task(void *parameters)
 {
@@ -706,7 +704,6 @@ void Reg_Uptime_Task(void *parameters)
       if (flag)
       {
         String str = "XrouteAlarm=No active license! Please check your license status!!\n";
-        myBle.sendString(str);
         ws.sendToAll(str.c_str());
         vTaskDelay(pdTICKS_TO_MS(1000));
       }
@@ -1161,18 +1158,17 @@ void led_indicator_task(void *parameters)
     {
       ws2812Blink(COLOR_ORANG, 1, 3, 1);
     }
-    // BLE//
-    if (myBle.isConnected() == true)
-      ws2812Blink(COLOR_BLUE, 1, 3, 1);
-    if (myBle.isConnected() == false)
-      ws2812Blink(COLOR_RED, 1, 3, 1);
+    // TODO : add wifi connection later on for color RED and BLUE
     int clients = ws.clientCount();
     if (clients > 0)
     {
       if (ws.isUpdating())
         ws2812Blink(COLOR_WHITE, clients, 1, 0.8);
       else
-        ws2812Blink(COLOR_GREEN, clients, 2, 0.5);
+      {
+        ws2812Blink(COLOR_GREEN, clients, 3, 0.5);
+        ws2812Blink(COLOR_RED, 1, 4, 0.5);
+      }
     }
     vTaskDelay(200 / portTICK_PERIOD_MS);
   }
@@ -1387,7 +1383,7 @@ void createTimerCondition(String _outputType, int _motorPort, int _upTimeMs, int
   cndtions.push_back(Conditions(_outputType, _motorPort, _upTimeMs, downTimeMs)); // 0
 }
 //_______________________PARSER
-void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *pData, size_t length)
+void processReceivedCommandData(uint8_t *pData, size_t length)
 {
   char str[128];
   static RGB_VALS RGB1;
@@ -1452,20 +1448,13 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         {
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          // myBle.sendString("sw" + String(index) + "=ON\n");
-          // ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
-          ws.sendToAll(String("sw" + String(index) + "=ON\n").c_str());
-          // vTaskDelay(10 / portTICK_PERIOD_MS);
+          ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
         }
         else if (command.lastIndexOf("OFF") > 0)
         {
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          // myBle.sendString("sw" + String(index) + "=OFF\n");
-          // ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
-          ws.sendToAll(String("sw" + String(index) + "=OFF\n").c_str());
-
-          // vTaskDelay(10 / portTICK_PERIOD_MS);
+          ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
         }
         else
         {
@@ -1675,8 +1664,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         msg += "\"LOCAL_IP\" : \"" + WiFi.localIP().toString() + "\",";
         msg += "\"RSSI\" : " + String(WiFi.RSSI()) + ",";
         msg += "\"port\" : " + String(wifi_WebSocket_Settings.get<int>(NetworkKeys::Port)) + "}]}";
-        // myBle.sendString(msg.c_str());
-        myBle.sendLongString(msg.c_str());
         ws.sendToThisClient(msg.c_str());
       }
       else if (command.startsWith("DEVICE_INFO_JSON_"))
@@ -1708,15 +1695,12 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String msg;
         serializeJson(doc, msg);
         // Serial.println(msg);
-        //  myBle.sendString(msg.c_str());
-        myBle.sendLongString(msg.c_str()); // testing for crash . it was crashing on normal senString beqause of length
         ws.sendToThisClient(msg.c_str());
       }
       else if (command.startsWith("WIFI_IP_"))
       {
         int index = (command.substring(command.lastIndexOf("_") + 1)).toInt(); // unused for now
         String myIp = "WIFI_IP_1=" + WiFi.localIP().toString() + "\n";
-        myBle.sendString(myIp.c_str());
         ws.sendToThisClient(myIp.c_str());
       }
       else if (command.startsWith("HOST_NAME_"))
@@ -1725,16 +1709,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String hostName = wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName);
         hostName = "HOST_NAME_1=" + hostName + "\n";
         ws.sendToThisClient(hostName.c_str());
-        myBle.sendString(hostName.c_str());
-      }
-      else if (command.startsWith("BLE_PASS_"))
-      {
-        int index = command.substring(command.lastIndexOf("_") + 1).toInt();
-        // String response = "BLEPASSWORD=" + String(EEPROM.readUInt(E2ADD.blePassSave)) + "\n"; TODO:
-        String response = "BLE_PASS_1=" + String(myBle.getPassKey()) + "\n";
-        myBle.sendString(response.c_str());
-        ws.sendToThisClient(response.c_str());
-        Serial.println(response.c_str());
       }
       else if (command.startsWith("CORE_DUMP_"))
       {
@@ -2099,7 +2073,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String pass = command.substring(command.indexOf("=") + 1);
         wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiPassword, pass);
         String str = "WIFI_PASS_CHANGED=OK\n";
-        myBle.sendString(str);
         ws.sendToAll(str.c_str());
       }
       else if (command.startsWith("WIFI_MODE_")) // WIFI_MODE_1=STA /
@@ -2119,7 +2092,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         }
         // ws.switchMode(wifi_WebSocket_Settings.get<wifi_mode_t>(NetworkKeys::STA_AP));TODO : switch mode causes crash so lets restart for now
         String str = "WIFI_MODE_CHANGED_OK\n";
-        myBle.sendString(str);
         ws.sendToAll(str.c_str());
       }
       else if (command.startsWith("HOST_NAME_"))
@@ -2127,7 +2099,6 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String hostName = command.substring(command.indexOf("=") + 1);
         wifi_WebSocket_Settings.set<String>(NetworkKeys::HostName, hostName);
         String str = "HOST_NAME_CHANGED_OK\n";
-        myBle.sendString(str);
         ws.sendToAll(str.c_str());
       }
       else if (command.startsWith("WIFI_AP_PASS_"))
@@ -2135,45 +2106,12 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
         String pass = command.substring(command.indexOf("=") + 1);
         wifi_WebSocket_Settings.set<String>(NetworkKeys::ApPassword, pass);
         String str = "WIFI_AP_PASS_CHANGED_OK\n";
-        myBle.sendString(str);
         ws.sendToAll(str.c_str());
-      }
-      else if (command.startsWith("BLE_PASS_")) // example : BLE_PASS_1=123456,654321
-      {
-        int index = command.substring(command.lastIndexOf("_") + 1).toInt();
-        // extract 6 digit oldPass from = to ,
-        int eq = command.indexOf('=');
-        int comma = command.indexOf(',');
-        String oldPassStr = command.substring(eq + 1, comma);
-        uint32_t oldPass = atoi(oldPassStr.c_str());
-        // extract 6 digit newPass from , to end
-        String newPassStr = command.substring(comma + 1);
-        uint32_t newPass = atoi(newPassStr.c_str());
-        // check if oldPass is correct
-        if (oldPass == myBle.getPassKey())
-        {
-          EEPROM.writeUInt(E2ADD.blePassSave, newPass);
-          EEPROM.commit();
-          // set new passkey and wipe bonds
-          Serial.println("PassKey: " + String(myBle.getPassKey()));
-          myBle.sendData("BLE_PASSWORD_CHANGED_OK\n");
-          ws.sendToAll("BLE_PASSWORD_CHANGED_OK\n");
-          myBle.setPassKey(newPass, true);
-        }
-        else
-        {
-          myBle.sendString("BLE_PASSWORD_CHANGED_ERROR\n");
-        }
       }
       else
       {
         RES = 5;
       }
-    }
-    else if (command.startsWith("PASSKEY")) // normaly its done one the myNimBle.cpp if its being passed here it means its being registered in whitelist already
-    {
-      myBle.sendString("PASSKEY_ACCEPTED\n");
-      Serial.println("🔷🔷🔷This device is already registered in whitelist");
     }
     else
     {
@@ -2195,14 +2133,13 @@ void processReceivedCommandData(NimBLECharacteristic *pCharacteristic, uint8_t *
   {
     String errorMessage = "Missing[\\n]:" + String(accumulatedData.c_str());
     Serial.println(errorMessage);
-    myBle.sendString(errorMessage);
     ws.sendToThisClient(errorMessage.c_str());
     accumulatedData.clear();
   }
 }
 std::deque<String> cmdQueue;
 SemaphoreHandle_t cmdQueueMutex;
-void onDataReceived(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo, uint8_t *pData, size_t length)
+void onDataReceived(uint8_t *pData, size_t length)
 {
   // You no longer need any security checks here.
   // This function is now ONLY called for data from already-authenticated, whitelisted devices.
@@ -2223,8 +2160,7 @@ void sendCmdToExecute(char *str)
   // Simulate BLE data reception
   uint8_t *pData = reinterpret_cast<uint8_t *>(str); // Removed const_cast - ensure str is mutable if needed, or cast differently
   size_t length = strlen(str);
-  NimBLECharacteristic *pServerChar = myBle.getServerCharacteristic();
-  processReceivedCommandData(pServerChar, pData, length);
+  processReceivedCommandData(pData, length);
 }
 void cmdQueTask(void *pvParameters)
 {
@@ -2362,13 +2298,6 @@ void setup()
     // giveMeMacAdress();
   }
 
-  // BLE
-  if (true)
-  {
-    myBle.beginServer(onDataReceived);
-    myBle.setPassKey(EEPROM.readUInt(E2ADD.blePassSave), true); // to do : false this to prevent wiping
-  }
-
   // user infos
   if (true)
   {
@@ -2400,7 +2329,7 @@ void setup()
     // Configure network
     String ssid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID, "LabobinX_2.4G");
     String pass = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiPassword, "102030405060");
-    String defApName = "Xroute-AP" + String(myBle.getDeviceCode());
+    String defApName = "Xroute-AP" + getDeviceCode();
     String apName = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApName, defApName);
     String apPass = wifi_WebSocket_Settings.get<String>(NetworkKeys::ApPassword, "12345678");
     String hostName = wifi_WebSocket_Settings.get<String>(NetworkKeys::HostName, "xroute");
@@ -2453,7 +2382,6 @@ void setup()
                     bool status = SaveStringToFile(data, ConfigFile);
                     if (status == true)
                     {
-                      myBle.sendString("UiSevadSuccessful\n");
                       ws.sendToAll("UiSevadSuccessful\n");
                       uiConfigIndex++;
                       other_Settings.set<uint32_t>(otherKeys::UI_CONFIG_INDEX, uiConfigIndex);
@@ -2461,7 +2389,6 @@ void setup()
                     }
                     else
                     {
-                      myBle.sendString("UiSevadError\n");
                       ws.sendToAll("UiSevadError\n");
                     }
                   }
@@ -2502,13 +2429,13 @@ void setup()
     ws.onCommand([](const char *msg)
                  {
                    // uint32_t time=micros();
-                   if (cmdQueue.size() < 8) // Optional limit to prevent unbounded growth
+                   if (cmdQueue.size() < 16) // Optional limit to prevent unbounded growth
                    {
                      cmdQueue.push_back(String(msg));
                    }
                    else
                    {
-                     Serial.println("🌐⚠️Command queue full, dropping incoming message");
+                     Serial.println("🌐⚠️  Command queue full, dropping incoming message");
                    }
                    // Serial.println("time="+String(micros()-time));
                  });
@@ -2614,21 +2541,13 @@ void setup()
     //     NULL,
     // 0);
     // RAM
-    // xTaskCreatePinnedToCore(
-    //     ramMonitorTask,
-    //     "ramMonitorTask",
-    //     1024, // stack size
-    //     NULL,
-    //     1,
-    //     NULL,0);
-    // WIFI
-    //  xTaskCreatePinnedToCore(
-    //      WifiTask,
-    //      "WifiTask",
-    //      8 * 1024, // stack size
-    //      NULL,
-    //      1,
-    //      NULL);
+    xTaskCreatePinnedToCore(
+        ramMonitorTask,
+        "ramMonitorTask",
+        1024, // stack size
+        NULL,
+        1,
+        NULL, 0);
   }
 }
 void loop()

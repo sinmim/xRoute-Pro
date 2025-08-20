@@ -38,20 +38,12 @@ bool checkPass(uint64_t uid, const char *pass)
   // Compare the registration code with the provided password
   return strcmp(pass, code) == 0;
 }
-#include "myNimBle.h"
-extern MyBle myBle;
 
 #include "XrouteAsyncWebSocketServer.h"
 extern XrouteAsyncWebSocketServer ws;
 
 void sendToAll(char *str)
 {
-  // if ble have client send string
-  if (myBle.isConnected())
-  {
-    myBle.sendString(str);
-  }
-  // if ws has client
   ws.sendToAll(str);
 }
 void sendToAll(const char *str)
@@ -338,4 +330,13 @@ void printHex(const char *prefix, const uint8_t *data, size_t len)
     Serial.print(isprint(data[i]) ? (char)data[i] : '.');
   }
   Serial.println("'");
+}
+
+String getDeviceCode()
+{
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_BT);
+  char uniqueID[7];
+  snprintf(uniqueID, sizeof(uniqueID), "-%02X%02X", mac[4], mac[5]);
+  return String(uniqueID);
 }

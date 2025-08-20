@@ -1,7 +1,5 @@
 #ifndef otherFunctions_h
 #define otherFunctions_h
-void SetNextion(unsigned int pos, float *dimTmp, float *dimLimit);
-void generatePass(char *result);
 bool checkPass(uint64_t uid, const char *pass);
 void sendToAll(char *str);
 void sendToAll(const char *str);
@@ -40,5 +38,6 @@ private:
 };
 
 void printHex(const char *prefix, const uint8_t *data, size_t len);
+String getDeviceCode();
 
 #endif
