@@ -32,6 +32,7 @@ MyController MyBoard(MyController::XROUTE_PRO);
 #include <SPIFFS.h>
 #include <FS.h>
 #include <MyWifi.h>
+#include "CliTerminal.h"
 #endif
 #define __________________________________________VAR_DEF
 #ifdef __________________________________________VAR_DEF
@@ -171,7 +172,7 @@ extern relConfig RELAYS;
 int blePass;
 // END-----------------------DATA's
 #endif
-// coreDump
+// ==========================CoreDump
 MyCoreDump *coreDump;
 //===========================CPU
 #include "CPU_Usage.h"
@@ -2165,6 +2166,9 @@ void sendCmdToExecute(char *str)
   size_t length = strlen(str);
   processReceivedCommandData(pData, length);
 }
+// ==========================Terminal
+CliTerminal terminal(Serial, [](const char* cmd){ sendCmdToExecute((char*)cmd); });
+
 void cmdQueTask(void *pvParameters)
 {
   while (true)
@@ -2225,7 +2229,8 @@ void setup()
     coreDump = new MyCoreDump();
     Serial.println("\n//======STARTING=====//");
     // atach an intrupt for incomming serial data
-    Serial.onReceive(serialCB);
+    //Serial.onReceive(serialCB);
+    terminal.begin();
     initRelay();
     initLED_PWM();
     initADC();
@@ -2339,6 +2344,8 @@ void setup()
     {
       // try to connect to it if its ok to connect to it
       int res = testWifi(newSsid, newPass);
+      //print res
+      Serial.println(" 👁️ 👁️ 👁️ res=" + String(res));
       wifi_WebSocket_Settings.set<int>(NetworkKeys::AtempResault, res);
       wifi_WebSocket_Settings.set<bool>(NetworkKeys::NewConfigIsAvailble, false);
       if (res == WL_CONNECTED)
@@ -2346,6 +2353,8 @@ void setup()
         wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiSSID, newSsid);
         wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiPassword, newPass);
       }
+      Serial.println(" 👁️ 👁️ 👁️ res=" + String(res));
+
     }
     // Configure network
     String ssid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID, "LabobinX_2.4G");
@@ -2562,18 +2571,19 @@ void setup()
     //     NULL,
     // 0);
     // RAM
-    xTaskCreatePinnedToCore(
-        ramMonitorTask,
-        "ramMonitorTask",
-        1024, // stack size
-        NULL,
-        1,
-        NULL, 0);
+    // xTaskCreatePinnedToCore(
+    //     ramMonitorTask,
+    //     "ramMonitorTask",
+    //     1024, // stack size
+    //     NULL,
+    //     1,
+    //     NULL, 0);
   }
 }
 void loop()
 {
-  vTaskDelay(pdMS_TO_TICKS(100));
+  terminal.handleInput();
+  vTaskDelay(pdMS_TO_TICKS(10));
 }
 void loadSavedValue()
 {

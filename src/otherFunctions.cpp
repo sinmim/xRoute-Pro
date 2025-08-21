@@ -341,27 +341,144 @@ String getDeviceCode()
   return String(uniqueID);
 }
 
+#include <WiFi.h>
+
+// This struct will hold the state for our function.
+// It's defined globally so the event handler can access it.
+struct WifiTestState
+{
+  volatile bool connected;
+  volatile bool attempt_finished;
+  volatile int disconnect_reason;
+};
+
+static WifiTestState g_wifi_state;
+
+/**
+ * @brief Translates WiFi connection result codes into human-readable strings.
+ * @param code The integer result code from the testWifi function.
+ */
+// This is just the updated function. You can replace your old one with this.
+void printWifiResult(int code)
+{
+  Serial.print("🧪🧪 Result Description: ");
+  switch (code)
+  {
+  case 3: // Matches WL_CONNECTED
+    Serial.println("Connection Successful.");
+    break;
+
+  case 14: // WIFI_REASON_MIC_FAILURE
+    Serial.println("MIC Failure. This almost always means the password is incorrect.");
+    break;
+
+  case 15: // WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT
+    Serial.println("4-Way Handshake Timeout. This also strongly suggests an incorrect password.");
+    break;
+
+  case 99:
+    Serial.println("Connection Timed Out. The network didn't respond in time.");
+    break;
+
+  case 200: // WIFI_REASON_BEACON_TIMEOUT
+    Serial.println("Connection Lost (Beacon Timeout). Signal may be too weak or router is offline.");
+    break;
+
+  case 201: // WIFI_REASON_NO_AP_FOUND
+    Serial.println("Access Point Not Found. Check if the SSID is correct and you are in range.");
+    break;
+
+  case 202: // WIFI_REASON_AUTH_EXPIRE
+    Serial.println("Authentication Expired. Please try reconnecting.");
+    break;
+
+  case 203: // WIFI_REASON_AUTH_FAIL
+    Serial.println("Authentication Failed. The router rejected the connection for an unspecified reason.");
+    break;
+
+  case 204: // WIFI_REASON_HANDSHAKE_TIMEOUT
+    Serial.println("Handshake Timeout. This is very likely due to an incorrect password.");
+    break;
+
+  default:
+    Serial.printf("An unknown error occurred. (Code: %d)\n", code);
+    break;
+  }
+}
+// The event handler now just updates the global struct
+void testWifiEventHandler(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+  switch (event)
+  {
+  case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+    g_wifi_state.connected = true;
+    g_wifi_state.attempt_finished = true;
+    break;
+  case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+    g_wifi_state.connected = false;
+    g_wifi_state.disconnect_reason = info.wifi_sta_disconnected.reason;
+    g_wifi_state.attempt_finished = true;
+    break;
+  default:
+    break;
+  }
+}
+
+/**
+ * @brief A robust, self-contained function to test a WiFi connection.
+ * It registers and unregisters its own event handler without interfering
+ * with other parts of the system.
+ */
 int testWifi(String ssid, String pass)
 {
-  int res;
+  // 1. Reset the state struct
+  g_wifi_state.connected = false;
+  g_wifi_state.attempt_finished = false;
+  g_wifi_state.disconnect_reason = 0;
+
+  // 2. Register our specific event handler and GET ITS ID
+  WiFiEventId_t event_id = WiFi.onEvent(testWifiEventHandler);
+
+  // 3. Start the connection
   WiFi.mode(WIFI_STA);
-  res = WiFi.begin(ssid.c_str(), pass.c_str());
-  Serial.print("🧪🧪 testing WiFi connection to WiFi ..");
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  Serial.print("🧪🧪 testing WiFi connection to SSID:" + ssid + " PASS:" + pass);
+
+  // 4. Wait for the connection to finish or time out
   int counter = 0;
-  while (WiFi.status() != WL_CONNECTED)
+  while (!g_wifi_state.attempt_finished && counter < 100)
   {
     Serial.print('.');
-    vTaskDelay(1000);
+    vTaskDelay(pdTICKS_TO_MS(100));
     counter++;
-    if (counter > 10)
+  }
+  // 5. UNREGISTER ONLY OUR SPECIFIC HANDLER using its ID
+  WiFi.removeEvent(event_id);
+  // 6. Determine the result and perform cleanup
+  int return_code;
+  if (g_wifi_state.attempt_finished)
+  {
+    if (g_wifi_state.connected)
     {
-      Serial.println("🧪🧪 Could not connect to WiFi");
-      return res;
+      Serial.println("\n🧪🧪 Connected to the WiFi network. IP: " + WiFi.localIP().toString());
+      return_code = 3; // WL_CONNECTED
+    }
+    else
+    {
+      Serial.printf("\n🧪🧪 Connection failed. Reason code: %d\n", g_wifi_state.disconnect_reason);
+      return_code = g_wifi_state.disconnect_reason;
     }
   }
-  Serial.println("🧪🧪 Connected to the WiFi network. IP: " + WiFi.localIP().toString());
-  // disconnect
+  else
+  {
+    Serial.println("\n🧪🧪 Connection attempt timed out.");
+    return_code = 99;
+  }
+  printWifiResult(return_code);
+
+  // 7. Cleanup WiFi
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
-  return res;
+
+  return return_code;
 }
