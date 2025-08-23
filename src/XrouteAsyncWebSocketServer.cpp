@@ -434,7 +434,8 @@ void XrouteAsyncWebSocketServer::SendToAllExcludeClient(const char *message, Asy
     if (_clients.size() <= 1)
     {
       // Only one client connected — it's the one to be excluded
-      Serial.println("[WS] 👤 Only one client connected (excluded) — skipping send");
+      // Serial.println("[WS] 👤 Only one client connected (excluded) — skipping send");
+      Serial.println("[WS] 👤 skipping send");
       return;
     }
   }
@@ -645,10 +646,17 @@ void XrouteAsyncWebSocketServer::begin(wifi_mode_t mode)
                                   }
                                   else if (cmd.who == ALL_CLIENTS)
                                   {
-                                    if (self->_ws->availableForWriteAll())
-                                    {
-                                      self->_ws->textAll(cmd.message.c_str());
-                                    }
+                                    /*
+                                    The sendToAll function already acts as the "gatekeeper" to your queue. Once a message has been accepted into the queue,
+                                    the WS_SEND_TASK should trust the underlying AsyncTCP library to handle the transmission and its own flow control.
+                                    By removing the redundant second check, you ensure that any message you queue will be passed to the library for sending,
+                                    preventing it from being dropped and breaking the vicious cycle.
+                                    */
+                                    // if (self->_ws->availableForWriteAll())
+                                    //{
+                                    // self->_ws->textAll(cmd.message.c_str());
+                                    //}
+                                    self->_ws->textAll(cmd.message.c_str());
                                   }
                                   else if (cmd.who == EXCLUDE_CLIENT && cmd.client)
                                   {
@@ -680,12 +688,11 @@ wifi_mode_t XrouteAsyncWebSocketServer::getMode()
 
 #undef ME
 
-
 /*
 To-Do List for Future Improvements
 Here are some key areas to look at later to further improve the robustness and efficiency of your project.
 
-1. (High Priority) Investigate Memory Safety Margin (streamFile) while i did update ui by postman and then lcd ask the ui and it causes crash maybe i need to update index of the ui after a while 
+1. (High Priority) Investigate Memory Safety Margin (streamFile) while i did update ui by postman and then lcd ask the ui and it causes crash maybe i need to update index of the ui after a while
 and also i should prevent creating ui send task in multiple requests and i think i did it already
 The "one time crash" you mentioned suggests that the current "All-in-One" method, while functional, might be operating close to the device's memory limit.
 
