@@ -806,8 +806,8 @@ void MeasurmentTask(void *parameters)
       a1 = 0;
     }
     a2 = ((amp2 - amp2Offset) * A2calCo);
-    v = (volt * VcalCo) - (cableResistance * a1 / 1000.0F) - Negvolt;
-    w = a1 / 10.0F * v / 10.0F;
+    v = (volt * VcalCo) - (cableResistance * a1 / 100.0F) - Negvolt;
+    w = v * a1;
     // b is now being calculated in the battery monitoring task
     // b = (v - battEmptyVoltage) / (battFullVoltage - battEmptyVoltage) * 100;
     // b = constrain(b, 0, 100);
@@ -858,11 +858,11 @@ void MeasurmentTask(void *parameters)
     data += str;
     sprintf(str, "BATPR1=%d\n", (int)b);
     data += str;
-    sprintf(str, "AMPINT1=%.2f\n", (float)a0 / 10.0F);
+    sprintf(str, "AMPINT1=%.1f\n", a0);
     data += str;
-    sprintf(str, "AMPEXT1=%d\n", (int)a1);
+    sprintf(str, "AMPEXT1=%.1f\n", a1);
     data += str;
-    sprintf(str, "AMPEXT2=%d\n", (int)a2);
+    sprintf(str, "AMPEXT2=%.1f\n", a2);
     data += str;
     sprintf(str, "WAT1=%d\n", (int)w);
     data += str;
@@ -1815,7 +1815,6 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
         sprintf(str, "show.txt=\"VcalCo=%f NegVoltOffset=%f\"\n", VcalCo, NegVoltOffset);
         Serial.println(str);
         ws.sendToThisClient(str);
-        // myBle.sendString(str);
       }
       else if (command.startsWith("OTMP_")) // outside temp
       {
@@ -1840,18 +1839,17 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
         EEPROM.commit();
         char str[128];
         sprintf(str, "show.txt=\"PT_mvCal=%f\"\n", PT_mvCal);
-        // myBle.sendString("show.txt=\"PT_mvCal=" + String(PT_mvCal) + "\"\n");
         ws.sendToThisClient(str);
       }
       else if (command.startsWith("INT_CUR_")) // internal current
       {
-        A0calCo = static_cast<float>(atoi(command.c_str() + 8)) / (amp0Offset - amp0);
+        float val = command.substring(command.indexOf("=") + 1).toFloat();
+        A0calCo = val / (amp0Offset - amp0);
         EEPROM.writeFloat(E2ADD.A0calCoSave, A0calCo);
         EEPROM.commit();
         char str[128];
         sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
         Serial.println(str);
-        // myBle.sendString(str);
         ws.sendToThisClient(str);
       }
       else if (command.startsWith("ZERO_INT_CUR_")) // internal current offset
