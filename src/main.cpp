@@ -168,9 +168,39 @@ int DFLT_CABLE_RES_MILI_OHM = 0;
 float pressurCalOffset = 0.04F; // psi
 // END---------------------------------Default Values
 extern relConfig RELAYS;
-// BluetoothSerial SerialBT;
-int blePass;
 // END-----------------------DATA's
+int dimShortFlg = false;
+int dimShortNum = 0;
+// OTA
+#define OTA_BUFFER_SIZE 2048
+uint8_t *UDP_buffer = nullptr;
+bool UDP_bufferBussy = true;
+bool UDP_dataReady = false;
+int UDP_buffLen;
+int UDP_len;
+#endif
+#define __________________________________________TASKHANDLE
+#ifdef __________________________________________TASKHANDLE
+TaskHandle_t I2C_SENSORS_TASK_Handle;
+TaskHandle_t Reg_Uptime_Task_Handle;
+TaskHandle_t ConditionsTask_Handle;
+TaskHandle_t MeasurmentTaskHandle;
+TaskHandle_t updateTaskHandle;
+TaskHandle_t sendUiConfigTaskHandle;
+TaskHandle_t sendConditionsTaskHandle;
+TaskHandle_t DimerTask_Handle;
+TaskHandle_t adcReadingTask_Handle;
+TaskHandle_t led_indicator_task_Handle;
+TaskHandle_t OVR_CRNT_PRTCT_TASK_Handle;
+TaskHandle_t BatteryTask_Handle;
+#endif
+#define __________________________________________FUNCTIONS
+#ifdef __________________________________________FUNCTIONS
+void sendCmdToExecute(char *str);
+void dimmerShortCircuitIntrupt();
+void defaultCalibrations();
+void onDataReceived(uint8_t *pData, size_t length);
+
 #endif
 // ==========================CoreDump
 MyCoreDump *coreDump;
@@ -341,14 +371,14 @@ String GyroOriantation = "XY00";
 LIS3DH myIMU; // Default constructor is I2C, addr 0x19.
 uint8_t Xis, Yis;
 int revX, revY;
+void readaxels(uint8_t sensor, float *x, float *y)
+{
+  static String last;
 #define AXEL_X_DEF 'X'
 #define AXEL_Y_DEF 'Y'
 #define AXEL_Z_DEF 'Z'
 #define AXEL_REV '1'
 #define AXEL_NOR '0'
-void readaxels(uint8_t sensor, float *x, float *y)
-{
-  static String last;
 #define ADD_INTERNAL_GYRO 0x19
 #define ADD_MPU6050 0x68
   float tempx;
@@ -407,35 +437,6 @@ void readaxels(uint8_t sensor, float *x, float *y)
   if (Yis == AXEL_Z_DEF)
     *y = tempz;
 }
-class I2CDevice
-{
-public:
-  I2CDevice(int address, String name)
-  {
-    _address = address;
-    _name = name;
-    _connected = false;
-  }
-  bool isConnected()
-  {
-    Wire.beginTransmission(_address);
-    _connected = (Wire.endTransmission() == 0);
-    return _connected;
-  }
-  bool lastState()
-  {
-    return _connected;
-  }
-  String getName()
-  {
-    return _name;
-  }
-
-private:
-  int _address;
-  String _name;
-  bool _connected;
-};
 void I2C_SENSORS_TASK(void *parameters)
 {
 #define CHECK_INTERVAL 500
@@ -599,7 +600,7 @@ void I2C_SENSORS_TASK(void *parameters)
       }
     }
     // Actual mesurments and filtering
-    if (cntr % BARO_INTERVAL == 0 && mainBarometer == ADD_INTERNAL_BAROMETER && GyroLicense->isActive() == true)
+    if (cntr % BARO_INTERVAL == 0 && mainBarometer == ADD_INTERNAL_BAROMETER) //&& GyroLicense->isActive() == true)
     {
       digitalAlt = psiToMeters(BARO.readPressure(PSI) - pressurCalOffset);
     }
@@ -651,13 +652,7 @@ void I2C_SENSORS_TASK(void *parameters)
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
-void sendCmdToExecute(char *str);
-void dimmerShortCircuitIntrupt();
-void defaultCalibrations();
-int dimShortFlg = false;
-int dimShortNum = 0;
 //=======================TEST
-void onDataReceived(uint8_t *pData, size_t length);
 //-------------------------------------------------TASKS
 void Reg_Uptime_Task(void *parameters)
 {
@@ -811,7 +806,7 @@ void MeasurmentTask(void *parameters)
       a1 = 0;
     }
     a2 = ((amp2 - amp2Offset) * A2calCo);
-    v = (volt * VcalCo) - (cableResistance * a1 / 100.0F) - (Negvolt * 10.0F);
+    v = (volt * VcalCo) - (cableResistance * a1 / 1000.0F) - Negvolt;
     w = a1 / 10.0F * v / 10.0F;
     // b is now being calculated in the battery monitoring task
     // b = (v - battEmptyVoltage) / (battFullVoltage - battEmptyVoltage) * 100;
@@ -859,7 +854,7 @@ void MeasurmentTask(void *parameters)
     // data += str;
     // sprintf(str, "CARVOL1=%d\n", (int)v);
     // data += str;
-    sprintf(str, "BATVOL1=%d\n", (int)v);
+    sprintf(str, "BATVOL1=%0.1f\n", v);
     data += str;
     sprintf(str, "BATPR1=%d\n", (int)b);
     data += str;
@@ -898,25 +893,6 @@ void MeasurmentTask(void *parameters)
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
-// websocket OTA
-#define OTA_BUFFER_SIZE 2048
-uint8_t *UDP_buffer = nullptr;
-bool UDP_bufferBussy = true;
-bool UDP_dataReady = false;
-int UDP_buffLen;
-int UDP_len;
-TaskHandle_t I2C_SENSORS_TASK_Handle;
-TaskHandle_t Reg_Uptime_Task_Handle;
-TaskHandle_t ConditionsTask_Handle;
-TaskHandle_t MeasurmentTaskHandle;
-TaskHandle_t updateTaskHandle;
-TaskHandle_t sendUiConfigTaskHandle;
-TaskHandle_t sendConditionsTaskHandle;
-TaskHandle_t DimerTask_Handle;
-TaskHandle_t adcReadingTask_Handle;
-TaskHandle_t led_indicator_task_Handle;
-TaskHandle_t OVR_CRNT_PRTCT_TASK_Handle;
-TaskHandle_t BatteryTask_Handle;
 void pauseUnnessesaryTasks()
 {
   TaskHandle_t th[9] =
@@ -1315,7 +1291,6 @@ void BatteryTask(void *parameters)
 void defaultCalibrations()
 {
   char str[128];
-
   EEPROM.writeFloat(E2ADD.lowVoltageSave, lowVoltageDeflt);
   EEPROM.writeInt(E2ADD.lowVoltageRelaysSave, lowVoltageRelaysDeflt);
   EEPROM.writeInt(E2ADD.lowVoltageDimersSave, lowVoltageDimersDeflt);
@@ -1323,7 +1298,7 @@ void defaultCalibrations()
   EEPROM.writeInt(E2ADD.criticalVoltageRelaysSave, criticalVoltageRelaysDeflt);
   EEPROM.writeInt(E2ADD.criticalVoltageDimersSave, criticalVoltageDimersDeflt);
   EEPROM.writeUInt(E2ADD.E2promFirsTime, E2PROM_NOT_FIRST_TIME_RUN_VAL);
-  EEPROM.writeUInt(E2ADD.blePassSave, blePassDeflt);
+  // EEPROM.writeUInt(E2ADD.blePassSave, blePassDeflt);
   EEPROM.writeFloat(E2ADD.pressurCalOffsetSave, pressurCalOffsetDeflt);
   EEPROM.writeFloat(E2ADD.accXValueOffsetSave, accXValueOffsetDeflt);
   EEPROM.writeFloat(E2ADD.accYValueOffsetSave, accYValueOffsetDeflt);
@@ -1384,7 +1359,7 @@ void createTimerCondition(String _outputType, int _motorPort, int _upTimeMs, int
   cndtions.push_back(Conditions(_outputType, _motorPort, _upTimeMs, downTimeMs)); // 0
 }
 //_______________________PARSER
-void processReceivedCommandData(uint8_t *pData, size_t length)
+void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSend = true)
 {
   char str[128];
   static RGB_VALS RGB1;
@@ -1418,7 +1393,10 @@ void processReceivedCommandData(uint8_t *pData, size_t length)
           sprintf(str, "DIMER%d=%s\n", dimNumber + 1, valStr);
           // myBle.sendString(str);
           //   ws.sendToAll(str);
-          ws.SendToAllExcludeClient(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
+          if (ExcludeForSend)
+            ws.SendToAllExcludeClient(str, ws.getClient()); // send to all cliants except the one who is ben this command received from
+          else
+            ws.sendToAll(str);
           // Serial.printf("in:%s | out:%s\n", command, str);
         }
         else
@@ -1449,13 +1427,19 @@ void processReceivedCommandData(uint8_t *pData, size_t length)
         {
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
+          if (ExcludeForSend)
+            ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
+          else
+            ws.sendToAll(String("sw" + String(index) + "=ON\n").c_str());
         }
         else if (command.lastIndexOf("OFF") > 0)
         {
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
           setRelay(RELAYS.relPos, v / 10);
-          ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
+          if (ExcludeForSend)
+            ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
+          else
+            ws.sendToAll(String("sw" + String(index) + "=OFF\n").c_str());
         }
         else
         {
@@ -1494,7 +1478,10 @@ void processReceivedCommandData(uint8_t *pData, size_t length)
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
           setRelay(RELAYS.relPos, v / 10);
           // myBle.sendString("Motor1=Up\n");
-          ws.sendToAll(String("Motor1=Up\n").c_str());
+          if (ExcludeForSend)
+            ws.sendToAll(String("Motor1=Up\n").c_str());
+          else
+            ws.SendToAllExcludeClient(String("Motor1=Up\n").c_str(), ws.getClient());
         }
         else if (command.indexOf("DOWN") > 0)
         {
@@ -1503,7 +1490,10 @@ void processReceivedCommandData(uint8_t *pData, size_t length)
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
           setRelay(RELAYS.relPos, v / 10);
           // myBle.sendString("Motor1=Down\n");
-          ws.sendToAll(String("Motor1=Down\n").c_str());
+          if (ExcludeForSend)
+            ws.sendToAll(String("Motor1=Down\n").c_str());
+          else
+            ws.sendToAll(String("Motor1=Down\n").c_str());
         }
         else if (command.indexOf("STOP") > 0)
         {
@@ -1512,7 +1502,10 @@ void processReceivedCommandData(uint8_t *pData, size_t length)
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
           setRelay(RELAYS.relPos, v / 10);
           // myBle.sendString("Motor1=Stop\n");
-          ws.sendToAll(String("Motor1=Stop\n").c_str());
+          if (ExcludeForSend)
+            ws.sendToAll(String("Motor1=Stop\n").c_str());
+          else
+            ws.sendToAll(String("Motor1=Stop\n").c_str());
         }
       }
       else if (command.startsWith("ZERO_GYRO_")) // Zero Gyro
@@ -1857,6 +1850,7 @@ void processReceivedCommandData(uint8_t *pData, size_t length)
         EEPROM.commit();
         char str[128];
         sprintf(str, "show.txt=\"A0calCo=%f\"\n", A0calCo);
+        Serial.println(str);
         // myBle.sendString(str);
         ws.sendToThisClient(str);
       }
@@ -2166,9 +2160,16 @@ void sendCmdToExecute(char *str)
   size_t length = strlen(str);
   processReceivedCommandData(pData, length);
 }
+void sendCmdToExecuteFromConditions(char *str)
+{
+  // Simulate BLE data reception
+  uint8_t *pData = reinterpret_cast<uint8_t *>(str);
+  size_t length = strlen(str);
+  processReceivedCommandData(pData, length, false);
+}
 // ==========================Terminal
-CliTerminal terminal(Serial, [](const char* cmd){ sendCmdToExecute((char*)cmd); });
-
+CliTerminal terminal(Serial, [](const char *cmd)
+                     { sendCmdToExecute((char *)cmd); });
 void cmdQueTask(void *pvParameters)
 {
   while (true)
@@ -2229,7 +2230,7 @@ void setup()
     coreDump = new MyCoreDump();
     Serial.println("\n//======STARTING=====//");
     // atach an intrupt for incomming serial data
-    //Serial.onReceive(serialCB);
+    // Serial.onReceive(serialCB);
     terminal.begin();
     initRelay();
     initLED_PWM();
@@ -2289,7 +2290,7 @@ void setup()
     conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt,
                           &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2,
                           &battHourLeft, &motorWay);
-    setCmdFunction(&sendCmdToExecute);
+    setCmdFunction(&sendCmdToExecuteFromConditions);
     getRelayStateFunction(&relState_0_15);
     getDimValueFunction(&getDimVal);
     setCondCreatorFunction(&createCondition);
@@ -2344,7 +2345,7 @@ void setup()
     {
       // try to connect to it if its ok to connect to it
       int res = testWifi(newSsid, newPass);
-      //print res
+      // print res
       Serial.println(" 👁️ 👁️ 👁️ res=" + String(res));
       wifi_WebSocket_Settings.set<int>(NetworkKeys::AtempResault, res);
       wifi_WebSocket_Settings.set<bool>(NetworkKeys::NewConfigIsAvailble, false);
@@ -2354,7 +2355,6 @@ void setup()
         wifi_WebSocket_Settings.set<String>(NetworkKeys::WifiPassword, newPass);
       }
       Serial.println(" 👁️ 👁️ 👁️ res=" + String(res));
-
     }
     // Configure network
     String ssid = wifi_WebSocket_Settings.get<String>(NetworkKeys::WifiSSID, "LabobinX_2.4G");
@@ -2594,7 +2594,7 @@ void loadSavedValue()
   {
     defaultCalibrations();
   }
-  blePass = EEPROM.readUInt(E2ADD.blePassSave);
+  // blePass = EEPROM.readUInt(E2ADD.blePassSave);
   pressurCalOffset = EEPROM.readFloat(E2ADD.pressurCalOffsetSave);
   accXValueOffset = EEPROM.readFloat(E2ADD.accXValueOffsetSave);
   accYValueOffset = EEPROM.readFloat(E2ADD.accYValueOffsetSave);
@@ -2713,6 +2713,7 @@ void dimmerShortCircuitIntrupt()
 }
 /*  new problems
 // ino haminjoori minevisam ke commit konam bebinam ye shakhe jadid dar miyad ya na
+1- yedoone ws eshtebahi baz mishe bedoone inke kesi behesh vasl bashe khod be khod
 4- neveshtane scadual condition
 5- timeout vase update
 6- dimere rate ziyad drop beshe

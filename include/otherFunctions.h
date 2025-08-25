@@ -1,6 +1,7 @@
 #ifndef otherFunctions_h
 #define otherFunctions_h
 #include <WiFiType.h>
+#include <Wire.h>
 bool checkPass(uint64_t uid, const char *pass);
 void sendToAll(char *str);
 void sendToAll(const char *str);
@@ -40,5 +41,34 @@ private:
 void printHex(const char *prefix, const uint8_t *data, size_t len);
 String getDeviceCode();
 int testWifi(String ssid, String pass);
+
+class I2CDevice
+{
+public:
+  I2CDevice(int address, String name)
+  {
+    _address = address;
+    _name = name;
+    _connected = false;
+  }
+  bool isConnected()
+  {
+    Wire.beginTransmission(_address);
+    _connected = (Wire.endTransmission() == 0);
+    return _connected;
+  }
+  bool lastState()
+  {
+    return _connected;
+  }
+  String getName()
+  {
+    return _name;
+  }
+private:
+  int _address;
+  String _name;
+  bool _connected;
+};
 
 #endif

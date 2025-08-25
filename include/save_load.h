@@ -36,7 +36,7 @@ struct EEpromAdd
     int licenseStatSave = ADDRESS * 30;     // Reserve 64/4=16 Byte String for next future Variable
     int GyroOriantationSave = ADDRESS * 50; // reserve 20 Byte XY00/n
     int pressurCalOffsetSave = ADDRESS * 60;
-    int blePassSave = ADDRESS * 70;
+    //int blePassSave = ADDRESS * 70;
     int E2promFirsTime = ADDRESS * 75;
     int lowVoltageSave = ADDRESS * 76;
     int lowVoltageRelaysSave = ADDRESS * 77;
