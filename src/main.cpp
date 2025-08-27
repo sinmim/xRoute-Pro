@@ -60,9 +60,6 @@ uint8_t iv[] = {3, 8, 2, 5, 0, 1, 8, 0, 9, 12, 79, 72, 3, 4, 6, 0};
 //  IV for AES decryption (16 bytes)
 // uint8_t iv[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 boolean UpdatingFlg = false;
-//========Battery
-Battery myBattery;
-boolean ampSenisConnected = false;
 //========Sensor
 #define I2C_BUSSY 1
 #define I2C_FREE 0
@@ -117,7 +114,7 @@ float negv = 0, v = 0, a0 = 0, a1 = 0, a2 = 0, w = 0, b = 0, cwPrcnt = 0, dwPrcn
 float VcalCo = 0, volt = 0;
 boolean lowVoltageFlg = false;
 float amp0Offset = 0;
-float A0calCo = 1, amp0 = 0;
+float A0calCo = 1, amp0 = 0, ampRef = 0, TMP1, TMP2;
 float amp1Offset = 0;
 float A1calCo = 1, amp1 = 0;
 float amp2Offset = 0;
@@ -127,10 +124,14 @@ float NegVoltOffsetSave = 0;
 float NegVoltOffset = 0;
 float Negvolt = 0;
 //--------------Battery
+int batteryConfig;
 float batteryCap = 0;
 float battFullVoltage = 0;
 float battEmptyVoltage = 0;
 float cableResistance = 0;
+Battery myBattery(BATTERY_TYPE_AGM, 100.0, BatteryConfig::V12, 12.6);
+int batteryType = BATTERY_TYPE_NON;
+boolean ampSenisConnected = false;
 //--------------Gauges
 // clean water G1
 float clnWtr = 0;
@@ -162,8 +163,8 @@ int DFLT_A_CAL = 50;
 int DFLT_A2_CAL = 60;
 int DFLT_BATT_CAP = 100;
 int DFLT_PT_MV_CAL = 585;
-int DFLT_BATT_FULL_VOLT = 135;
-int DFLT_BATT_EMPTY_VOLT = 119;
+float DFLT_BATT_FULL_VOLT = 13.5;
+float DFLT_BATT_EMPTY_VOLT = 11.9;
 int DFLT_CABLE_RES_MILI_OHM = 0;
 float pressurCalOffset = 0.04F; // psi
 // END---------------------------------Default Values
@@ -799,7 +800,8 @@ void MeasurmentTask(void *parameters)
     a0 = ((amp0 - amp0Offset) * A0calCo);
     if (ampSenisConnected)
     {
-      a1 = ((amp1 - amp1Offset) * A1calCo);
+      // a1 = ((amp1 - amp1Offset) * A1calCo);
+      a1 = ((amp1 - ampRef) * A1calCo);
     }
     else
     {
@@ -854,9 +856,9 @@ void MeasurmentTask(void *parameters)
     // data += str;
     // sprintf(str, "CARVOL1=%d\n", (int)v);
     // data += str;
-    sprintf(str, "BATVOL1=%0.1f\n", v);
+    sprintf(str, "BATVOL1=%0.2f\n", v);
     data += str;
-    sprintf(str, "BATPR1=%d\n", (int)b);
+    sprintf(str, "BATPR1=%0.1f\n", b);
     data += str;
     sprintf(str, "AMPINT1=%.1f\n", a0);
     data += str;
@@ -1079,11 +1081,13 @@ void adcReadingTask(void *parameters)
 {
   int cntr = 0;
   float lastPT100 = 0;
+  float tmpAmpRef;
 
   negv = ADC_LPF(NEG_VOLT_MUX_IN, 1, negv, 0);
   volt = ADC_LPF(VOLT_MUX_IN, 1, volt, 0.0);
   amp0 = ADC_LPF(AMPER0_MUX_IN, 1, amp0, 0.0);
   amp1 = ADC_LPF(AMPER_MUX_IN, 1, amp1, 0.0);
+  ampRef = ADC_LPF(AIN2_MUX_IN, 1, ampRef, 0.0);
   amp2 = ADC_LPF(AIR_QUALITY_MUX_IN, 1, amp2, 0.0);
   clnWtr = ADC_LPF(GAUGE1_MUX_IN, 1, clnWtr, 0.0);
   drtWtr = ADC_LPF(GAUGE2_MUX_IN, 1, drtWtr, 0.0);
@@ -1108,6 +1112,9 @@ void adcReadingTask(void *parameters)
 
     amp0 = ADC_LPF(AMPER0_MUX_IN, 15, amp0, 0.995);
     amp1 = ADC_LPF(AMPER_MUX_IN, 15, amp1, 0.995);
+    tmpAmpRef = ADC_LPF(AIN2_MUX_IN, 15, tmpAmpRef, 0.995);
+    ampRef = tmpAmpRef * 15.0 / (15.0 + 33.0);
+
     amp2 = ADC_LPF(AIR_QUALITY_MUX_IN, 5, amp2, 0.995);
     clnWtr = ADC_LPF(GAUGE1_MUX_IN, 15, clnWtr, 0.995);
     drtWtr = ADC_LPF(GAUGE2_MUX_IN, 15, drtWtr, 0.995);
@@ -1247,45 +1254,43 @@ void ramMonitorTask(void *pvParameters)
 }
 void BatteryTask(void *parameters)
 {
-  vTaskDelay(5000 / portTICK_PERIOD_MS);
-  if (battFullVoltage < 180)
-  {
-    myBattery.init(BATTERY_TYPE_AGM, batteryCap, BATTERY_CONFIG_12V, v);
-  }
-  else
-  {
-    myBattery.init(BATTERY_TYPE_AGM, batteryCap, BATTERY_CONFIG_24V, v);
-  }
-  String str = myBattery.SelectBatteryAcordingToFullVoltage((int)battFullVoltage);
-  Serial.println("Battery init: " + str);
+  float _batVolt, _batAmp;
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
+
   for (;;)
   {
     if (UpdatingFlg)
       vTaskDelete(NULL);
-
-    myBattery.loop(v, a1, (v - battEmptyVoltage) / (battFullVoltage - battEmptyVoltage));
-
-    // it means eather sensor is connected or charging is lokily is under +40Amps. so need to decet sensor some how else later
-    if (amp1 > 200)
+      
+    // normally 795=> 2.5v = 2500mv*15k/(15k+33k)
+    if (ampRef > 700 && ampSenisConnected == false)
     {
-      if (!ampSenisConnected)
-      {
-        sendToAll("XrouteAlarm=Amp Meter Connected !\n");
-        ampSenisConnected = true;
-        myBattery.setPercent(myBattery.getBtPerV());
-      }
-      b = myBattery.getPercent() * 100;
+      ampSenisConnected = true;
+      myBattery.setAmpSensorConnected(ampSenisConnected);
+      Serial.println("🔋 ✅ Current sensor connected!");
     }
-    else
+    if (ampRef < 600 && ampSenisConnected == true)
     {
-      if (ampSenisConnected)
-      {
-        sendToAll("XrouteAlarm=Amp Meter Disconnected !\n");
-        ampSenisConnected = false;
-      }
-      b = constrain(myBattery.btPerV, 0, 1) * 100;
+      ampSenisConnected = false;
+      myBattery.setAmpSensorConnected(ampSenisConnected);
+      Serial.println("🔋 ⁉️ Current sensor disconnected!");
     }
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    _batVolt = v;
+    _batAmp = a1;
+    // 3. Call the main loop of the battery class with the latest readings.
+    myBattery.loop(_batVolt, _batAmp);
+    // 4. Get the final, calculated State of Charge.
+    float currentSoC = myBattery.getSoC();
+    b = currentSoC * 100.0;
+    // 5. Print the results.
+    Serial.print("🔋🔋 Voltage: " + String(_batVolt, 2) + "V");
+    Serial.print(" | Current: " + String(_batAmp, 2) + "A");
+    Serial.print(" | AmpRefVolt: " + String(ampRef) + "V");
+    Serial.print(" | Amp1: " + String(amp1) + "V");
+    Serial.println(" | SoC: " + String(currentSoC * 100.0, 1) + "%");
+
+    vTaskDelay(pdTICKS_TO_MS(500));
   }
 }
 void defaultCalibrations()
@@ -1317,10 +1322,15 @@ void defaultCalibrations()
   EEPROM.writeFloat(E2ADD.drtWtrMaxSave, drtWtrMaxDeflt);
   EEPROM.writeFloat(E2ADD.gryWtrMinSave, gryWtrMinDeflt);
   EEPROM.writeFloat(E2ADD.gryWtrMaxSave, gryWtrMaxDeflt);
-  EEPROM.writeFloat(E2ADD.batteryCapSave, batteryCapDeflt); // 100AH must be defafault
-  EEPROM.writeFloat(E2ADD.battFullVoltageSave, battFullVoltageDeflt);
-  EEPROM.writeFloat(E2ADD.battEmptyVoltageSave, battEmptyVoltageDeflt);
   EEPROM.writeFloat(E2ADD.cableResistanceSave, cableResistanceDeflt);
+  // Battery
+  other_Settings.set<float>(otherKeys::BATTERY_F_VOLT, battFullVoltageDeflt);
+  other_Settings.set<float>(otherKeys::BATTERY_E_VOLT, battEmptyVoltageDeflt);
+  other_Settings.set<float>(otherKeys::BATTERY_CAP, batteryCapDeflt);
+  other_Settings.set<int>(otherKeys::BATTERY_TYPE, (int)BATTERY_TYPE_NON);
+  other_Settings.set<float>(otherKeys::BATTERY_CAP, batteryCapDeflt);
+  other_Settings.set<int>(otherKeys::BATTERY_CONFIG, (int)BatteryConfig::V12);
+
   for (int i = 0; i < 7; i++) // save dimmer defaults
   {
     EEPROM.writeFloat(E2ADD.dimLimitSave[i], dimLimitDeflt); // limit dimers to %60
@@ -1841,6 +1851,72 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
         sprintf(str, "show.txt=\"PT_mvCal=%f\"\n", PT_mvCal);
         ws.sendToThisClient(str);
       }
+      /*BATTERY*/
+      else if (command.startsWith("BATT_CAP_")) // BATT_CAP_1=220
+      {
+        batteryCap = command.substring(command.indexOf("=") + 1).toFloat();
+        myBattery.setBatteryCap(batteryCap);
+        other_Settings.set<float>(otherKeys::BATTERY_CAP, batteryCap);
+        Serial.println("🔋 Battery Cap:" + String(batteryCap));
+      }
+      else if (command.startsWith("BATT_FULL_")) // BATT_FULL_1=13.5
+      {
+        battFullVoltage = command.substring(command.indexOf("=") + 1).toFloat();
+        myBattery.setCustomLinearVoltages(battEmptyVoltage, battFullVoltage);
+        other_Settings.set<float>(otherKeys::BATTERY_F_VOLT, battFullVoltage);
+        Serial.println("🔋 Battery Full:" + String(battFullVoltage));
+      }
+      else if (command.startsWith("BATT_EMPTY_")) // BATT_EMPTY_1=11.9
+      {
+        battEmptyVoltage = command.substring(command.indexOf("=") + 1).toFloat();
+        myBattery.setCustomLinearVoltages(battEmptyVoltage, battFullVoltage);
+        other_Settings.set<float>(otherKeys::BATTERY_E_VOLT, battEmptyVoltage);
+        Serial.println("🔋 Battery Empty:" + String(battEmptyVoltage));
+      }
+      else if (command.startsWith("BATT_CONFIG_")) // BATT_CONFIG_1=12|24
+      {
+        int config = command.substring(command.indexOf("=") + 1).toInt();
+        if (config == 12)
+        {
+          config = 1;
+        }
+        else if (config == 24)
+        {
+          config = 2;
+        }
+        if (config == 1 || config == 2)
+        {
+          myBattery.setBatteryConfig((BatteryConfig)config);
+          other_Settings.set<int>(otherKeys::BATTERY_CONFIG, config);
+          Serial.println("🔋 Battery Config:" + String(config));
+        }
+        else
+        {
+          Serial.println("🔋 🪫 Wrong Battery Config . must be 12 or 24");
+        }
+      }
+      else if (command.startsWith("BATT_TYPE_")) // BATT_TYPE_1=1
+      {
+        /*
+          BATTERY_TYPE_NON = 0, // Used for custom linear voltage mode
+          BATTERY_TYPE_GEL = 1,
+          BATTERY_TYPE_ACID = 2,
+          BATTERY_TYPE_AGM = 3,
+          BATTERY_TYPE_LIFEPO4 = 4,
+          BATTERY_TYPE_LITIUM = 5
+        */
+        if (batteryType >= 0 && batteryType <= 5)
+        {
+          batteryType = command.substring(command.indexOf("=") + 1).toInt();
+          myBattery.setBatType((BatteryType)batteryType);
+          other_Settings.set<int>(otherKeys::BATTERY_TYPE, batteryType);
+        }
+        else
+        {
+          Serial.println("🔋 🪫 Wrong Battery Type . must be 0-5");
+        }
+      }
+      /*OTHERS*/
       else if (command.startsWith("INT_CUR_")) // internal current
       {
         float val = command.substring(command.indexOf("=") + 1).toFloat();
@@ -2305,7 +2381,7 @@ void setup()
     // giveMeMacAdress();
   }
 
-  // user infos
+  // Setting Store
   if (true)
   {
     // wifi & WS
@@ -2325,9 +2401,25 @@ void setup()
     else
     {
       Serial.println("[" + other_Settings.getPath() + "]==> LOADED OK !");
+      // ui
       uiConfigIndex = other_Settings.get<uint32_t>(otherKeys::UI_CONFIG_INDEX, 1);
+      // battery
+      batteryType = other_Settings.get<int>(otherKeys::BATTERY_TYPE, (int)BATTERY_TYPE_NON);
+      batteryCap = other_Settings.get<float>(otherKeys::BATTERY_CAP, batteryCapDeflt);
+      batteryConfig = other_Settings.get<int>(otherKeys::BATTERY_CONFIG, (int)BatteryConfig::V12);
+      battFullVoltage = other_Settings.get<float>(otherKeys::BATTERY_F_VOLT, battFullVoltageDeflt);
+      battEmptyVoltage = other_Settings.get<float>(otherKeys::BATTERY_E_VOLT, battEmptyVoltageDeflt);
       other_Settings.saveIfChanged();
     }
+  }
+
+  // Battery
+  if (true)
+  {
+    myBattery.setBatType((BatteryType)batteryType);
+    myBattery.setBatteryCap(batteryCap);
+    myBattery.setBatteryConfig((BatteryConfig)batteryConfig);
+    myBattery.setCustomLinearVoltages(battEmptyVoltage, battFullVoltage);
   }
 
   // Network AND websocket
@@ -2610,14 +2702,14 @@ void loadSavedValue()
   drtWtrMax = EEPROM.readFloat(E2ADD.drtWtrMaxSave);
   gryWtrMin = EEPROM.readFloat(E2ADD.gryWtrMinSave);
   gryWtrMax = EEPROM.readFloat(E2ADD.gryWtrMaxSave);
-  batteryCap = EEPROM.readFloat(E2ADD.batteryCapSave);
-  DFLT_BATT_CAP = batteryCap;
-  battFullVoltage = EEPROM.readFloat(E2ADD.battFullVoltageSave);
-  DFLT_BATT_FULL_VOLT = battFullVoltage;
-  battEmptyVoltage = EEPROM.readFloat(E2ADD.battEmptyVoltageSave);
-  DFLT_BATT_EMPTY_VOLT = battEmptyVoltage;
-  cableResistance = EEPROM.readFloat(E2ADD.cableResistanceSave);
   PT_mvCal = EEPROM.readFloat(E2ADD.PT_mvCal_Save);
+  // batteryCap = EEPROM.readFloat(E2ADD.batteryCapSave);
+  // DFLT_BATT_CAP = batteryCap;
+  // battFullVoltage = EEPROM.readFloat(E2ADD.battFullVoltageSave);
+  // DFLT_BATT_FULL_VOLT = battFullVoltage;
+  // battEmptyVoltage = EEPROM.readFloat(E2ADD.battEmptyVoltageSave);
+  // DFLT_BATT_EMPTY_VOLT = battEmptyVoltage;
+  // cableResistance = EEPROM.readFloat(E2ADD.cableResistanceSave);
 
   for (int i = 0; i < 7; i++)
   {
@@ -2721,6 +2813,7 @@ void dimmerShortCircuitIntrupt()
 */
 // sendCmdToExecute needs wait for already incomming tasks
 //+++++++++++++++++++++++TO DO
+// 0- gyro ro sari tar bekhoon badan baraye inke age zarbe detect kard ivent bede ke in baraye vaghtiye ke automation add karde bashe
 //   ba ble nemishe JSONE hajme balaye 256B ro ersal kard masalan age GET_DEV_INFO_JSON_1 bezani nesfe miyad
 //   dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe
 //   voltage ke yehoyi biyad payin ya inke voltage eshtebah kalibre beshe rele vel mikone

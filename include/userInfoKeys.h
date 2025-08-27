@@ -33,6 +33,14 @@ namespace jsonKeys
 namespace otherKeys
 {
     constexpr char UI_CONFIG_INDEX[] = "UI_INDEDX";
+    // batery type
+    constexpr char BATTERY_TYPE[] = "BATTERY_TYPE";
+    constexpr char BATTERY_CAP[] = "BATTERY_CAP";
+    constexpr char BATTERY_CONFIG[] = "BATTERY_CONFIG";
+    constexpr char BATTERY_F_VOLT[] = "BATTERY_F_VOLT";
+    constexpr char BATTERY_E_VOLT[] = "BATTERY_E_VOLT";
+    constexpr char BATTERY_12_24_VOLT[] = "BATTERY_12_24_VOLT";
+
 }
 
 #endif // SETTINGS_KEYS_H

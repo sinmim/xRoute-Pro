@@ -16,7 +16,7 @@
 #define AMPER_MUX_IN          0b0110
 #define AMPER0_MUX_IN         0b0101
 #define AIN1_MUX_IN        7
-#define AIN2_MUX_IN        8
+#define AIN2_MUX_IN           0b1110
 #define NEG_VOLT_MUX_IN    9
 #define AIN4_MUX_IN        10
 #define AIN5_MUX_IN        11
