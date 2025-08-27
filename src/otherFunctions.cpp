@@ -482,3 +482,20 @@ int testWifi(String ssid, String pass)
 
   return return_code;
 }
+
+void shutDownAll(void (*executer)(char *str))
+{
+  char str[32];
+  // all relays
+  for (int i = 1; i <= MyBoard.relCount; i++)
+  {
+    sprintf(str, "SET_SW_%d=OFF\n", i);
+    executer(str);
+  }
+  // all dimers
+  for (int i = 1; i <= MyBoard.dimCount; i++)
+  {
+    sprintf(str, "SET_DIM_%d=0\n", i);
+    executer(str);
+  }
+}

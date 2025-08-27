@@ -1,8 +1,8 @@
 //====================================================libraries
 #include "xRouteDefs.h"
+MyController MyBoard(MyController::XROUTE_PRO);
 // defiene as XROUTE_PRO
 String Version = "0.9.0";
-MyController MyBoard(MyController::XROUTE_PRO);
 #define __________________________________________INCLUDES
 #ifdef __________________________________________INCLUDES
 #include <sdkconfig.h>
@@ -111,8 +111,10 @@ float digitalPress = 0;
 float digitalAlt = 0;
 //------------------------POWER
 float negv = 0, v = 0, a0 = 0, a1 = 0, a2 = 0, w = 0, b = 0, cwPrcnt = 0, dwPrcnt = 0, gwPrcnt = 0, pt100mv = 0, gsmAnten = 0, battHourLeft = 0;
+float vTmpForinternallUse;
 float VcalCo = 0, volt = 0;
-boolean lowVoltageFlg = false;
+boolean underVoltageFlg = false;
+boolean overVoltageFlg = false;
 float amp0Offset = 0;
 float A0calCo = 1, amp0 = 0, ampRef = 0, TMP1, TMP2;
 float amp1Offset = 0;
@@ -128,7 +130,6 @@ int batteryConfig;
 float batteryCap = 0;
 float battFullVoltage = 0;
 float battEmptyVoltage = 0;
-float cableResistance = 0;
 Battery myBattery(BATTERY_TYPE_AGM, 100.0, BatteryConfig::V12, 12.6);
 int batteryType = BATTERY_TYPE_NON;
 boolean ampSenisConnected = false;
@@ -750,7 +751,7 @@ void loadStateFromFile()
          &tmp, &dimTmp[0], &dimTmp[1], &dimTmp[2], &dimTmp[3], &dimTmp[4], &dimTmp[5], &dimTmp[6]);
 
   RELAYS.relPos = tmp;
-  setRelay(RELAYS.relPos, v / 10);
+  setRelay(RELAYS.relPos, vTmpForinternallUse);
   DimValChanged = true;
 }
 void saveStatesToFile()
@@ -794,7 +795,7 @@ void MeasurmentTask(void *parameters)
     // Set relay voltages acording to powersupply
     if (relaySatat() == REL_FREE)
     {
-      setRelPWM(REL_HOLD_VOLTAGE, v / 10);
+      setRelPWM(REL_HOLD_VOLTAGE, v);
     }
     /* -----------reading and filtering is done in adcReadingTask*/
     a0 = ((amp0 - amp0Offset) * A0calCo);
@@ -808,7 +809,7 @@ void MeasurmentTask(void *parameters)
       a1 = 0;
     }
     a2 = ((amp2 - amp2Offset) * A2calCo);
-    v = (volt * VcalCo) - (cableResistance * a1 / 100.0F) - Negvolt;
+    v = (volt * VcalCo) - Negvolt;
     w = v * a1;
     // b is now being calculated in the battery monitoring task
     // b = (v - battEmptyVoltage) / (battFullVoltage - battEmptyVoltage) * 100;
@@ -1101,13 +1102,37 @@ void adcReadingTask(void *parameters)
     negv = ADC_LPF(NEG_VOLT_MUX_IN, 5, negv, 0.995);
     Negvolt = ((((negv - NegVoltOffset) * 5 * 1.25) / 4096) - ((24 / 124) * 3.3)) / (1 + (24 / 124)); // 1.28 is for calibration Black PCB china
     volt = ADC_LPF(VOLT_MUX_IN, 5, volt, 0.995);
-    if (volt < 900) // 9.0 Volt is low for relays to work properly
+
+    // VcalCo=0.010852 NegVoltOffset=638.323486 // this is default working values
+    vTmpForinternallUse = (volt * 0.010852) - Negvolt;
+    if (millis() > 5000) // wait for voltage to stablize
     {
-      lowVoltageFlg = true;
-    }
-    else
-    {
-      lowVoltageFlg = false;
+      if (vTmpForinternallUse < MyBoard.underVoltage && underVoltageFlg == false) // 9.0 Volt is low for relays to work properly
+      {
+        shutDownAll(&sendCmdToExecute);
+        underVoltageFlg = true;
+        char str[64];
+        sprintf(str, "XrouteAlarm= PROTECTION! Under Voltage! : %.1f\n", vTmpForinternallUse);
+        ws.sendToAll(str);
+        Serial.println(str);
+      }
+      else if (underVoltageFlg && vTmpForinternallUse >= MyBoard.normalLowVoltage)
+      {
+        underVoltageFlg = false;
+      }
+      if (vTmpForinternallUse > MyBoard.overVoltage && overVoltageFlg == false)
+      {
+        shutDownAll(&sendCmdToExecute);
+        overVoltageFlg = true;
+        char str[64];
+        sprintf(str, "XrouteAlarm= PROTECTION! Under Voltage! : %.1f\n", vTmpForinternallUse);
+        ws.sendToAll(str);
+        Serial.println(str);
+      }
+      else if (overVoltageFlg && vTmpForinternallUse <= MyBoard.normalHighVoltage)
+      {
+        overVoltageFlg = false;
+      }
     }
 
     amp0 = ADC_LPF(AMPER0_MUX_IN, 15, amp0, 0.995);
@@ -1261,7 +1286,7 @@ void BatteryTask(void *parameters)
   {
     if (UpdatingFlg)
       vTaskDelete(NULL);
-      
+
     // normally 795=> 2.5v = 2500mv*15k/(15k+33k)
     if (ampRef > 700 && ampSenisConnected == false)
     {
@@ -1284,12 +1309,11 @@ void BatteryTask(void *parameters)
     float currentSoC = myBattery.getSoC();
     b = currentSoC * 100.0;
     // 5. Print the results.
-    Serial.print("🔋🔋 Voltage: " + String(_batVolt, 2) + "V");
-    Serial.print(" | Current: " + String(_batAmp, 2) + "A");
-    Serial.print(" | AmpRefVolt: " + String(ampRef) + "V");
-    Serial.print(" | Amp1: " + String(amp1) + "V");
-    Serial.println(" | SoC: " + String(currentSoC * 100.0, 1) + "%");
-
+    // Serial.print("🔋🔋 Voltage: " + String(_batVolt, 2) + "V");
+    // Serial.print(" | Current: " + String(_batAmp, 2) + "A");
+    // Serial.print(" | AmpRefVolt: " + String(ampRef) + "V");
+    // Serial.print(" | Amp1: " + String(amp1) + "V");
+    // Serial.println(" | SoC: " + String(currentSoC * 100.0, 1) + "%");
     vTaskDelay(pdTICKS_TO_MS(500));
   }
 }
@@ -1432,11 +1456,22 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
       }
       else if (command.startsWith("SW_")) // SW_12=ON
       {
+        if (underVoltageFlg)
+        {
+          ws.sendToAll("XrouteAlarm=    PROTECTION!    Under Voltage!\n");
+          return;
+        }
+        if (overVoltageFlg)
+        {
+          ws.sendToAll("XrouteAlarm=    PROTECTION!    Over Voltage!\n");
+          return;
+        }
+
         int index = atoi(command.substring(command.indexOf("_") + 1, command.indexOf('=')).c_str());
         if (command.lastIndexOf("ON") > 0)
         {
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[index - 1]);
-          setRelay(RELAYS.relPos, v / 10);
+          setRelay(RELAYS.relPos, vTmpForinternallUse);
           if (ExcludeForSend)
             ws.SendToAllExcludeClient(String("sw" + String(index) + "=ON\n").c_str(), ws.getClient());
           else
@@ -1445,7 +1480,7 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
         else if (command.lastIndexOf("OFF") > 0)
         {
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[index - 1]);
-          setRelay(RELAYS.relPos, v / 10);
+          setRelay(RELAYS.relPos, vTmpForinternallUse);
           if (ExcludeForSend)
             ws.SendToAllExcludeClient(String("sw" + String(index) + "=OFF\n").c_str(), ws.getClient());
           else
@@ -1486,7 +1521,7 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
           motorWay = MOTOR_UP;
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[7 - 1]);
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
-          setRelay(RELAYS.relPos, v / 10);
+          setRelay(RELAYS.relPos, vTmpForinternallUse);
           // myBle.sendString("Motor1=Up\n");
           if (ExcludeForSend)
             ws.sendToAll(String("Motor1=Up\n").c_str());
@@ -1498,7 +1533,7 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
           motorWay = MOTOR_DOWN;
           RELAYS.relPos |= (1UL << RELAYS.cnfgLookup[8 - 1]);
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
-          setRelay(RELAYS.relPos, v / 10);
+          setRelay(RELAYS.relPos, vTmpForinternallUse);
           // myBle.sendString("Motor1=Down\n");
           if (ExcludeForSend)
             ws.sendToAll(String("Motor1=Down\n").c_str());
@@ -1510,7 +1545,7 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
           motorWay = MOTOR_STOP;
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[7 - 1]);
           RELAYS.relPos &= ~(1UL << RELAYS.cnfgLookup[8 - 1]);
-          setRelay(RELAYS.relPos, v / 10);
+          setRelay(RELAYS.relPos, vTmpForinternallUse);
           // myBle.sendString("Motor1=Stop\n");
           if (ExcludeForSend)
             ws.sendToAll(String("Motor1=Stop\n").c_str());
@@ -1700,6 +1735,22 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
         String msg;
         serializeJson(doc, msg);
         // Serial.println(msg);
+        ws.sendToThisClient(msg.c_str());
+      }
+      else if (command.startsWith("BATT_INFO_JSON_"))
+      {
+        int index = (command.substring(command.lastIndexOf("_") + 1)).toInt();
+        StaticJsonDocument<1024> doc;
+        JsonObject root = doc.createNestedObject("BATT_INFO");
+        root["BATT_TYPE"] = batteryType;
+        root["BATT_CAP"] = batteryCap;
+        root["BATT_FULL_VOLT"] = battFullVoltage;
+        root["BATT_EMPTY_VOLT"] = battEmptyVoltage;
+        root["BATT_CONFIG"] = batteryConfig * 12;
+        root["SHONT"] = ampSenisConnected;
+        String msg;
+        serializeJson(doc, msg);
+        Serial.println(msg);
         ws.sendToThisClient(msg.c_str());
       }
       else if (command.startsWith("WIFI_IP_"))
@@ -2598,7 +2649,7 @@ void setup()
     xTaskCreatePinnedToCore(
         adcReadingTask,
         "ADC READING TASK",
-        1.5 * 1024, // ✔️
+        4.5 * 1024, // ✔️
         NULL,
         1,
         &adcReadingTask_Handle,

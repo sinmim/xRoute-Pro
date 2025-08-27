@@ -15,6 +15,11 @@ public:
     int dimCount;
     int fltCount;
     int motorCount;
+    float overVoltage;
+    float normalHighVoltage;
+    float underVoltage;
+    float normalLowVoltage;
+
     MyController(DeviceType type)
     {
         switch (type)
@@ -26,6 +31,10 @@ public:
             dimCount = 5;
             fltCount = 2;
             motorCount = 1;
+            overVoltage = 29.5;
+            normalHighVoltage = 28.0;
+            underVoltage = 9.5;
+            normalLowVoltage = 11.0;
             break;
         case XROUTE_MASTER:
             log_i("[xRouteDefs]: XROUTE_MASTER");
@@ -34,6 +43,10 @@ public:
             dimCount = 7;
             fltCount = 3;
             motorCount = 2;
+            overVoltage = 29.5;
+            normalHighVoltage = 28.0;
+            underVoltage = 9.5;
+            normalLowVoltage = 11.0;
             break;
         default:
             log_e("[xRouteDefs]: ERROR! Invalid device type");
@@ -42,6 +55,10 @@ public:
             dimCount = 5;
             fltCount = 2;
             motorCount = 1;
+            overVoltage = 29.5;
+            normalHighVoltage = 28.0;
+            underVoltage = 9.5;
+            normalLowVoltage = 11.0;
             break;
         }
     }

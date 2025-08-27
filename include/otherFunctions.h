@@ -65,10 +65,13 @@ public:
   {
     return _name;
   }
+
 private:
   int _address;
   String _name;
   bool _connected;
 };
+
+void shutDownAll(void (*executer)(char *str));
 
 #endif

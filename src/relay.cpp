@@ -12,9 +12,10 @@ void setRelPWM(float volt, float SuplyVol)
     if (duty > 1) // if the power supply is lower than desired voltage duty must be limited to 100%
         duty = 1;
     int max = pow(2, REL_PWM_RES);
+    //print all details
+    //Serial.printf("volt: %.2f, SuplyVol: %.2f, duty: %.2f, max: %d, write: %d\n", volt, SuplyVol, duty, max, (int)((1 - duty) * max));
     ledcWrite(REL_PWM_CHANNEL, (1 - duty) * max); // 1-duty becaus i need inverted pwm
 }
-
 void initRelay()
 {
     ledcSetup(REL_PWM_CHANNEL, REL_PWM_FREQ, REL_PWM_RES);
@@ -43,7 +44,7 @@ void setRelayNum(int relNum, relConfig *relays, bool state)
 void setRelay(unsigned int data, float SuplyVol)
 {
     state = REL_BUSY;
-    SuplyVol = SupplyVoltage; // privent  adaptive voltage for now
+    //SuplyVol = SupplyVoltage; // privent  adaptive voltage for now
     int i;
     setRelPWM(REL_TRIG_VOLTAGE, SuplyVol);
     vTaskDelay(10 / portTICK_PERIOD_MS);
