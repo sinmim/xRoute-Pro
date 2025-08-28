@@ -105,7 +105,8 @@ bool XrouteAsyncWebSocketServer::init(wifi_mode_t mode)
       {
         ME;
         Serial.println("Time oute");
-        return false;
+        //return false;
+        break;
       }
       vTaskDelay(pdMS_TO_TICKS(500));
       Serial.print('.');
