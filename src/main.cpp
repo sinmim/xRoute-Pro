@@ -33,9 +33,12 @@ String Version = "0.9.0";
 #include <FS.h>
 #include <MyWifi.h>
 #include "CliTerminal.h"
+#include "StatusIndicator.h"
 #endif
 #define __________________________________________VAR_DEF
 #ifdef __________________________________________VAR_DEF
+// LED
+StatusIndicator statusLed(23); // pin23
 //*******************VERSION CONTROLS
 // userInfo
 #include "SettingsStore.h"
@@ -74,19 +77,6 @@ float accYValueOffset = 0;
 boolean GyroOffsetingFlg = false;
 sensors_event_t mpuAcc, mpuGyro, mpuTemp;
 void initMPU();
-//------------------------------------WS2812
-#define LEDS_COUNT 1
-#define LEDS_PIN 23
-#define CHANNEL 0
-Freenove_ESP32_WS2812 strip = Freenove_ESP32_WS2812(LEDS_COUNT, LEDS_PIN, CHANNEL, TYPE_GRB);
-#define COLOR_RED 0xff0000
-#define COLOR_GREEN 0x00ff00
-#define COLOR_BLUE 0x0000ff
-#define COLOR_ORANG 0xffa000
-#define COLOR_OFF 0x000000
-#define COLOR_WHITE 0xffffff
-int LED_COLOR = COLOR_OFF;
-void ws2812Blink(int color, int times, int interval_ms, float intensity);
 //------------------------------------e2prom
 void loadSavedValue();
 EEpromAdd E2ADD;
@@ -1154,32 +1144,23 @@ void led_indicator_task(void *parameters)
 {
   for (;;)
   {
-    if (UpdatingFlg)
-    {
-      strip.setBrightness(250);
-    }
-    while (UpdatingFlg)
-    {
-      ws2812Blink(COLOR_WHITE, 1, 3, 1);
-      vTaskDelay(50 / portTICK_PERIOD_MS);
-    }
-    if (overCrntFlg == true)
-    {
-      ws2812Blink(COLOR_ORANG, 1, 3, 1);
-    }
-    // TODO : add wifi connection later on for color RED and BLUE
+    // 1. Gather the current system state
+    bool wifi_ok = (WiFi.status() == WL_CONNECTED || WiFi.getMode() == WIFI_AP);
+    bool internet_ok = false; // isConnectedToInternet();
     int clients = ws.clientCount();
-    if (clients > 0)
-    {
-      if (ws.isUpdating())
-        ws2812Blink(COLOR_WHITE, clients, 1, 0.8);
-      else
-      {
-        ws2812Blink(COLOR_GREEN, clients, 3, 0.5);
-        ws2812Blink(COLOR_RED, 1, 4, 0.5);
-      }
-    }
-    vTaskDelay(200 / portTICK_PERIOD_MS);
+
+    // 2. Pass the state to the indicator object
+    statusLed.update(
+        UpdatingFlg,
+        overVoltageFlg,
+        underVoltageFlg,
+        overCrntFlg,
+        clients,
+        wifi_ok,
+        internet_ok);
+
+    // 3. Yield
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 void OVR_CRNT_PRTCT_TASK(void *parameters)
@@ -1597,7 +1578,7 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
         Serial.println("[PARSER]:Restarting ESP32");
         // pauseUnnessesaryTasks();
         vTaskSuspend(led_indicator_task_Handle);
-        ws2812Blink(COLOR_WHITE, 10, 1, 1);
+        // ws2812Blink(COLOR_WHITE, 10, 1, 1);
         vTaskDelay(pdMS_TO_TICKS(2000));
         ESP.restart();
       }
@@ -1743,6 +1724,7 @@ void processReceivedCommandData(uint8_t *pData, size_t length, bool ExcludeForSe
         StaticJsonDocument<1024> doc;
         JsonObject root = doc.createNestedObject("BATT_INFO");
         root["BATT_TYPE"] = batteryType;
+        root["BATT_TYPE_NAME"] = myBattery.getBatTypeName();
         root["BATT_CAP"] = batteryCap;
         root["BATT_FULL_VOLT"] = battFullVoltage;
         root["BATT_EMPTY_VOLT"] = battEmptyVoltage;
@@ -2346,6 +2328,20 @@ void serialCB()
 //--------------------
 void setup()
 {
+  // LED
+  if (true)
+  {
+    statusLed.begin();
+    xTaskCreatePinnedToCore(
+        led_indicator_task,
+        "led_indicator_task",
+        1.2 * 1024, // ✔️
+        NULL,
+        1,
+        &led_indicator_task_Handle,
+        0);
+  }
+
   // low levels and hardware
   if (true)
   {
@@ -2360,7 +2356,6 @@ void setup()
     initRelay();
     initLED_PWM();
     initADC();
-    strip.begin();
     uint32_t flashSize = ESP.getFlashChipSize();
     float flashSizeMB = (float)flashSize / (1024.0 * 1024.0); // MB
     Serial.print("FlashSize:");
@@ -2655,14 +2650,6 @@ void setup()
         &adcReadingTask_Handle,
         1);
     xTaskCreatePinnedToCore(
-        led_indicator_task,
-        "led_indicator_task",
-        1.2 * 1024, // ✔️
-        NULL,
-        1,
-        &led_indicator_task_Handle,
-        0);
-    xTaskCreatePinnedToCore(
         OVR_CRNT_PRTCT_TASK,
         "OVR_CRNT_PRTCT_TASK",
         1.5 * 1024, // ✔️
@@ -2792,29 +2779,6 @@ void loadSavedValue()
     GyroOriantation = String(strTmp);
   }
 }
-void ws2812Blink(int color, int times, int interval_ms, float intensity)
-{
-#define MIN_LIGHT 1
-  int MAX_LIGHT = 255 * intensity;
-  int STEP_INTERVAL_MS = interval_ms;
-  for (int i = 0; i < times; i++)
-  {
-    for (int i = MIN_LIGHT; i < MAX_LIGHT; i += 2)
-    {
-      strip.setLedColorData(0, color);
-      strip.setBrightness(i);
-      strip.show();
-      vTaskDelay(pdMS_TO_TICKS(STEP_INTERVAL_MS));
-    }
-    for (int i = MAX_LIGHT; i >= MIN_LIGHT; i -= 2)
-    {
-      strip.setLedColorData(0, color);
-      strip.setBrightness(i);
-      strip.show();
-      vTaskDelay(pdMS_TO_TICKS(STEP_INTERVAL_MS));
-    }
-  }
-}
 void initMPU()
 {
   mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
@@ -2864,6 +2828,8 @@ void dimmerShortCircuitIntrupt()
 */
 // sendCmdToExecute needs wait for already incomming tasks
 //+++++++++++++++++++++++TO DO
+// anteno daravordam zadam khodesh be wifi vasl nashod
+// badan adc read task ro hajme stakesho mitooni biyari payin ba hazve ersal WS as toosh va anjamesh ye jaye dg
 // 0- gyro ro sari tar bekhoon badan baraye inke age zarbe detect kard ivent bede ke in baraye vaghtiye ke automation add karde bashe
 //   ba ble nemishe JSONE hajme balaye 256B ro ersal kard masalan age GET_DEV_INFO_JSON_1 bezani nesfe miyad
 //   dakhele loope Vcal to ya dakhele loope Tcal to infinit loop nabayad beshe

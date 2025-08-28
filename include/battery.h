@@ -13,6 +13,15 @@ enum BatteryType
     BATTERY_TYPE_LIFEPO4 = 4,
     BATTERY_TYPE_LITIUM = 5
 };
+// create a string enum of battery names
+const char *const BATTERY_TYPE_NAMES[] =
+    {
+        "NON",
+        "GEL",
+        "ACID",
+        "AGM",
+        "LIFEPO4",
+        "LITIUM"};
 
 // Battery system voltage configuration (for series connections)
 enum class BatteryConfig
@@ -63,6 +72,8 @@ public:
      * @param type The new battery type from the BatteryType enum.
      */
     void setBatType(BatteryType type);
+
+    String getBatTypeName();
 
     /**
      * @brief Updates the battery system voltage configuration (12V/24V) at runtime.

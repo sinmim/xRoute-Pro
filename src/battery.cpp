@@ -149,6 +149,11 @@ void Battery::setBatType(BatteryType type)
     }
 }
 
+String Battery::getBatTypeName()
+{
+    return BATTERY_TYPE_NAMES[(int)m_batteryType];
+}
+
 void Battery::setBatteryConfig(BatteryConfig config)
 {
     m_config = config;
