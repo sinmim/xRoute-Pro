@@ -40,6 +40,8 @@ namespace otherKeys
     constexpr char BATTERY_F_VOLT[] = "BATTERY_F_VOLT";
     constexpr char BATTERY_E_VOLT[] = "BATTERY_E_VOLT";
     constexpr char BATTERY_12_24_VOLT[] = "BATTERY_12_24_VOLT";
+    //factory reset is inside class itself
+
 
 }
 

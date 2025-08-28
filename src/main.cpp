@@ -33,6 +33,7 @@ String Version = "0.9.0";
 #include <FS.h>
 #include "CliTerminal.h"
 #include "StatusIndicator.h"
+#include "FactoryReset.h"
 #endif
 #define __________________________________________VAR_DEF
 #ifdef __________________________________________VAR_DEF
@@ -2327,19 +2328,6 @@ void serialCB()
 //--------------------
 void setup()
 {
-  // LED
-  if (true)
-  {
-    statusLed.begin();
-    xTaskCreatePinnedToCore(
-        led_indicator_task,
-        "led_indicator_task",
-        1.2 * 1024, // ✔️
-        NULL,
-        1,
-        &led_indicator_task_Handle,
-        0);
-  }
 
   // low levels and hardware
   if (true)
@@ -2368,7 +2356,6 @@ void setup()
   if (SPIFFS.begin(true))
   {
     Serial.println("SPIFF OK !");
-    loadStateFromFile();
     // UI Config File
     if (!SPIFFS.exists(ConfigFile))
     {
@@ -2394,36 +2381,6 @@ void setup()
   else
   {
     Serial.println("SPIFF ERROR !");
-  }
-
-  // licensing
-  if (true)
-  {
-    xrtLcns = new RegDev(RegFilePath);
-    xrtLizing = new Leasing(UpTimeFilePath);
-  }
-
-  // Config the Conditions
-  if (true)
-  {
-    conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt,
-                          &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2,
-                          &battHourLeft, &motorWay);
-    setCmdFunction(&sendCmdToExecuteFromConditions);
-    getRelayStateFunction(&relState_0_15);
-    getDimValueFunction(&getDimVal);
-    setCondCreatorFunction(&createCondition);
-    setTimerCondCreatorFunction(&createTimerCondition);
-    jsonCon.readJsonConditionsFromFile(CondFile);
-  }
-
-  // lisences
-  if (true)
-  {
-    GyroLicense = new lisence("Gyro", "G9933");   // Key for Gyro
-    VoiceLicense = new lisence("Voice", "V5612"); // Key For Voice
-    // Serial.println("General Lisence:" + GeneralLisence);
-    // giveMeMacAdress();
   }
 
   // Setting Store
@@ -2456,6 +2413,93 @@ void setup()
       battEmptyVoltage = other_Settings.get<float>(otherKeys::BATTERY_E_VOLT, battEmptyVoltageDeflt);
       other_Settings.saveIfChanged();
     }
+  }
+
+  // LED
+  if (true)
+  {
+    statusLed.begin();
+    xTaskCreatePinnedToCore(
+        led_indicator_task,
+        "led_indicator_task",
+        1.2 * 1024, // ✔️
+        NULL,
+        1,
+        &led_indicator_task_Handle,
+        0);
+  }
+  statusLed.blink(statusLed.colors.black, 1, 2500); // 1*2*2500=5000 ms
+
+  // factory reset
+  if (true)
+  {
+    auto settings_getter = [&](const char *key, int default_val)
+    {
+      return other_Settings.get<int>(key, default_val);
+    };
+    auto settings_setter = [&](const char *key, int value)
+    {
+      other_Settings.set<int>(key, value);
+    };
+
+    FactoryReset factoryReset(5000, settings_getter, settings_setter);
+    int stat = factoryReset.check();
+    if (stat > 3)
+    {
+      statusLed.blink(statusLed.colors.yellow, 5, 2000); // 10*2*250=10000 ms
+      Serial.println("🧽 🧽 🧽 Factory reset condition met! Resetting Wi-Fi settings.");
+      wifi_WebSocket_Settings.set<int>(NetworkKeys::STA_AP, WIFI_MODE_AP);
+      String newApName = "Xroute-AP" + getDeviceCode();
+      wifi_WebSocket_Settings.set<String>(NetworkKeys::ApName, newApName);
+      wifi_WebSocket_Settings.set<String>(NetworkKeys::ApPassword, "12345678");
+      wifi_WebSocket_Settings.saveIfChanged();
+      other_Settings.set<int>(FACTORY_RESET_COUNTER_KEY, 0);
+      other_Settings.saveIfChanged();
+      vTaskDelay(pdTICKS_TO_MS(10000));                 // wait for blink to finish
+      statusLed.blink(statusLed.colors.black, 1, 2500); // 1*2*2500=5000 ms
+    }
+    else if (stat > 0)
+    {
+      if (stat == 1)
+        statusLed.blink(statusLed.colors.orange, 10, 200);
+      else if (stat == 2)
+        statusLed.blink(statusLed.colors.orange, 20, 100);
+      else if (stat == 3)
+        statusLed.blink(statusLed.colors.orange, 40, 50);
+    }
+  }
+
+  // loading states
+  loadStateFromFile();
+
+  // licensing
+  if (true)
+  {
+    xrtLcns = new RegDev(RegFilePath);
+    xrtLizing = new Leasing(UpTimeFilePath);
+  }
+
+  // Config the Conditions
+  if (true)
+  {
+    conditionSetVariables(&v, &a0, &a1, &w, &b, &cwPrcnt, &dwPrcnt, &gwPrcnt,
+                          &digitalTemp, &digitalHum, &digitalAlt, &pt100, &a2,
+                          &battHourLeft, &motorWay);
+    setCmdFunction(&sendCmdToExecuteFromConditions);
+    getRelayStateFunction(&relState_0_15);
+    getDimValueFunction(&getDimVal);
+    setCondCreatorFunction(&createCondition);
+    setTimerCondCreatorFunction(&createTimerCondition);
+    jsonCon.readJsonConditionsFromFile(CondFile);
+  }
+
+  // lisences
+  if (true)
+  {
+    GyroLicense = new lisence("Gyro", "G9933");   // Key for Gyro
+    VoiceLicense = new lisence("Voice", "V5612"); // Key For Voice
+    // Serial.println("General Lisence:" + GeneralLisence);
+    // giveMeMacAdress();
   }
 
   // Battery
@@ -2816,10 +2860,7 @@ void dimmerShortCircuitIntrupt()
   }
 }
 /*  new problems
-// ino haminjoori minevisam ke commit konam bebinam ye shakhe jadid dar miyad ya na
-1- yedoone ws eshtebahi baz mishe bedoone inke kesi behesh vasl bashe khod be khod
 4- neveshtane scadual condition
-5- timeout vase update
 6- dimere rate ziyad drop beshe
 7- sharte larzeshe gyro baraye jologiri az dozdi
 8- ba release dimmer ali behem dastore saveStatesToFile(); ro bedahad / ali mige rooye on crash age betooni bezari aliye / behatresh ine ke ba timer befahmi ke dimer dige change nemishe va oon moghe savestate koni
