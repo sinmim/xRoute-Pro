@@ -31,7 +31,6 @@ String Version = "0.9.0";
 #include "SparkFunLIS3DH.h"
 #include <SPIFFS.h>
 #include <FS.h>
-#include <MyWifi.h>
 #include "CliTerminal.h"
 #include "StatusIndicator.h"
 #endif

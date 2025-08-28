@@ -1,5 +1,0 @@
-ERROR: PlatformIO decoder failed.
-
---- STDERR ---
-*** Do not know how to make File target `decode' (C:\Users\Sinmim\OneDrive\Elec\Xroute mini\xRoute-Pro\decode).  Stop.
-========================== [FAILED] Took 4.64 seconds ==========================

@@ -5,9 +5,8 @@
 #include "otherFunctions.h"
 #include "relay.h"
 #include "esp_core_dump.h"
-// BLE//#include "BLESerial.h"
 #include "BluetoothSerial.h"
-#include "main.h"
+#include "../main.h"
 #include "stdio.h"
 #include <SPIFFS.h>
 #include <FS.h>
